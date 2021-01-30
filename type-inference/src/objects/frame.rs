@@ -750,10 +750,7 @@ impl Frame {
         }
 
         // Return an error for empty arrays.
-        let type_ = match element_type {
-            Some(type_) => type_,
-            None => return Err(FrameError::empty_array(span)),
-        };
+        let type_ = element_type.ok_or_else(|| FrameError::empty_array(span))?;
 
         Ok(Type::Array(Box::new(type_)))
     }

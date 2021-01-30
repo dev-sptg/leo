@@ -64,10 +64,7 @@ impl Scope {
     /// Checks loop variables first, then non-loop variables.
     ///
     pub fn get_variable(&self, name: &str) -> Option<&Type> {
-        match self.get_loop_variable(name) {
-            Some(loop_variable_type) => Some(loop_variable_type),
-            None => self.variables.get(name),
-        }
+        self.get_loop_variable(name).or_else(|| self.variables.get(name))
     }
 
     ///

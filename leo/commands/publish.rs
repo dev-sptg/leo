@@ -88,10 +88,7 @@ impl CLI for PublishCommand {
             return Err(MissingPackageLicense.into());
         }
 
-        let package_remote = match package_manifest.get_package_remote() {
-            Some(remote) => remote,
-            None => return Err(MissingPackageRemote.into()),
-        };
+        let package_remote = package_manifest.get_package_remote().ok_or(MissingPackageRemote)?;
 
         // Create the output directory
         OutputsDirectory::create(&path)?;

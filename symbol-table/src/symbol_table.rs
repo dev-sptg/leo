@@ -179,10 +179,7 @@ impl SymbolTable {
             Some(circuit) => Some(circuit),
             None => {
                 // Lookup name in parent symbol table.
-                match &self.parent {
-                    Some(parent) => parent.get_circuit_type(name),
-                    None => None,
-                }
+                self.parent.as_ref().and_then(|parent| parent.get_circuit_type(name))
             }
         }
     }
@@ -199,10 +196,7 @@ impl SymbolTable {
             Some(circuit) => Some(circuit),
             None => {
                 // Lookup name in parent symbol table
-                match &self.parent {
-                    Some(parent) => parent.get_function_type(name),
-                    None => None,
-                }
+                self.parent.as_ref().and_then(|parent| parent.get_function_type(name))
             }
         }
     }
