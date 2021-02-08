@@ -9,8 +9,16 @@ env:
 
 jobs:
   ubuntu:
-    name: Ubuntu
+    name: "target: ${{ matrix.cfg.target }}"
     runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.cfg.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        cfg:
+          - { target: aarch64-unknown-linux-gnu, experimental: true }
+          - { target: arm-unknown-linux-gnueabi, experimental: true }
+          - { target: x86_64-unknown-linux-gnu, experimental: false }
     steps:
       - name: Checkout
         uses: actions/checkout@v1
@@ -22,10 +30,14 @@ jobs:
           toolchain: stable
           override: true
           components: rustfmt
-
+          target: ${{ matrix.cfg.target }}
+      - name: Install dependencies for arm64
+        if: ${{ matrix.cfg.target  == 'aarch64-unknown-linux-gnu' }}
+        run: |
+          sudo apt-get install -y aarch64-linux-gnu-gcc
       - name: Build Leo
         run: |
-          cargo build --all --release && strip target/release/leo
+          cargo build --release --workspace --target=${{ matrix.cfg.target }} && strip target/${{ matrix.cfg.target }}/release/leo
         env:
           CARGO_NET_GIT_FETCH_WITH_CLI: true
 
@@ -34,25 +46,27 @@ jobs:
 
       - name: Zip
         run: |
-          mkdir tempdir
-          mv target/release/leo tempdir
-          cd tempdir
-          zip -r leo-${{ steps.get_version.outputs.version }}-x86_64-unknown-linux-gnu.zip leo
-          cd ..
-          mv tempdir/leo-${{ steps.get_version.outputs.version }}-x86_64-unknown-linux-gnu.zip .
+          zip -r leo-${{ steps.get_version.outputs.version }}-${{ matrix.cfg.target }}.zip target/${{ matrix.cfg.target }}/release/leo
 
       - name: Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            leo-${{ steps.get_version.outputs.version }}-x86_64-unknown-linux-gnu.zip
+            leo-${{ steps.get_version.outputs.version }}-${{ matrix.cfg.target }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   macos:
-    name: macOS
+    name: "target: ${{ matrix.cfg.target }}"
     runs-on: macos-latest
+    continue-on-error: ${{ matrix.cfg.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        cfg:
+          - { target: aarch64-apple-darwin, experimental: true }
+          - { target: x86_64-apple-darwin, experimental: false }
     steps:
       - name: Checkout
         uses: actions/checkout@v1
@@ -64,10 +78,11 @@ jobs:
           toolchain: stable
           override: true
           components: rustfmt
+          target: ${{ matrix.cfg.target }}
 
       - name: Build Leo
         run: |
-          cargo build --all --release && strip target/release/leo
+          cargo build --release --workspace --target=${{ matrix.cfg.target }} && strip target/${{ matrix.cfg.target }}/release/leo
         env:
           CARGO_NET_GIT_FETCH_WITH_CLI: true
 
@@ -76,26 +91,28 @@ jobs:
 
       - name: Zip
         run: |
-          mkdir tempdir
-          mv target/release/leo tempdir
-          cd tempdir
-          zip -r leo-${{ steps.get_version.outputs.version }}-x86_64-apple-darwin.zip leo
-          cd ..
-          mv tempdir/leo-${{ steps.get_version.outputs.version }}-x86_64-apple-darwin.zip .
+          zip -r leo-${{ steps.get_version.outputs.version }}-${{ matrix.cfg.target }}.zip target/${{ matrix.cfg.target }}/release/leo
 
       - name: Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            leo-${{ steps.get_version.outputs.version }}-x86_64-apple-darwin.zip
+            leo-${{ steps.get_version.outputs.version }}-${{ matrix.cfg.target }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   windows:
-    name: Windows
+    name: "target: ${{ matrix.cfg.target }}"
     runs-on: windows-latest
-    continue-on-error: true
+    continue-on-error: ${{ matrix.cfg.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        cfg:
+          - { target: aarch64-pc-windows-msvc, experimental: false }
+          - { target: i686-pc-windows-msvc, experimental: true }
+          - { target: x86_64-pc-windows-msvc, experimental: false }
     steps:
       - name: Checkout
         uses: actions/checkout@v1
@@ -107,16 +124,20 @@ jobs:
           toolchain: stable
           override: true
           components: rustfmt
+          target: ${{ matrix.cfg.target }}
 
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v1
         with:
-          version: "10.0"
-          directory: ~ / .clang
+          version: "11"
+          directory: ${{ runner.temp }}/llvm
+
+      - name: Set LIBCLANG_PATH
+        run: echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
 
       - name: Build Leo
         run: |
-          cargo build --all --release
+          cargo build --release --workspace --target=${{ matrix.cfg.target }}
         env:
           CARGO_NET_GIT_FETCH_WITH_CLI: true
 
@@ -125,18 +146,12 @@ jobs:
 
       - name: Zip
         run: |
-          mkdir tempdir
-          mv target/release/leo tempdir
-          cd tempdir
-          Compress-Archive leo-${{ steps.get_version.outputs.version }}-x86_64-pc-windows-gnu leo
-          cd ..
-          mv leo-${{ steps.get_version.outputs.version }}-x86_64-pc-windows-gnu .
-
+          Compress-Archive target/${{ matrix.cfg.target }}/release/leo.exe leo-${{ steps.get_version.outputs.version }}-${{ matrix.cfg.target }}.zip
       - name: Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            leo-${{ steps.get_version.outputs.version }}-x86_64-pc-windows-gnu.zip
+            leo-${{ steps.get_version.outputs.version }}-${{ matrix.cfg.target }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
