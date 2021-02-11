@@ -159,9 +159,13 @@ version = "0.5"
 [dev-dependencies.rusty-hook]
 version = "0.11.2"
 
+[dependencies]
+openssl = { version = '0.10', optional = true }
+
 [features]
 default = [ ]
 ci_skip = [ "leo-compiler/ci_skip" ]
+vendored-openssl = ["openssl/vendored"]
 
 [profile.release]
 opt-level = 3
