@@ -78,15 +78,19 @@ version = "1.5.3"
 version = "0.4"
 
 [dependencies.snarkvm-ir]
+path = "../../snarkVM/ir"
 version = "0.7.9"
 
 [dependencies.snarkvm-r1cs]
+path = "../../snarkVM/r1cs"
 version = "0.7.9"
 
 [dependencies.snarkvm-eval]
+path = "../../snarkVM/eval"
 version = "0.7.9"
 
 [dependencies.snarkvm-curves]
+path = "../../snarkVM/curves"
 version = "0.7.9"
 
 [dependencies.bincode]

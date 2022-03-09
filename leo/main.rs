@@ -23,7 +23,7 @@ pub mod updater;
 pub mod wrapper;
 
 use commands::{
-    package::{Clone, Fetch, Login, Logout, Publish},
+    package::{/*Clone,*/ Fetch, Login, Logout, Publish},
     Build, Clean, Command, Deploy, Init, Lint, New, Prove, Run, Setup, Test, Update, Watch,
 };
 use leo_errors::{emitter::Handler, Result};
@@ -131,12 +131,11 @@ enum CommandOpts {
         command: Fetch,
     },
 
-    #[structopt(about = "Clone a package from the Aleo Package Manager")]
+    /* #[structopt(about = "Clone a package from the Aleo Package Manager")]
     Clone {
         #[structopt(flatten)]
         command: Clone,
-    },
-
+    },*/
     #[structopt(about = "Login to the Aleo Package Manager")]
     Login {
         #[structopt(flatten)]
@@ -173,6 +172,10 @@ enum CommandOpts {
     },
 }
 
+use std::clone;
+use std::sync::{Arc, Condvar, Mutex};
+use std::thread;
+use std::time::Duration;
 fn main() {
     // Initialize a handler for errors.
     let handler = Handler::default();
@@ -221,7 +224,7 @@ fn try_execute_command(command: CommandOpts, context: context::Context) -> Resul
 
         // CommandOpts::Add { command } => command.try_execute(context),
         CommandOpts::Fetch { command } => command.try_execute(context),
-        CommandOpts::Clone { command } => command.try_execute(context),
+        //CommandOpts::Clone { command } => command.try_execute(context),
         CommandOpts::Login { command } => command.try_execute(context),
         CommandOpts::Logout { command } => command.try_execute(context),
         CommandOpts::Publish { command } => command.try_execute(context),

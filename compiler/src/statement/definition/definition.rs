@@ -28,6 +28,7 @@ impl<'a> Program<'a> {
             self.emit(Instruction::TupleIndexGet(QueryData {
                 destination: target,
                 values: vec![values.clone(), Value::Integer(Integer::U32(i as u32))],
+                span: Some(leo_span::Span::default()),
             }));
         }
 

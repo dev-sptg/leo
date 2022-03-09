@@ -26,6 +26,7 @@ impl<'a> Program<'a> {
         self.emit(Instruction::Pow(QueryData {
             destination: output,
             values: vec![left, right],
+            span: Some(leo_span::Span::default()),
         }));
         Ok(Value::Ref(output))
     }

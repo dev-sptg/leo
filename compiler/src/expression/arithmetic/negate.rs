@@ -26,6 +26,7 @@ impl<'a> Program<'a> {
         self.emit(Instruction::Negate(QueryData {
             destination: output,
             values: vec![inner],
+            span: Some(leo_span::Span::default()),
         }));
         Ok(Value::Ref(output))
     }

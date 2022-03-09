@@ -64,6 +64,7 @@ impl<'a> Program<'a> {
                 stop_value.clone(),
                 Value::Integer(Integer::U32(slice_length)),
             ],
+            span: Some(leo_span::Span::default()),
         }));
         context.input_register = out;
         context.input_type = Type::Array(Box::new(inner_type.clone()), slice_length);
@@ -71,6 +72,7 @@ impl<'a> Program<'a> {
         self.emit(Instruction::ArraySliceStore(QueryData {
             destination: input_var,
             values: vec![start_value, stop_value, inner],
+            span: Some(leo_span::Span::default()),
         }));
         Ok(Value::Ref(input_var))
     }

@@ -99,11 +99,13 @@ impl<'a> Program<'a> {
             self.emit(Instruction::TupleIndexGet(QueryData {
                 destination: out_target,
                 values: vec![Value::Ref(output), Value::Integer(Integer::U32(0))],
+                span: Some(leo_span::Span::default()),
             }));
             self.resolve_mut_ref(target, Value::Ref(out_target))?;
             self.emit(Instruction::TupleIndexGet(QueryData {
                 destination: output,
                 values: vec![Value::Ref(output), Value::Integer(Integer::U32(1))],
+                span: Some(leo_span::Span::default()),
             }));
         }
 

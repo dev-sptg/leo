@@ -38,6 +38,7 @@ impl<'a> Program<'a> {
             self.emit(Instruction::Not(QueryData {
                 destination: not_condition_var,
                 values: vec![condition],
+                span: Some(leo_span::Span::default()),
             }));
             self.mask(Value::Ref(not_condition_var), |program| program.enforce_statement(next))?;
         }

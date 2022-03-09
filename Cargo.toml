@@ -92,24 +92,30 @@ path = "./synthesizer"
 version = "1.5.3"
 
 [dependencies.snarkvm-algorithms]
+path = "../snarkVM/algorithms"
 version = "0.7.9"
 
 [dependencies.snarkvm-curves]
+path = "../snarkVM/curves"
 version = "0.7.9"
 default-features = false
 
 [dependencies.snarkvm-gadgets]
+path = "../snarkVM/gadgets"
 version = "0.7.9"
 default-features = false
 
 [dependencies.snarkvm-r1cs]
+path = "../snarkVM/r1cs"
 version = "0.7.9"
 default-features = false
 
 [dependencies.snarkvm-utilities]
+path = "../snarkVM/utilities"
 version = "0.7.9"
 
 [dependencies.snarkvm-eval]
+path = "../snarkVM/eval"
 version = "0.7.9"
 
 [dependencies.structopt]

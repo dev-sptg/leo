@@ -19,6 +19,7 @@ edition = "2021"
 rust-version = "1.56"
 
 [dependencies.snarkvm-curves]
+path = "../../snarkVM/curves"
 version = "0.7.9"
 default-features = false
 
@@ -31,13 +32,16 @@ version = "0.6.6"
 default-features = false
 
 [dependencies.snarkvm-fields]
+path = "../../snarkVM/fields"
 version = "0.7.9"
 default-features = false
 
 [dependencies.snarkvm-gadgets]
+path = "../../snarkVM/gadgets"
 version = "0.7.9"
 
 [dependencies.snarkvm-r1cs]
+path = "../../snarkVM/r1cs"
 version = "0.7.9"
 default-features = false
 

@@ -74,6 +74,7 @@ impl<'a> Program<'a> {
         self.emit(Instruction::Store(QueryData {
             destination: target,
             values: vec![resulting_value],
+            span: Some(leo_span::Span::default()),
         }));
 
         Ok(())

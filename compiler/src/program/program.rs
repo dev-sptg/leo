@@ -24,6 +24,7 @@ use leo_span::sym;
 use snarkvm_ir::{Header, Instruction, MaskData, QueryData, RepeatData, SnarkVMVersion, Type, Value};
 
 use indexmap::IndexMap;
+use std::path::PathBuf;
 
 use crate::CompilerOptions;
 
@@ -50,10 +51,11 @@ pub(crate) struct Program<'a> {
     inputs: IndexMap<u32, Input>,
     variable_to_register: IndexMap<AsgId, u32>,
     input_orderings: IndexMap<InputCategory, Vec<String>>,
+    main_file_path: PathBuf,
 }
 
 impl<'a> Program<'a> {
-    pub fn new(asg: leo_asg::Program<'a>) -> Self {
+    pub fn new(asg: leo_asg::Program<'a>, main_file_path: PathBuf) -> Self {
         Self {
             asg,
             current_function: None,
@@ -63,6 +65,7 @@ impl<'a> Program<'a> {
             inputs: IndexMap::new(),
             variable_to_register: IndexMap::new(),
             input_orderings: IndexMap::new(),
+            main_file_path,
         }
     }
 
@@ -182,6 +185,7 @@ impl<'a> Program<'a> {
         self.emit(Instruction::Store(QueryData {
             destination: self.resolve_var(target),
             values: vec![value],
+            span: Some(leo_span::Span::default()),
         }));
     }
 

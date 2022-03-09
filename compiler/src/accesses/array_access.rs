@@ -19,6 +19,7 @@
 use crate::program::Program;
 use leo_asg::{Expression, ExpressionNode, Type};
 use leo_errors::Result;
+use pest::error::InputLocation::Span;
 use snarkvm_ir::{Instruction, Integer, QueryData, Value};
 
 impl<'a> Program<'a> {
@@ -30,6 +31,7 @@ impl<'a> Program<'a> {
         self.emit(Instruction::ArrayIndexGet(QueryData {
             destination: out,
             values: vec![array_value, index_value],
+            span: Some(leo_span::Span::default()),
         }));
         Ok(Value::Ref(out))
     }
@@ -65,6 +67,7 @@ impl<'a> Program<'a> {
                 right_value,
                 Value::Integer(Integer::U32(length)),
             ],
+            span: Some(leo_span::Span::default()),
         }));
         Ok(Value::Ref(out))
     }

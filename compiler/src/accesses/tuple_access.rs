@@ -32,6 +32,7 @@ impl<'a> Program<'a> {
         self.emit(Instruction::TupleIndexGet(QueryData {
             destination: out,
             values: vec![inner, Value::Integer(Integer::U32(index as u32))],
+            span: Some(leo_span::Span::default()),
         }));
 
         Ok(Value::Ref(out))

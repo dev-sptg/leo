@@ -41,6 +41,7 @@ impl<'a> Program<'a> {
         self.emit(Instruction::ArrayIndexGet(QueryData {
             destination: out,
             values: vec![Value::Ref(input_var), index_value.clone()],
+            span: Some(leo_span::Span::default()),
         }));
         context.input_register = out;
         context.input_type = inner_type.clone();
@@ -48,6 +49,7 @@ impl<'a> Program<'a> {
         self.emit(Instruction::ArrayIndexStore(QueryData {
             destination: input_var,
             values: vec![index_value, inner],
+            span: Some(leo_span::Span::default()),
         }));
         Ok(Value::Ref(input_var))
     }

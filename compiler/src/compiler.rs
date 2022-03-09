@@ -42,6 +42,7 @@ use indexmap::IndexMap;
 use leo_synthesizer::CircuitSynthesizer;
 use num_bigint::{BigInt, Sign};
 use sha2::{Digest, Sha256};
+use std::ffi::CString;
 use std::io::Write;
 use std::{convert::TryFrom, fs, path::PathBuf};
 
@@ -285,7 +286,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
     pub fn compile_ir(&self, input: &leo_ast::Input) -> Result<snarkvm_ir::Program> {
         let asg = self.asg.as_ref().unwrap().clone();
-        let mut program = Program::new(asg);
+        let mut program = Program::new(asg, self.main_file_path.clone());
 
         program.enforce_program(input)?;
 
@@ -424,7 +425,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
     pub fn compile_test(&self, input: InputPairs) -> Result<(u32, u32)> {
         let asg = self.asg.as_ref().unwrap().clone();
-        let program = Program::new(asg);
+        let program = Program::new(asg, self.main_file_path.clone());
 
         let program_name = program.asg.name.clone();
         let mut output_file_name = program_name.clone();
@@ -662,6 +663,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 Self::process_input_value(value, &ir_input.type_, &span)?,
             );
         }
+
+        out.debug_data = self.main_file_path.clone();
         Ok(out)
     }
 }
