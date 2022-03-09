@@ -105,7 +105,7 @@ version = "0.8"
 version = "1.0"
 
 [dependencies.sha2]
-version = "0.9"
+version = "0.10"
 
 [dependencies.tracing]
 version = "0.1"
