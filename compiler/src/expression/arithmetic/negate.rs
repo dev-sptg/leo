@@ -25,8 +25,7 @@ impl<'a> Program<'a> {
         let output = self.alloc();
         self.emit(Instruction::Negate(QueryData {
             destination: output,
-            values: vec![inner],
-            span: Some(leo_span::Span::default()),
+            values: vec![inner]
         }));
         Ok(Value::Ref(output))
     }

@@ -26,8 +26,7 @@ impl<'a> Program<'a> {
         let output = self.alloc();
         self.emit(Instruction::Add(QueryData {
             destination: output,
-            values: vec![left, right],
-            span: Some(leo_span::Span::default()),
+            values: vec![left, right]
         }));
         Ok(Value::Ref(output))
     }

@@ -17,7 +17,7 @@
 //! Enforces array access in a compiled Leo program.
 
 use crate::program::Program;
-use leo_asg::Expression;
+use leo_asg::{Expression, Node};
 use leo_errors::Result;
 use snarkvm_ir::{Instruction, Integer, QueryData, Value};
 
@@ -28,11 +28,9 @@ impl<'a> Program<'a> {
         let inner = self.enforce_expression(tuple)?;
 
         let out = self.alloc();
-
         self.emit(Instruction::TupleIndexGet(QueryData {
             destination: out,
-            values: vec![inner, Value::Integer(Integer::U32(index as u32))],
-            span: Some(leo_span::Span::default()),
+            values: vec![inner, Value::Integer(Integer::U32(index as u32))]
         }));
 
         Ok(Value::Ref(out))

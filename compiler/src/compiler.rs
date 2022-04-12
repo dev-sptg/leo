@@ -42,7 +42,6 @@ use indexmap::IndexMap;
 use leo_synthesizer::CircuitSynthesizer;
 use num_bigint::{BigInt, Sign};
 use sha2::{Digest, Sha256};
-use std::ffi::CString;
 use std::io::Write;
 use std::{convert::TryFrom, fs, path::PathBuf};
 

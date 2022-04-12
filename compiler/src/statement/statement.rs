@@ -19,6 +19,8 @@
 use crate::program::Program;
 use leo_asg::Statement;
 use leo_errors::Result;
+use snarkvm_debugdata::DebugInstruction;
+use snarkvm_ir::Value;
 
 pub type StatementResult<T> = Result<T>;
 
@@ -50,9 +52,45 @@ impl<'a> Program<'a> {
             }
             Statement::Console(statement) => {
                 self.evaluate_console_function_call(statement)?;
+                let line_start =  *&statement.span.clone().unwrap_or_default().line_start as u32;
+                let line_end =  *&statement.span.clone().unwrap_or_default().line_stop as u32;
+                let func_index = self.resolve_function(self.current_function.expect("return in non-function"));
+
+                let instruction_index = self.current_instructions_index() - 1;
+                self.debug_data.insert_instruction(func_index, instruction_index , DebugInstruction {
+                    self_var_id: 0,
+                    line_start,
+                    line_end,
+                });
             }
             Statement::Expression(statement) => {
                 let _value = self.enforce_expression(statement.expression.get())?;
+                let line_start =  *&statement.span.clone().unwrap_or_default().line_start as u32;
+                let line_end =  *&statement.span.clone().unwrap_or_default().line_stop as u32;
+                let func_index = self.resolve_function(self.current_function.expect("return in non-function"));
+
+                let value = _value.clone();
+                match value {
+                    Value::Address(_) => {}
+                    Value::Boolean(_) => {}
+                    Value::Field(_) => {}
+                    Value::Char(_) => {}
+                    Value::Group(_) => {}
+                    Value::Integer(_) => {}
+                    Value::Array(_) => {}
+                    Value::Tuple(_) => {}
+                    Value::Str(_) => {}
+                    Value::Ref(id) => {
+                        
+                        let instruction_index = self.current_instructions_index() - 1;
+                        self.debug_data.insert_instruction(func_index, instruction_index , DebugInstruction {
+                            self_var_id: 0,
+                            line_start,
+                            line_end,
+                        });
+                    }
+                };
+        
             }
             Statement::Block(statement) => {
                 self.evaluate_block(statement)?;

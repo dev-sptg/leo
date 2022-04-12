@@ -40,7 +40,6 @@ impl<'a> Program<'a> {
         self.emit(Instruction::Pick(QueryData {
             destination: out,
             values: vec![conditional_value, first_value, second_value],
-            span: Some(leo_span::Span::default()),
         }));
 
         Ok(Value::Ref(out))

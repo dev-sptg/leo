@@ -25,6 +25,7 @@ use snarkvm_ir::{Header, Instruction, MaskData, QueryData, RepeatData, SnarkVMVe
 
 use indexmap::IndexMap;
 use std::path::PathBuf;
+use snarkvm_debugdata::DebugData;
 
 use crate::CompilerOptions;
 
@@ -51,6 +52,8 @@ pub(crate) struct Program<'a> {
     inputs: IndexMap<u32, Input>,
     variable_to_register: IndexMap<AsgId, u32>,
     input_orderings: IndexMap<InputCategory, Vec<String>>,
+    pub debug_data: DebugData,
+    pub current_dbg_func: u32,
     main_file_path: PathBuf,
 }
 
@@ -65,6 +68,8 @@ impl<'a> Program<'a> {
             inputs: IndexMap::new(),
             variable_to_register: IndexMap::new(),
             input_orderings: IndexMap::new(),
+            debug_data: DebugData::new(),
+            current_dbg_func: 0,
             main_file_path,
         }
     }
@@ -177,6 +182,10 @@ impl<'a> Program<'a> {
         &mut self.functions.last_mut().unwrap().instructions
     }
 
+    pub fn current_instructions_index(&mut self) -> u32 {
+        self.functions.last_mut().unwrap().instructions.len() as u32
+    }
+
     pub fn emit(&mut self, instruction: Instruction) {
         self.current_instructions().push(instruction);
     }
@@ -185,7 +194,6 @@ impl<'a> Program<'a> {
         self.emit(Instruction::Store(QueryData {
             destination: self.resolve_var(target),
             values: vec![value],
-            span: Some(leo_span::Span::default()),
         }));
     }
 
@@ -273,6 +281,7 @@ impl<'a> Program<'a> {
                 public_states,
                 private_record_states,
                 private_leaf_states,
+                debug_data: self.debug_data.clone(),
                 inline_limit: compiler_options.inline_limit,
             },
         }

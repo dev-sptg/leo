@@ -16,11 +16,13 @@
 
 //! Generates R1CS constraints for a compiled Leo program.
 
+use indexmap::IndexMap;
 use crate::Program;
 use leo_asg::CircuitMember;
 use leo_errors::CompilerError;
 use leo_errors::Result;
 use leo_span::sym;
+use snarkvm_debugdata::{DebugFunction, DebugItem};
 
 impl<'a> Program<'a> {
     pub fn enforce_program(&mut self, input: &leo_ast::Input) -> Result<()> {
@@ -72,6 +74,35 @@ impl<'a> Program<'a> {
             self.enforce_definition_statement(global_const)?;
         }
 
+        let dbg_func = DebugFunction{
+            name: function.name.borrow().name.to_string(),
+            self_circuit_id: 0,
+            variables: Vec::new(),
+            instructions: IndexMap::new(),
+            line_start: *&function.span.clone().unwrap_or_default().line_start as u32,
+            line_end: *&function.span.clone().unwrap_or_default().line_stop as u32
+        };
+
+        self.current_dbg_func = self.resolve_function(function);
+        let current_dbg_func = self.current_dbg_func;
+        self.debug_data.add_function(self.current_dbg_func, dbg_func);
+
+
+        for function in secondary_functions.iter() {
+            let dbg_func = DebugFunction {
+                name: function.name.borrow().name.to_string(),
+                self_circuit_id: 0,
+                variables: Vec::new(),
+                instructions: IndexMap::new(),
+                line_start: *&function.span.clone().unwrap_or_default().line_start as u32,
+                line_end: *&function.span.clone().unwrap_or_default().line_stop as u32
+            };
+
+            self.current_dbg_func = self.resolve_function(function);
+            self.debug_data.add_function(self.current_dbg_func, dbg_func);
+        }
+
+        self.current_dbg_func = current_dbg_func;
         self.enforce_main_function(function, input)?;
         for function in secondary_functions.iter() {
             self.enforce_function_definition(*function)?;

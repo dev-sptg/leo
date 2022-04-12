@@ -25,6 +25,8 @@ use leo_errors::CompilerError;
 use leo_errors::Result;
 use leo_span::Span;
 use num_bigint::Sign;
+use snarkvm_debugdata::DebugItem::{Function, Variable};
+use snarkvm_debugdata::{DebugItem, DebugVariable, DebugVariableType};
 use snarkvm_ir::{Group, GroupCoordinate, Integer, Value};
 
 pub(crate) fn asg_group_coordinate_to_ir(coordinate: &leo_asg::GroupCoordinate) -> GroupCoordinate {
@@ -128,6 +130,19 @@ impl<'a> Program<'a> {
         })
     }
 
+    /*pub(crate) fn add_debug_variable(&mut self, func_id:u32, id:u32, dbg_item: DebugItem) {
+
+        match self.debug_data.data.get_mut(&func_id).expect("unresolved function")  {
+            Variable(_var) => {
+
+            }
+            Function(func) => {
+                func.add_variable(id, dbg_item);
+            }
+            Circuit(_) => {}
+        }
+    }*/
+
     pub(crate) fn enforce_expression(&mut self, expression: &'a Expression<'a>) -> Result<Value> {
         let span = &expression.span().cloned().unwrap_or_default();
         match expression {
@@ -155,7 +170,28 @@ impl<'a> Program<'a> {
             Expression::Cast(_) => unimplemented!("casts not implemented"),
 
             // Variables
-            Expression::VariableRef(variable_ref) => self.evaluate_ref(variable_ref),
+            Expression::VariableRef(variable_ref) => {
+                //let function = self.current_dbg_func;
+
+                let dbg_var = DebugVariable {
+                    name: String::from(variable_ref.variable.borrow().name.to_string()),
+                    type_: DebugVariableType::Integer,
+                    value: "".to_string(),
+                    circuit_id: 0,
+                    mutable: false,
+                    const_: false,
+                    line_start: span.line_start as u32,
+                    line_end: span.line_stop as u32,
+                    sub_variables: Vec::new()
+                };
+
+                let id = self.resolve_var(variable_ref.variable);
+                self.debug_data.add_variable(id, dbg_var);
+
+                //self.add_debug_variable(self.current_dbg_func, id, DebugItem::Variable(dbg_var));
+                self.evaluate_ref(variable_ref)
+
+            },
 
             // Values
             Expression::Constant(Constant { value, .. }) => self.enforce_const_value(value, span),

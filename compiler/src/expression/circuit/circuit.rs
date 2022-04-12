@@ -20,12 +20,21 @@ use crate::program::Program;
 use leo_asg::{CircuitInitExpression, CircuitMember};
 use leo_errors::{CompilerError, Result};
 use leo_span::Span;
+use snarkvm_debugdata::DebugCircuit;
 use snarkvm_ir::Value;
 
 impl<'a> Program<'a> {
     pub fn enforce_circuit(&mut self, expr: &CircuitInitExpression<'a>, span: &Span) -> Result<Value> {
         let circuit = expr.circuit.get();
         let members = circuit.members.borrow();
+
+        let mut dbg_circ = DebugCircuit {
+            name: String::from(circuit.name.borrow().to_string()),
+            members: vec![],
+            functions: vec![],
+            line_start: circuit.span.clone().unwrap_or_default().line_start as u32,
+            line_end: circuit.span.clone().unwrap_or_default().line_stop as u32
+        };
 
         let member_var_len = members
             .values()
@@ -42,12 +51,28 @@ impl<'a> Program<'a> {
             match target {
                 CircuitMember::Variable(_type_) => {
                     let variable_value = self.enforce_expression(inner.get())?;
+                    let value = variable_value.clone();
+                    match value {
+                        Value::Address(_) => {}
+                        Value::Boolean(_) => {}
+                        Value::Field(_) => {}
+                        Value::Char(_) => {}
+                        Value::Group(_) => {}
+                        Value::Integer(_) => {}
+                        Value::Array(_) => {}
+                        Value::Tuple(_) => {}
+                        Value::Str(_) => {}
+                        Value::Ref(id) => {
+                            dbg_circ.members.push(id);
+                        }
+                    };
                     resolved_members[index] = Some(variable_value);
                 }
                 _ => return Err(CompilerError::expected_circuit_member(name, span).into()),
             }
         }
-
+        self.debug_data.last_circuit_id = self.debug_data.circuits.len() as u32;
+        self.debug_data.circuits.insert(self.debug_data.last_circuit_id, dbg_circ);
         Ok(Value::Tuple(
             resolved_members
                 .into_iter()

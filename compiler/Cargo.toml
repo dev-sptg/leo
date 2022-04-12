@@ -93,6 +93,10 @@ version = "0.7.9"
 path = "../../snarkVM/curves"
 version = "0.7.9"
 
+[dependencies.snarkvm-debugdata]
+version = "0.1.0"
+path = "../../snarkVM/debugdata"
+
 [dependencies.bincode]
 version = "1.3"
 

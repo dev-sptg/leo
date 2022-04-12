@@ -172,10 +172,6 @@ enum CommandOpts {
     },
 }
 
-use std::clone;
-use std::sync::{Arc, Condvar, Mutex};
-use std::thread;
-use std::time::Duration;
 fn main() {
     // Initialize a handler for errors.
     let handler = Handler::default();

@@ -16,15 +16,16 @@
 
 //! Enforces constraints on a function in a compiled Leo program.
 
+use std::borrow::Borrow;
 use crate::program::Program;
 
-use leo_asg::{Expression, Function, FunctionQualifier};
+use leo_asg::{Expression, Function, FunctionQualifier, Node};
 use leo_errors::CompilerError;
 use leo_errors::Result;
 use leo_span::sym;
 use snarkvm_ir::{CallCoreData, CallData, Instruction, Integer, PredicateData, QueryData, Value};
-
 use std::cell::Cell;
+use snarkvm_debugdata::{DebugFunction, DebugVariableType};
 
 impl<'a> Program<'a> {
     pub(crate) fn enforce_function_definition(&mut self, function: &'a Function<'a>) -> Result<()> {
@@ -47,17 +48,65 @@ impl<'a> Program<'a> {
         Ok(())
     }
 
+    pub(crate) fn get_value_id( &mut self, val: Value) -> Option<u32>  {
+        match val {
+            Value::Address(_) => {}
+            Value::Boolean(_) => {}
+            Value::Field(_) => {}
+            Value::Char(_) => {}
+            Value::Group(_) => {}
+            Value::Integer(_) => {}
+            Value::Array(_) => {}
+            Value::Tuple(_) => {}
+            Value::Str(_) => {}
+            Value::Ref(id) => {
+               return Some(id)
+            }
+        }
+        None
+    }
+
     pub(crate) fn enforce_function_call(
         &mut self,
         function: &'a Function<'a>,
         target: Option<&'a Expression<'a>>,
         arguments: &[Cell<&'a Expression<'a>>],
     ) -> Result<Value> {
+
         let target_value = target.map(|target| self.enforce_expression(target)).transpose()?;
+
+
 
         let mut ir_arguments = vec![];
 
         if let Some(target) = target_value {
+
+            let value = target.clone();
+
+            let val_id = self.get_value_id(value.clone());
+            match val_id {
+                None => {}
+                Some(id) => {
+                    match self.debug_data.variables.get(&id) {
+                        Some(variable) => {
+                            match variable.type_ {
+                                DebugVariableType::Circuit => {
+                                    let index = self.resolve_function(function);
+                                    let func = self.debug_data.get_function(index);
+                                    match func {
+                                        None => {}
+                                        Some(item) => {
+                                            item.self_circuit_id = id;
+                                        }
+                                    }
+                                }
+                                _=> {}
+                            }
+                        }
+                        None =>{}
+                    }
+                }
+            }
             ir_arguments.push(target);
         }
 
@@ -73,12 +122,11 @@ impl<'a> Program<'a> {
         // Store input values as new variables in resolved program
         for input_expression in arguments.iter() {
             let input_value = self.enforce_expression(input_expression.get())?;
-
             ir_arguments.push(input_value);
         }
 
-        let output = self.alloc();
 
+        let output = self.alloc();
         if let Some(core_mapping) = function.core_mapping.get() {
             self.emit(Instruction::CallCore(CallCoreData {
                 destination: output,
@@ -86,6 +134,10 @@ impl<'a> Program<'a> {
                 arguments: ir_arguments,
             }));
         } else {
+            
+
+            //self.debug_data.add_function(output, )
+
             self.emit(Instruction::Call(CallData {
                 destination: output,
                 index: self.resolve_function(function),
@@ -99,13 +151,11 @@ impl<'a> Program<'a> {
             self.emit(Instruction::TupleIndexGet(QueryData {
                 destination: out_target,
                 values: vec![Value::Ref(output), Value::Integer(Integer::U32(0))],
-                span: Some(leo_span::Span::default()),
             }));
             self.resolve_mut_ref(target, Value::Ref(out_target))?;
             self.emit(Instruction::TupleIndexGet(QueryData {
                 destination: output,
                 values: vec![Value::Ref(output), Value::Integer(Integer::U32(1))],
-                span: Some(leo_span::Span::default()),
             }));
         }
 

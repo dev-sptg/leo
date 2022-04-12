@@ -20,7 +20,6 @@
 
 use crate::Program;
 use leo_errors::Result;
-use leo_span::Span;
 use snarkvm_ir::{Instruction, QueryData, Value};
 
 impl<'a> Program<'a> {
@@ -28,8 +27,7 @@ impl<'a> Program<'a> {
         let output = self.alloc();
         self.emit(Instruction::Div(QueryData {
             destination: output,
-            values: vec![left, right],
-            span: Some(Span::default()),
+            values: vec![left, right]
         }));
         Ok(Value::Ref(output))
     }
