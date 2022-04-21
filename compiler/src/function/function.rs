@@ -122,6 +122,15 @@ impl<'a> Program<'a> {
         // Store input values as new variables in resolved program
         for input_expression in arguments.iter() {
             let input_value = self.enforce_expression(input_expression.get())?;
+          /*  let val_id = self.get_value_id(input_value.clone());
+            match val_id {
+                None => {}
+                Some(id) => {
+                    let index = self.resolve_function(function);
+                    self.debug_data.add_variable_to_function(index, id);
+                }
+            }*/
+
             ir_arguments.push(input_value);
         }
 

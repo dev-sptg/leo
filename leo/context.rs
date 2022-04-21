@@ -35,6 +35,9 @@ pub struct Context<'a> {
 
     /// Path at which the command is called, None when default
     pub path: Option<PathBuf>,
+
+    pub debug: bool,
+    pub debug_port: Option<u32>,
 }
 
 impl Context<'_> {
@@ -62,7 +65,7 @@ impl Context<'_> {
 }
 
 /// Create a new context for the current directory.
-pub fn create_context(handler: &Handler, path: PathBuf, api_url: Option<String>) -> Result<Context<'_>> {
+pub fn create_context(handler: &Handler, path: PathBuf, api_url: Option<String>, debug: bool, debug_port: Option<u32>) -> Result<Context<'_>> {
     let token = config::read_token().ok();
 
     let api = Api::new(api_url.unwrap_or_else(|| PACKAGE_MANAGER_URL.to_string()), token);
@@ -71,11 +74,13 @@ pub fn create_context(handler: &Handler, path: PathBuf, api_url: Option<String>)
         handler,
         api,
         path: Some(path),
+        debug,
+        debug_port
     })
 }
 
 /// Returns project context.
-pub fn get_context(handler: &Handler, api_url: Option<String>) -> Result<Context<'_>> {
+pub fn get_context(handler: &Handler, api_url: Option<String>, debug: bool, debug_port: Option<u32>) -> Result<Context<'_>> {
     let token = config::read_token().ok();
 
     let api = Api::new(api_url.unwrap_or_else(|| PACKAGE_MANAGER_URL.to_string()), token);
@@ -84,5 +89,8 @@ pub fn get_context(handler: &Handler, api_url: Option<String>) -> Result<Context
         handler,
         api,
         path: None,
+        debug,
+        debug_port,
+
     })
 }

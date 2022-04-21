@@ -30,6 +30,7 @@ use leo_errors::{emitter::Handler, Result};
 use leo_span::symbol::create_session_if_not_set_then;
 use std::path::PathBuf;
 use structopt::{clap::AppSettings, StructOpt};
+use tracing::debug;
 
 /// CLI Arguments entry point - includes global parameters and subcommands
 #[derive(StructOpt, Debug)]
@@ -37,6 +38,9 @@ use structopt::{clap::AppSettings, StructOpt};
 struct Opt {
     #[structopt(short, global = true, help = "Print additional information for debugging")]
     debug: bool,
+
+    #[structopt(long, global = true, help = "Port used for debugging")]
+    debug_port: Option<u32>,
 
     #[structopt(short, global = true, help = "Suppress CLI output")]
     quiet: bool,
@@ -54,6 +58,9 @@ struct Opt {
         parse(from_os_str)
     )]
     path: Option<PathBuf>,
+
+    //#[structopt(long, help = "Port used for debugging")]
+    //debug_port: u32,
 }
 
 ///Leo compiler and package manager
@@ -192,16 +199,16 @@ fn run_with_args(handler: &Handler, opt: Opt) -> Result<()> {
         )?;
     }
 
-    let context = create_context(handler, opt.path, opt.api)?;
+    let context = create_context(handler, opt.path, opt.api, opt.debug, opt.debug_port)?;
     create_session_if_not_set_then(|_| try_execute_command(opt.command, context))
 }
 
 /// Returns custom root folder and creates a context for it.
 /// If not specified, the default context will be created in cwd.
-fn create_context(handler: &Handler, path: Option<PathBuf>, api: Option<String>) -> Result<context::Context<'_>> {
+fn create_context(handler: &Handler, path: Option<PathBuf>, api: Option<String>, debug: bool, debug_port: Option<u32>) -> Result<context::Context<'_>> {
     match path {
-        Some(path) => context::create_context(handler, path, api),
-        None => context::get_context(handler, api),
+        Some(path) => context::create_context(handler, path, api, debug, debug_port),
+        None => context::get_context(handler, api, debug, debug_port),
     }
 }
 

@@ -20,6 +20,7 @@ use crate::program::Program;
 use leo_asg::{AssignAccess, AssignOperation, AssignStatement, Type};
 use leo_errors::Result;
 use snarkvm_ir::{Instruction, QueryData, Value};
+use snarkvm_debugdata::DebugInstruction;
 
 mod array_index;
 mod array_range_index;
@@ -70,6 +71,16 @@ impl<'a> Program<'a> {
             operation: assignee.operation,
             target_value,
         })?;
+
+        let line_start =  *&assignee.span.clone().unwrap_or_default().line_start as u32;
+        let line_end =  *&assignee.span.clone().unwrap_or_default().line_stop as u32;
+        let func_index = self.resolve_function(self.current_function.expect("return in non-function"));
+        let instruction_index = self.current_instructions_index();
+        self.debug_data.insert_instruction(func_index, instruction_index , DebugInstruction {
+            self_var_id: 0,
+            line_start,
+            line_end,
+        });
 
         self.emit(Instruction::Store(QueryData {
             destination: target,

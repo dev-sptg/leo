@@ -111,6 +111,8 @@ impl<'a> Command<'a> for Test {
                 Some(self.compiler_options.clone().into()),
                 IndexMap::new(),
                 Some(self.compiler_options.clone().into()),
+                context.debug,
+                context.debug_port
             )?;
 
             let temporary_program = program;

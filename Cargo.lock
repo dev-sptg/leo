@@ -2813,19 +2813,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "snarkvm-debugger"
-version = "0.1.0"
-dependencies = [
- "indexmap",
- "libc",
- "libloading",
- "serde",
- "snarkvm-debugdata",
- "snarkvm-ir",
- "synchronoise",
-]
-
-[[package]]
 name = "snarkvm-derives"
 version = "0.7.9"
 dependencies = [
@@ -2872,10 +2859,10 @@ version = "0.7.9"
 dependencies = [
  "anyhow",
  "indexmap",
- "leo-span",
+ "libc",
  "libloading",
  "snarkvm-curves",
- "snarkvm-debugger",
+ "snarkvm-debugdata",
  "snarkvm-dpc",
  "snarkvm-fields",
  "snarkvm-gadgets",

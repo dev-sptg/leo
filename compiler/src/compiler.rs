@@ -44,6 +44,8 @@ use num_bigint::{BigInt, Sign};
 use sha2::{Digest, Sha256};
 use std::io::Write;
 use std::{convert::TryFrom, fs, path::PathBuf};
+use tracing::debug;
+use snarkvm_ir::LogLevel::Debug;
 
 thread_local! {
     static THREAD_GLOBAL_CONTEXT: AsgContext<'static> = {
@@ -76,6 +78,8 @@ pub struct Compiler<'a, 'b> {
     options: CompilerOptions,
     imports_map: IndexMap<String, String>,
     output_options: OutputOptions,
+    debug: bool,
+    debug_port: Option<u32>,
 }
 
 impl<'a, 'b> Compiler<'a, 'b> {
@@ -90,6 +94,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
         options: Option<CompilerOptions>,
         imports_map: IndexMap<String, String>,
         output_options: Option<OutputOptions>,
+        debug: bool,
+        debug_port: Option<u32>,
     ) -> Self {
         // load static files
         // TODO remove this once we implement a determinstic include_dir
@@ -106,6 +112,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
             options: options.unwrap_or_default(),
             imports_map,
             output_options: output_options.unwrap_or_default(),
+            debug,
+            debug_port,
         }
     }
 
@@ -124,6 +132,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
         options: Option<CompilerOptions>,
         imports_map: IndexMap<String, String>,
         output_options: Option<OutputOptions>,
+        debug: bool,
+        debug_port: Option<u32>,
     ) -> Result<Self> {
         let mut compiler = Self::new(
             handler,
@@ -134,6 +144,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
             options,
             imports_map,
             output_options,
+            debug,
+            debug_port,
         );
 
         compiler.parse_program()?;
@@ -285,7 +297,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
     pub fn compile_ir(&self, input: &leo_ast::Input) -> Result<snarkvm_ir::Program> {
         let asg = self.asg.as_ref().unwrap().clone();
-        let mut program = Program::new(asg, self.main_file_path.clone());
+
+        let mut program = Program::new(asg, self.main_file_path.clone(), self.debug, self.debug_port);
 
         program.enforce_program(input)?;
 
@@ -424,7 +437,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
     pub fn compile_test(&self, input: InputPairs) -> Result<(u32, u32)> {
         let asg = self.asg.as_ref().unwrap().clone();
-        let program = Program::new(asg, self.main_file_path.clone());
+        let program = Program::new(asg, self.main_file_path.clone(), self.debug, self.debug_port);
 
         let program_name = program.asg.name.clone();
         let mut output_file_name = program_name.clone();

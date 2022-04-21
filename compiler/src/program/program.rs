@@ -25,8 +25,7 @@ use snarkvm_ir::{Header, Instruction, MaskData, QueryData, RepeatData, SnarkVMVe
 
 use indexmap::IndexMap;
 use std::path::PathBuf;
-use snarkvm_debugdata::DebugData;
-
+use snarkvm_debugdata::{DebugData, DebugVariable, DebugVariableType, DebugInstruction};
 use crate::CompilerOptions;
 
 #[derive(Clone, Debug)]
@@ -58,7 +57,7 @@ pub(crate) struct Program<'a> {
 }
 
 impl<'a> Program<'a> {
-    pub fn new(asg: leo_asg::Program<'a>, main_file_path: PathBuf) -> Self {
+    pub fn new(asg: leo_asg::Program<'a>, main_file_path: PathBuf, debug: bool, debug_port: Option<u32>) -> Self {
         Self {
             asg,
             current_function: None,
@@ -68,7 +67,7 @@ impl<'a> Program<'a> {
             inputs: IndexMap::new(),
             variable_to_register: IndexMap::new(),
             input_orderings: IndexMap::new(),
-            debug_data: DebugData::new(),
+            debug_data: DebugData::new(debug, debug_port),
             current_dbg_func: 0,
             main_file_path,
         }
@@ -117,6 +116,22 @@ impl<'a> Program<'a> {
                 name: variable.borrow().name.name.to_string(),
             },
         );
+
+        let span = variable.borrow().name.span.clone();
+        let dbg_var = DebugVariable {
+            name: String::from(variable.borrow().name.to_string()),
+            type_: DebugVariableType::Integer,
+            value: "".to_string(),
+            circuit_id: 0,
+            mutable: false,
+            const_: false,
+            line_start: span.line_start as u32,
+            line_end: span.line_stop as u32,
+            sub_variables: Vec::new()
+        };
+        let func_index = self.resolve_function(self.current_function.expect("return in non-function"));
+        self.debug_data.add_variable(register, dbg_var);
+        self.debug_data.add_variable_to_function(func_index, register);
         register
     }
 
@@ -174,7 +189,25 @@ impl<'a> Program<'a> {
             }
         }
         for (_name, variable) in &function.arguments {
-            self.alloc_var(variable.get());
+            let id = self.alloc_var(variable.get());
+
+
+            let span = variable.get().borrow().name.span.clone();
+            let dbg_var = DebugVariable {
+                name: String::from(variable.get().borrow().name.to_string()),
+                type_: DebugVariableType::Integer,
+                value: "".to_string(),
+                circuit_id: 0,
+                mutable: false,
+                const_: false,
+                line_start: span.line_start as u32,
+                line_end: span.line_stop as u32,
+                sub_variables: Vec::new()
+            };
+
+            let func_index = self.resolve_function(self.current_function.expect("return in non-function"));
+            self.debug_data.add_variable(id, dbg_var);
+            self.debug_data.add_variable_to_function(func_index, id);
         }
     }
 
@@ -204,6 +237,24 @@ impl<'a> Program<'a> {
             self.current_instructions().truncate(start_index);
             return out;
         }
+
+        let index = self.resolve_function(self.current_function.expect("return in non-function"));
+        let func = self.debug_data.get_function(index);
+        let mut copy_instructions: IndexMap<u32, DebugInstruction> = IndexMap::new();
+        match func {
+            None => {}
+            Some(item) => {
+                copy_instructions = item.instructions.clone();
+                item.instructions.clear();
+                for (key, val) in copy_instructions {
+                    if key < (start_index as u32) {
+                        item.instructions.insert(key, val.clone());
+                    } else {
+                        item.instructions.insert(key + 1, val.clone());
+                    }
+                }
+            }
+        }
         let masked_count = self.current_instructions().len() - start_index;
         self.current_instructions().insert(
             start_index,
@@ -225,11 +276,50 @@ impl<'a> Program<'a> {
     ) -> Result<R, E> {
         let start_index = self.current_instructions().len();
         let iter_register = self.alloc_var(iter_variable);
+        let index = self.resolve_function(self.current_function.expect("return in non-function"));
+
+        let dbg_var = DebugVariable {
+            name: String::from(iter_variable.borrow().name.to_string()),
+            type_: DebugVariableType::Integer,
+            value: "".to_string(),
+            circuit_id: 0,
+            mutable: false,
+            const_: false,
+            line_start: iter_variable.borrow().name.span.line_start as u32,
+            line_end: iter_variable.borrow().name.span.line_stop as u32,
+            sub_variables: Vec::new()
+        };
+
+        self.debug_data.add_variable(iter_register, dbg_var);
+        self.debug_data.add_variable_to_function(index, iter_register);
+
+
         let out = inner(self);
         if out.is_err() {
             self.current_instructions().truncate(start_index);
             return out;
         }
+
+
+        let func = self.debug_data.get_function(index);
+        let mut copy_instructions: IndexMap<u32, DebugInstruction> = IndexMap::new();
+        match func {
+            None => {}
+            Some(item) => {
+                copy_instructions = item.instructions.clone();
+                item.instructions.clear();
+                for (key, val) in copy_instructions {
+                    if key < (start_index as u32) {
+                        item.instructions.insert(key, val.clone());
+                    } else {
+                        item.instructions.insert(key + 1, val.clone());
+                    }
+                }
+            }
+        }
+
+
+
         let masked_count = self.current_instructions().len() - start_index;
         self.current_instructions().insert(
             start_index,
@@ -241,6 +331,7 @@ impl<'a> Program<'a> {
                 to,
             }),
         );
+
         out
     }
 

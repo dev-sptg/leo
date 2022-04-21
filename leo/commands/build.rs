@@ -269,6 +269,8 @@ impl<'a> Command<'a> for Build {
             Some(self.compiler_options.clone().into()),
             imports_map,
             Some(self.compiler_options.into()),
+            context.debug,
+            context.debug_port
         )?;
 
         // Compute the current program checksum
