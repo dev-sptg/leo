@@ -78,7 +78,7 @@ pub struct Compiler<'a, 'b> {
     options: CompilerOptions,
     imports_map: IndexMap<String, String>,
     output_options: OutputOptions,
-    debug: bool,
+    pub debug: bool,
     debug_port: Option<u32>,
 }
 

@@ -85,6 +85,12 @@ enum CommandOpts {
         command: Build,
     },
 
+    #[structopt(about = "Compile and debug the current package as a program")]
+    Debug {
+        #[structopt(flatten)]
+        command: Build,
+    },
+
     #[structopt(about = "Run a program setup")]
     Setup {
         #[structopt(flatten)]
@@ -199,16 +205,16 @@ fn run_with_args(handler: &Handler, opt: Opt) -> Result<()> {
         )?;
     }
 
-    let context = create_context(handler, opt.path, opt.api, opt.debug, opt.debug_port)?;
+    let context = create_context(handler, opt.path, opt.api, opt.debug_port)?;
     create_session_if_not_set_then(|_| try_execute_command(opt.command, context))
 }
 
 /// Returns custom root folder and creates a context for it.
 /// If not specified, the default context will be created in cwd.
-fn create_context(handler: &Handler, path: Option<PathBuf>, api: Option<String>, debug: bool, debug_port: Option<u32>) -> Result<context::Context<'_>> {
+fn create_context(handler: &Handler, path: Option<PathBuf>, api: Option<String>, debug_port: Option<u32>) -> Result<context::Context<'_>> {
     match path {
-        Some(path) => context::create_context(handler, path, api, debug, debug_port),
-        None => context::get_context(handler, api, debug, debug_port),
+        Some(path) => context::create_context(handler, path, api, debug_port),
+        None => context::get_context(handler, api,  debug_port),
     }
 }
 
@@ -216,6 +222,11 @@ fn try_execute_command(command: CommandOpts, context: context::Context) -> Resul
     match command {
         CommandOpts::Init { command } => command.try_execute(context),
         CommandOpts::New { command } => command.try_execute(context),
+        CommandOpts::Debug { command } => {
+            let mut context= context.clone();
+            context.debug = true;
+            command.try_execute(context)
+        },
         CommandOpts::Build { command } => command.try_execute(context),
         CommandOpts::Setup { command } => command.try_execute(context),
         CommandOpts::Prove { command } => command.try_execute(context),

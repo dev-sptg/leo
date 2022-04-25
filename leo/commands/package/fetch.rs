@@ -117,7 +117,7 @@ impl Fetch {
             }
 
             // Check imported dependency's dependencies.
-            let imported_dependencies = create_context(context.handler, path, None, context.debug, context.debug_port)?
+            let imported_dependencies = create_context(context.handler, path, None, context.debug_port)?
                 .manifest()
                 .map_err(|_| CliError::unable_to_read_imported_dependency_manifest())?
                 .get_package_dependencies();
