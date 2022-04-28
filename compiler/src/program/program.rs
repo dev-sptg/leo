@@ -25,7 +25,7 @@ use snarkvm_ir::{Header, Instruction, MaskData, QueryData, RepeatData, SnarkVMVe
 
 use indexmap::IndexMap;
 use std::path::PathBuf;
-use snarkvm_debugdata::{DebugData, DebugVariable, DebugVariableType, DebugInstruction};
+use snarkvm_debugdata::{DebugData, DebugVariable, DebugVariableType};
 use crate::CompilerOptions;
 
 #[derive(Clone, Debug)]
@@ -240,11 +240,11 @@ impl<'a> Program<'a> {
 
         let index = self.resolve_function(self.current_function.expect("return in non-function"));
         let func = self.debug_data.get_function(index);
-        let mut copy_instructions: IndexMap<u32, DebugInstruction> = IndexMap::new();
+        //let mut copy_instructions: IndexMap<u32, DebugInstruction> = IndexMap::new();
         match func {
             None => {}
             Some(item) => {
-                copy_instructions = item.instructions.clone();
+                let copy_instructions = item.instructions.clone();
                 item.instructions.clear();
                 for (key, val) in copy_instructions {
                     if key < (start_index as u32) {
@@ -302,11 +302,11 @@ impl<'a> Program<'a> {
 
 
         let func = self.debug_data.get_function(index);
-        let mut copy_instructions: IndexMap<u32, DebugInstruction> = IndexMap::new();
+        //let mut copy_instructions: IndexMap<u32, DebugInstruction> = IndexMap::new();
         match func {
             None => {}
             Some(item) => {
-                copy_instructions = item.instructions.clone();
+                let copy_instructions = item.instructions.clone();
                 item.instructions.clear();
                 for (key, val) in copy_instructions {
                     if key < (start_index as u32) {

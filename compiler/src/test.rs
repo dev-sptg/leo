@@ -61,6 +61,8 @@ fn new_compiler(handler: &Handler, path: PathBuf, theorem_options: Option<Output
         None,
         IndexMap::new(),
         theorem_options,
+        false,
+        None
     )
 }
 

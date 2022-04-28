@@ -20,7 +20,7 @@ use crate::program::Program;
 use leo_asg::{CircuitMember, DefinitionStatement, Expression, Type, Variable};
 use leo_asg::CircuitMember::{Const, Function};
 use leo_errors::{CompilerError, Result};
-use snarkvm_debugdata::{DebugInstruction, DebugItem, DebugVariable, DebugVariableType};
+use snarkvm_debugdata::{DebugInstruction, DebugVariable, DebugVariableType};
 use snarkvm_ir::{Instruction, Integer, QueryData, Value};
 
 impl<'a> Program<'a> {
@@ -56,7 +56,7 @@ impl<'a> Program<'a> {
             Value::Array(_) => {}
             Value::Tuple(_) => {}
             Value::Str(_) => {}
-            Value::Ref(id) => {
+            Value::Ref(_id) => {
 
                 let instruction_index = self.current_instructions_index() - 1;
                 self.debug_data.insert_instruction(func_index, instruction_index , DebugInstruction {

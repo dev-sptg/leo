@@ -22,7 +22,7 @@ use leo_asg::CircuitMember;
 use leo_errors::CompilerError;
 use leo_errors::Result;
 use leo_span::sym;
-use snarkvm_debugdata::{DebugFunction, DebugItem};
+use snarkvm_debugdata::{DebugFunction};
 
 impl<'a> Program<'a> {
     pub fn enforce_program(&mut self, input: &leo_ast::Input) -> Result<()> {

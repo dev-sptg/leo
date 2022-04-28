@@ -242,7 +242,7 @@ pub fn leo_update_and_update_automatic() -> Result<()> {
 /// Create context for Pedersen Hash example
 fn context(handler: &Handler) -> Result<Context<'_>> {
     let path = PathBuf::from(&PEDERSEN_HASH_PATH);
-    let context = create_context(handler, path, None)?;
+    let context = create_context(handler, path, None, None)?;
 
     Ok(context)
 }

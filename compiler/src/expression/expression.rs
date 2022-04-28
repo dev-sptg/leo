@@ -25,8 +25,7 @@ use leo_errors::CompilerError;
 use leo_errors::Result;
 use leo_span::Span;
 use num_bigint::Sign;
-use snarkvm_debugdata::DebugItem::{Function, Variable};
-use snarkvm_debugdata::{DebugItem, DebugVariable, DebugVariableType};
+use snarkvm_debugdata::{DebugVariable, DebugVariableType};
 use snarkvm_ir::{Group, GroupCoordinate, Integer, Value};
 
 pub(crate) fn asg_group_coordinate_to_ir(coordinate: &leo_asg::GroupCoordinate) -> GroupCoordinate {

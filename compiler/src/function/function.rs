@@ -25,7 +25,7 @@ use leo_errors::Result;
 use leo_span::sym;
 use snarkvm_ir::{CallCoreData, CallData, Instruction, Integer, PredicateData, QueryData, Value};
 use std::cell::Cell;
-use snarkvm_debugdata::{DebugFunction, DebugVariableType};
+use snarkvm_debugdata::{DebugVariableType};
 
 impl<'a> Program<'a> {
     pub(crate) fn enforce_function_definition(&mut self, function: &'a Function<'a>) -> Result<()> {
