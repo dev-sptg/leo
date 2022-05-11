@@ -16,13 +16,15 @@
 
 //! Generates R1CS constraints for a compiled Leo program.
 
+use std::borrow::Borrow;
 use indexmap::IndexMap;
 use crate::Program;
 use leo_asg::CircuitMember;
 use leo_errors::CompilerError;
 use leo_errors::Result;
-use leo_span::sym;
+use leo_span::{Span, sym};
 use snarkvm_debugdata::{DebugFunction};
+use std::path::Path;
 
 impl<'a> Program<'a> {
     pub fn enforce_program(&mut self, input: &leo_ast::Input) -> Result<()> {
@@ -74,8 +76,17 @@ impl<'a> Program<'a> {
             self.enforce_definition_statement(global_const)?;
         }
 
+        //let span = *&function.span.clone().unwrap_or_default();
+        let file_path = match  &function.span.clone() {
+            None => {"".to_string()}
+            Some(sp) => {
+                sp.path.to_string()
+            }
+        };
+
         let dbg_func = DebugFunction{
             name: function.name.borrow().name.to_string(),
+            file_path,
             self_circuit_id: 0,
             variables: Vec::new(),
             instructions: IndexMap::new(),
@@ -90,8 +101,16 @@ impl<'a> Program<'a> {
 
 
         for function in secondary_functions.iter() {
+            let file_path = match function.span.clone() {
+                None => {"".to_string()}
+                Some(sp) => {
+                    sp.path.to_string()
+                }
+            };
+
             let dbg_func = DebugFunction {
                 name: function.name.borrow().name.to_string(),
+                file_path,
                 self_circuit_id: 0,
                 variables: Vec::new(),
                 instructions: IndexMap::new(),

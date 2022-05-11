@@ -65,7 +65,7 @@ impl<'a> Program<'a> {
             }
             Statement::Expression(statement) => {
                 let _value = self.enforce_expression(statement.expression.get())?;
-                let line_start =  *&statement.span.clone().unwrap_or_default().line_start as u32;
+                /*let line_start =  *&statement.span.clone().unwrap_or_default().line_start as u32;
                 let line_end =  *&statement.span.clone().unwrap_or_default().line_stop as u32;
                 let func_index = self.resolve_function(self.current_function.expect("return in non-function"));
 
@@ -89,7 +89,7 @@ impl<'a> Program<'a> {
                             line_end,
                         });
                     }
-                };
+                };*/
         
             }
             Statement::Block(statement) => {

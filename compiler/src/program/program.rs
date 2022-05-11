@@ -25,7 +25,7 @@ use snarkvm_ir::{Header, Instruction, MaskData, QueryData, RepeatData, SnarkVMVe
 
 use indexmap::IndexMap;
 use std::path::PathBuf;
-use snarkvm_debugdata::{DebugData, DebugVariable, DebugVariableType};
+use snarkvm_debugdata::{DebugData, DebugInstruction, DebugVariable, DebugVariableType};
 use crate::CompilerOptions;
 
 #[derive(Clone, Debug)]
@@ -215,7 +215,49 @@ impl<'a> Program<'a> {
         &mut self.functions.last_mut().unwrap().instructions
     }
 
+    pub fn insert_instruction(&mut self, func_index: u32, line_start: u32) {
+        if self.functions.last_mut().unwrap().instructions.len() == 0 {
+            return;
+        }
+
+
+        let instruction_index = self.current_instructions_index() - 1;
+        match self.functions.last_mut().unwrap().instructions.last() {
+            None => {}
+            Some(item) => {
+                match item {
+                    Instruction::Store(_) => {
+                        self.debug_data.insert_instruction(func_index, instruction_index , DebugInstruction {
+                            self_var_id: 0,
+                            line_start,
+                            line_end: 0,
+                        });
+                    }
+                    Instruction::Call(_) => {
+                        self.debug_data.insert_instruction(func_index, instruction_index , DebugInstruction {
+                            self_var_id: 0,
+                            line_start,
+                            line_end: 0,
+                        });
+                    }
+                    Instruction::Return(_) => {
+                        self.debug_data.insert_instruction(func_index, instruction_index , DebugInstruction {
+                            self_var_id: 0,
+                            line_start,
+                            line_end: 0,
+                        });
+                    }
+                    _=> {}
+                }
+            }
+        }
+
+
+
+    }
+
     pub fn current_instructions_index(&mut self) -> u32 {
+
         self.functions.last_mut().unwrap().instructions.len() as u32
     }
 

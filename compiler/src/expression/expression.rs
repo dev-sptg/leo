@@ -257,7 +257,16 @@ impl<'a> Program<'a> {
                 target,
                 arguments,
                 ..
-            }) => self.enforce_function_call(function.get(), target.get(), &arguments[..]),
+            }) => {
+                let value = self.enforce_function_call(function.get(), target.get(), &arguments[..]);
+                let line_start =  span.line_start as u32;
+                let line_end =  span.line_stop as u32;
+                let func_index = self.resolve_function(self.current_function.expect("return in non-function"));
+
+                self.insert_instruction(func_index, line_start);
+                
+                value
+            }
         }
     }
 }

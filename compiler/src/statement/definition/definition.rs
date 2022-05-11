@@ -45,7 +45,17 @@ impl<'a> Program<'a> {
 
         self.current_dbg_func = func_index;
         let expression = self.enforce_expression(statement.value.get())?;
-        let value = expression.clone();
+        //self.insert_instruction(func_index, line_start);
+        //let instruction_index = self.current_instructions_index() - 1;
+
+
+        /*self.debug_data.insert_instruction(func_index, instruction_index , DebugInstruction {
+            self_var_id: 0,
+            line_start,
+            line_end,
+        });*/
+
+        /*let value = expression.clone();
         match value {
             Value::Address(_) => {}
             Value::Boolean(_) => {}
@@ -65,7 +75,7 @@ impl<'a> Program<'a> {
                     line_end,
                 });
             }
-        };
+        };*/
 
 
         //let id = self.resolve_var(variable_ref.variable);
@@ -83,12 +93,13 @@ impl<'a> Program<'a> {
             let line_end = *&statement.span.clone().unwrap_or_default().line_stop as u32;
     
             self.store(variable, expression);
-            let instruction_index = self.current_instructions_index() - 1;
+            /*let instruction_index = self.current_instructions_index() - 1;
             self.debug_data.insert_instruction(func_index, instruction_index , DebugInstruction {
                 self_var_id: 0,
                 line_start,
                 line_end,
-            });
+            });*/
+            self.insert_instruction(func_index, line_start);
             let id = self.resolve_var(variable);
             match variable.clone().borrow().type_ {
                 Type::Address => {}

@@ -43,40 +43,11 @@ impl<'a> Program<'a> {
         let line_end =  *&statement.span.clone().unwrap_or_default().line_stop as u32;
         let value = output.clone();
         let instruction_index = self.current_instructions_index();
-        match value {
-            Value::Address(_) => {}
-            Value::Boolean(_) => {}
-            Value::Field(_) => {}
-            Value::Char(_) => {}
-            Value::Group(_) => {}
-            Value::Integer(_) => {}
-            Value::Array(_) => {}
-            Value::Tuple(_) => {
-                self.debug_data.insert_instruction(func_index, instruction_index , DebugInstruction {
-                    self_var_id: 0,
-                    line_start,
-                    line_end,
-                });
-                /*self.debug_data.instructions.insert(0, DebugInstruction {
-                    self_var_id: 0,
-                    line_start,
-                    line_end,
-                });*/
-            }
-            Value::Str(_) => {}
-            Value::Ref(_) => {
-                self.debug_data.insert_instruction(func_index, instruction_index , DebugInstruction {
-                    self_var_id: 0,
-                    line_start,
-                    line_end,
-                });
-                /*self.debug_data.instructions.insert(id, DebugInstruction {
-                    self_var_id: 0,
-                    line_start,
-                    line_end,
-                });*/
-            }
-        };
+        self.debug_data.insert_instruction(func_index, instruction_index , DebugInstruction {
+            self_var_id: 0,
+            line_start,
+            line_end,
+        });
         self.emit(Instruction::Return(PredicateData { values: vec![output] }));
         Ok(())
     }
