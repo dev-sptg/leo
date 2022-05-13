@@ -91,6 +91,7 @@ impl<'a> Program<'a> {
             variables: Vec::new(),
             instructions: IndexMap::new(),
             arguments: Vec::new(),
+            current_line: 0,
             line_start: *&function.span.clone().unwrap_or_default().line_start as u32,
             line_end: *&function.span.clone().unwrap_or_default().line_stop as u32
         };
@@ -115,6 +116,7 @@ impl<'a> Program<'a> {
                 variables: Vec::new(),
                 instructions: IndexMap::new(),
                 arguments: Vec::new(),
+                current_line: 0,
                 line_start: *&function.span.clone().unwrap_or_default().line_start as u32,
                 line_end: *&function.span.clone().unwrap_or_default().line_stop as u32
             };
