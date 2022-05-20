@@ -119,8 +119,38 @@ impl<'a> Program<'a> {
                     self.debug_data.add_variable_to_function(self.current_dbg_func, id);
                 }
                 Type::Char => {}
-                Type::Field => {}
-                Type::Group => {}
+                Type::Field => {
+                    let dbg_var = DebugVariable {
+                        name: String::from(variable.borrow().name.to_string()),
+                        type_: DebugVariableType::Group,
+                        value: "".to_string(),
+                        circuit_id: 0,
+                        mutable: false,
+                        const_: false,
+                        line_start: *&statement.span.clone().unwrap_or_default().line_start as u32,
+                        line_end: *&statement.span.clone().unwrap_or_default().line_stop as u32,
+                        sub_variables: Vec::new()
+                    };
+
+                    self.debug_data.add_variable(id, dbg_var);
+                    self.debug_data.add_variable_to_function(self.current_dbg_func, id);
+                }
+                Type::Group => {
+                    let dbg_var = DebugVariable {
+                        name: String::from(variable.borrow().name.to_string()),
+                        type_: DebugVariableType::Group,
+                        value: "".to_string(),
+                        circuit_id: 0,
+                        mutable: false,
+                        const_: false,
+                        line_start: *&statement.span.clone().unwrap_or_default().line_start as u32,
+                        line_end: *&statement.span.clone().unwrap_or_default().line_stop as u32,
+                        sub_variables: Vec::new()
+                    };
+
+                    self.debug_data.add_variable(id, dbg_var);
+                    self.debug_data.add_variable_to_function(self.current_dbg_func, id);
+                }
                 Type::Integer(_) => {
                     let dbg_var = DebugVariable {
                         name: String::from(variable.borrow().name.to_string()),
