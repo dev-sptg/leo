@@ -110,6 +110,7 @@ impl<'a> Program<'a> {
                         value: "".to_string(),
                         circuit_id: 0,
                         mutable: false,
+                        is_argument: false,
                         const_: false,
                         line_start: *&statement.span.clone().unwrap_or_default().line_start as u32,
                         line_end: *&statement.span.clone().unwrap_or_default().line_stop as u32,
@@ -126,6 +127,7 @@ impl<'a> Program<'a> {
                         value: "".to_string(),
                         circuit_id: 0,
                         mutable: false,
+                        is_argument: false,
                         const_: false,
                         line_start: *&statement.span.clone().unwrap_or_default().line_start as u32,
                         line_end: *&statement.span.clone().unwrap_or_default().line_stop as u32,
@@ -142,6 +144,7 @@ impl<'a> Program<'a> {
                         value: "".to_string(),
                         circuit_id: 0,
                         mutable: false,
+                        is_argument: false,
                         const_: false,
                         line_start: *&statement.span.clone().unwrap_or_default().line_start as u32,
                         line_end: *&statement.span.clone().unwrap_or_default().line_stop as u32,
@@ -158,6 +161,7 @@ impl<'a> Program<'a> {
                         value: "".to_string(),
                         circuit_id: 0,
                         mutable: false,
+                        is_argument: false,
                         const_: false,
                         line_start: *&statement.span.clone().unwrap_or_default().line_start as u32,
                         line_end: *&statement.span.clone().unwrap_or_default().line_stop as u32,
@@ -172,9 +176,10 @@ impl<'a> Program<'a> {
                     let dbg_var = DebugVariable {
                         name: String::from(variable.borrow().name.to_string()),
                         type_: DebugVariableType::Array,
-                        value: "Array".to_string(),
+                        value: "".to_string(),
                         circuit_id: 0,
                         mutable: false,
+                        is_argument: false,
                         const_: false,
                         line_start: *&statement.span.clone().unwrap_or_default().line_start as u32,
                         line_end: *&statement.span.clone().unwrap_or_default().line_stop as u32,
@@ -185,7 +190,22 @@ impl<'a> Program<'a> {
                     self.debug_data.add_variable_to_function(self.current_dbg_func, id);
                 }
                 Type::ArrayWithoutSize(_) => {}
-                Type::Tuple(_) => {}
+                Type::Tuple(_) => {
+                    let dbg_var = DebugVariable {
+                        name: String::from(variable.borrow().name.to_string()),
+                        type_: DebugVariableType::Tuple,
+                        value: "".to_string(),
+                        circuit_id: 0,
+                        mutable: false,
+                        is_argument: false,
+                        const_: false,
+                        line_start: *&statement.span.clone().unwrap_or_default().line_start as u32,
+                        line_end: *&statement.span.clone().unwrap_or_default().line_stop as u32,
+                        sub_variables: Vec::new()
+                    };
+                    self.debug_data.add_variable(id, dbg_var);
+                    self.debug_data.add_variable_to_function(self.current_dbg_func, id);
+                }
                 Type::Circuit(circuit) => {
 
                     let mut dbg_var = DebugVariable {
@@ -194,6 +214,7 @@ impl<'a> Program<'a> {
                         value: circuit.name.borrow().name.to_string(),
                         circuit_id: self.debug_data.last_circuit_id,
                         mutable: false,
+                        is_argument: false,
                         const_: false,
                         line_start: *&statement.span.clone().unwrap_or_default().line_start as u32,
                         line_end: *&statement.span.clone().unwrap_or_default().line_stop as u32,
@@ -226,6 +247,7 @@ impl<'a> Program<'a> {
                                     value: "".to_string(),
                                     circuit_id: 0,
                                     mutable: false,
+                                    is_argument: false,
                                     const_: false,
                                     line_start: 0,
                                     line_end: 0,

@@ -178,6 +178,7 @@ impl<'a> Program<'a> {
                     value: "".to_string(),
                     circuit_id: 0,
                     mutable: false,
+                    is_argument: false,
                     const_: false,
                     line_start: span.line_start as u32,
                     line_end: span.line_stop as u32,
