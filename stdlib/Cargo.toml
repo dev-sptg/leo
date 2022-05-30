@@ -21,7 +21,7 @@ edition = "2018"
 path = "src/lib.rs"
 
 [dependencies]
-indexmap = "1.7.0"
+indexmap = "1.8.2"
 include_dir = "0.6.1"
 
 [dependencies.leo-ast]
