@@ -20,7 +20,7 @@ use crate::program::Program;
 use leo_asg::{CircuitInitExpression, CircuitMember};
 use leo_errors::{CompilerError, Result};
 use leo_span::Span;
-use snarkvm_debugdata::DebugCircuit;
+use snarkvm_debugdata::{DebugCircuit, DebugVariable, DebugVariableType};
 use snarkvm_ir::Value;
 
 impl<'a> Program<'a> {
@@ -51,21 +51,7 @@ impl<'a> Program<'a> {
             match target {
                 CircuitMember::Variable(_type_) => {
                     let variable_value = self.enforce_expression(inner.get())?;
-                    let value = variable_value.clone();
-                    match value {
-                        Value::Address(_) => {}
-                        Value::Boolean(_) => {}
-                        Value::Field(_) => {}
-                        Value::Char(_) => {}
-                        Value::Group(_) => {}
-                        Value::Integer(_) => {}
-                        Value::Array(_) => {}
-                        Value::Tuple(_) => {}
-                        Value::Str(_) => {}
-                        Value::Ref(id) => {
-                            dbg_circ.members.push(id);
-                        }
-                    };
+                    dbg_circ.members.push(DebugVariable::new_some_variable(DebugVariableType::Integer, name.to_string(), "Value is currently unavailable".to_string(), 0, 0));
                     resolved_members[index] = Some(variable_value);
                 }
                 _ => return Err(CompilerError::expected_circuit_member(name, span).into()),

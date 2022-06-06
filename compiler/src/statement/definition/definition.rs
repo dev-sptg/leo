@@ -45,47 +45,9 @@ impl<'a> Program<'a> {
 
         self.current_dbg_func = func_index;
         let expression = self.enforce_expression(statement.value.get())?;
-        //self.insert_instruction(func_index, line_start);
-        //let instruction_index = self.current_instructions_index() - 1;
-
-
-        /*self.debug_data.insert_instruction(func_index, instruction_index , DebugInstruction {
-            self_var_id: 0,
-            line_start,
-            line_end,
-        });*/
-
-        /*let value = expression.clone();
-        match value {
-            Value::Address(_) => {}
-            Value::Boolean(_) => {}
-            Value::Field(_) => {}
-            Value::Char(_) => {}
-            Value::Group(_) => {}
-            Value::Integer(_) => {}
-            Value::Array(_) => {}
-            Value::Tuple(_) => {}
-            Value::Str(_) => {}
-            Value::Ref(_id) => {
-
-                let instruction_index = self.current_instructions_index() - 1;
-                self.debug_data.insert_instruction(func_index, instruction_index , DebugInstruction {
-                    self_var_id: 0,
-                    line_start,
-                    line_end,
-                });
-            }
-        };*/
-
-
-        //let id = self.resolve_var(variable_ref.variable);
-       // self.current_dbg_func.variables.insert(id, dbg_var);
-
 
         if num_variables == 1 {
             let variable = statement.variables.get(0).unwrap();
-
-
             // Define a single variable with a single value
             self.alloc_var(variable);
 
@@ -93,172 +55,69 @@ impl<'a> Program<'a> {
             let line_end = *&statement.span.clone().unwrap_or_default().line_stop as u32;
     
             self.store(variable, expression);
-            /*let instruction_index = self.current_instructions_index() - 1;
-            self.debug_data.insert_instruction(func_index, instruction_index , DebugInstruction {
-                self_var_id: 0,
-                line_start,
-                line_end,
-            });*/
             self.insert_instruction(func_index, line_start);
             let id = self.resolve_var(variable);
-            match variable.clone().borrow().type_ {
+            match variable.clone().borrow().type_.clone() {
                 Type::Address => {}
                 Type::Boolean => {
-                    let dbg_var = DebugVariable {
-                        name: String::from(variable.borrow().name.to_string()),
-                        type_: DebugVariableType::Boolean,
-                        value: "".to_string(),
-                        circuit_id: 0,
-                        mutable: false,
-                        is_argument: false,
-                        const_: false,
-                        line_start: *&statement.span.clone().unwrap_or_default().line_start as u32,
-                        line_end: *&statement.span.clone().unwrap_or_default().line_stop as u32,
-                        sub_variables: Vec::new()
-                    };
+                    let dbg_var = DebugVariable::new_some_variable(DebugVariableType::Boolean, String::from(variable.borrow().name.to_string()), "Value is currently unavailable".to_string(), line_start, line_end);
                     self.debug_data.add_variable(id, dbg_var);
                     self.debug_data.add_variable_to_function(self.current_dbg_func, id);
                 }
                 Type::Char => {}
                 Type::Field => {
-                    let dbg_var = DebugVariable {
-                        name: String::from(variable.borrow().name.to_string()),
-                        type_: DebugVariableType::Group,
-                        value: "".to_string(),
-                        circuit_id: 0,
-                        mutable: false,
-                        is_argument: false,
-                        const_: false,
-                        line_start: *&statement.span.clone().unwrap_or_default().line_start as u32,
-                        line_end: *&statement.span.clone().unwrap_or_default().line_stop as u32,
-                        sub_variables: Vec::new()
-                    };
-
+                    let dbg_var = DebugVariable::new_some_variable(DebugVariableType::Group, String::from(variable.borrow().name.to_string()), "Value is currently unavailable".to_string(), line_start, line_end);
                     self.debug_data.add_variable(id, dbg_var);
                     self.debug_data.add_variable_to_function(self.current_dbg_func, id);
                 }
                 Type::Group => {
-                    let dbg_var = DebugVariable {
-                        name: String::from(variable.borrow().name.to_string()),
-                        type_: DebugVariableType::Group,
-                        value: "".to_string(),
-                        circuit_id: 0,
-                        mutable: false,
-                        is_argument: false,
-                        const_: false,
-                        line_start: *&statement.span.clone().unwrap_or_default().line_start as u32,
-                        line_end: *&statement.span.clone().unwrap_or_default().line_stop as u32,
-                        sub_variables: Vec::new()
-                    };
-
+                    let dbg_var = DebugVariable::new_some_variable(DebugVariableType::Group, String::from(variable.borrow().name.to_string()), "Value is currently unavailable".to_string(), line_start, line_end);
                     self.debug_data.add_variable(id, dbg_var);
                     self.debug_data.add_variable_to_function(self.current_dbg_func, id);
                 }
                 Type::Integer(_) => {
-                    let dbg_var = DebugVariable {
-                        name: String::from(variable.borrow().name.to_string()),
-                        type_: DebugVariableType::Integer,
-                        value: "".to_string(),
-                        circuit_id: 0,
-                        mutable: false,
-                        is_argument: false,
-                        const_: false,
-                        line_start: *&statement.span.clone().unwrap_or_default().line_start as u32,
-                        line_end: *&statement.span.clone().unwrap_or_default().line_stop as u32,
-                        sub_variables: Vec::new()
-                    };
-
+                    let dbg_var = DebugVariable::new_some_variable(DebugVariableType::Integer, String::from(variable.borrow().name.to_string()), "Value is currently unavailable".to_string(), line_start, line_end);
                     self.debug_data.add_variable(id, dbg_var);
                     self.debug_data.add_variable_to_function(self.current_dbg_func, id);
-                    //self.add_debug_variable(cur_func, id, DebugItem::Variable(dbg_var));
                 }
-                Type::Array(_, _) => {
-                    let dbg_var = DebugVariable {
-                        name: String::from(variable.borrow().name.to_string()),
-                        type_: DebugVariableType::Array,
-                        value: "".to_string(),
-                        circuit_id: 0,
-                        mutable: false,
-                        is_argument: false,
-                        const_: false,
-                        line_start: *&statement.span.clone().unwrap_or_default().line_start as u32,
-                        line_end: *&statement.span.clone().unwrap_or_default().line_stop as u32,
-                        sub_variables: Vec::new()
-                    };
+                Type::Array(type_, len) => {
+                    let mut dbg_var = DebugVariable::new_some_variable(DebugVariableType::Array, String::from(variable.borrow().name.to_string()), "Array".to_string(), line_start, line_end);
+                    for index in  0..len {
+                        let mut sub_var = DebugVariable::new_some_variable(DebugVariableType::Integer, format!("[{}]", index), format!("{}", type_), 0, 0);
+                        self.resolve_circuit(&*type_, &mut sub_var);
+                        dbg_var.sub_variables.push(sub_var);
+                    }
 
+                    self.debug_data.debug_variable = DebugVariable::new();
                     self.debug_data.add_variable(id, dbg_var);
                     self.debug_data.add_variable_to_function(self.current_dbg_func, id);
                 }
                 Type::ArrayWithoutSize(_) => {}
-                Type::Tuple(_) => {
-                    let dbg_var = DebugVariable {
-                        name: String::from(variable.borrow().name.to_string()),
-                        type_: DebugVariableType::Tuple,
-                        value: "".to_string(),
-                        circuit_id: 0,
-                        mutable: false,
-                        is_argument: false,
-                        const_: false,
-                        line_start: *&statement.span.clone().unwrap_or_default().line_start as u32,
-                        line_end: *&statement.span.clone().unwrap_or_default().line_stop as u32,
-                        sub_variables: Vec::new()
-                    };
+                Type::Tuple(items) => {
+                    let mut dbg_var =DebugVariable::new_some_variable(DebugVariableType::Tuple, String::from(variable.borrow().name.to_string()), "Tuple".to_string(), line_start, line_end);
+                    let mut index = 0;
+                    for item in items {
+                        let mut sub_var = DebugVariable::new_some_variable(DebugVariableType::Integer, format!("{}", index), "".to_string(), 0, 0);
+                        self.resolve_circuit(&item, &mut sub_var);
+                        dbg_var.sub_variables.push(sub_var);
+                        index += 1;
+                    }
+
                     self.debug_data.add_variable(id, dbg_var);
                     self.debug_data.add_variable_to_function(self.current_dbg_func, id);
                 }
                 Type::Circuit(circuit) => {
-
-                    let mut dbg_var = DebugVariable {
-                        name: String::from(variable.borrow().name.to_string()),
-                        type_: DebugVariableType::Circuit,
-                        value: circuit.name.borrow().name.to_string(),
-                        circuit_id: self.debug_data.last_circuit_id,
-                        mutable: false,
-                        is_argument: false,
-                        const_: false,
-                        line_start: *&statement.span.clone().unwrap_or_default().line_start as u32,
-                        line_end: *&statement.span.clone().unwrap_or_default().line_stop as u32,
-                        sub_variables: Vec::new()
-                    };
-
-                    /*let item = self.debug_data.circuits.get_mut(&self.debug_data.last_circuit_id);
-                    match item {
-                        Some(circuit) => {
-                            for member in &circuit.members {
-                                match self.debug_data.variables.get_mut(member) {
-                                    Some(variable) => {
-                                        dbg_var.sub_variables.push(variable.clone());
-                                    }
-                                    None => {  },
-                                }
-                            }
-                        },
-                        None => {  },
-                    }*/
-
-                    //let member = circuit.members.borrow_mut().iter;
+                    let mut dbg_var = DebugVariable::new_circuit(String::from(variable.borrow().name.to_string()), circuit.name.borrow().name.to_string(), self.debug_data.last_circuit_id, line_start, line_end);
                     let members = circuit.members.borrow();
                     for (name, member) in members.iter() {
                         match  member {
-                            CircuitMember::Variable(_) => {
-                                let sub_var = DebugVariable {
-                                    name: name.to_string(),
-                                    type_: DebugVariableType::Integer,
-                                    value: "".to_string(),
-                                    circuit_id: 0,
-                                    mutable: false,
-                                    is_argument: false,
-                                    const_: false,
-                                    line_start: 0,
-                                    line_end: 0,
-                                    sub_variables: Vec::new()
-                                };
+                            CircuitMember::Variable(var) => {
+                                let mut sub_var = DebugVariable::new_some_variable(DebugVariableType::Integer, name.to_string(), "Value is currently unavailable".to_string(), 0, 0);
+                                self.resolve_circuit(&var, &mut sub_var);
                                 dbg_var.sub_variables.push(sub_var);
                             }
                             _=> {}
                         }
-
-
                     }
 
                     self.debug_data.add_variable(id, dbg_var);
@@ -266,12 +125,61 @@ impl<'a> Program<'a> {
                 }
                 Type::Err => {}
             }
-
-            //let id = self.resolve_var(variable);
-            //cur_func.variables.insert(id, dbg_var);
             Ok(())
         } else {
             self.enforce_multiple_definition(&statement.variables[..], expression)
         }
+    }
+
+    pub fn resolve_circuit(&mut self, var: &Type<'a>, variable:  &mut DebugVariable) {
+        match var {
+            Type::Tuple(items) => {
+                variable.type_ = DebugVariableType::Tuple;
+                variable.value = "Tuple".to_string();
+                let mut index = 0;
+                for item in items {
+                    let mut sub_var = DebugVariable::new_some_variable(DebugVariableType::Integer, format!("{}", index), "".to_string(), 0, 0);
+                    self.resolve_circuit(&item, &mut sub_var);
+                    variable.sub_variables.push(sub_var);
+                    index += 1;
+                }
+            }
+            Type::Array(type_, len) => {
+                variable.type_ = DebugVariableType::Array;
+                variable.value = "Array".to_string();
+                for index in  0..*len {
+                    let mut sub_var = DebugVariable::new_some_variable(DebugVariableType::Integer, format!("[{}]", index), format!("{}", type_), 0, 0);
+                    self.resolve_circuit(&*type_, &mut sub_var);
+                    variable.sub_variables.push(sub_var);
+                }
+            }
+            Type::Circuit(circuit) => {
+                variable.type_ = DebugVariableType::Circuit;
+                variable.value = circuit.name.borrow().name.to_string();
+                let members = circuit.members.borrow();
+                for (name, member) in members.iter() {
+                    match  member {
+                        CircuitMember::Variable(var) => {
+                            let mut sub_var = DebugVariable::new_some_variable(DebugVariableType::Integer, format!("{}", name), "Value is currently unavailable".to_string(), 0, 0);
+                            self.resolve_circuit(&var, &mut sub_var);
+                            variable.sub_variables.push(sub_var);
+                        }
+                        _=> {
+                            
+                        }
+                    }
+                }
+
+            }
+            Type::Group => {
+                variable.type_ = DebugVariableType::Group;
+                variable.value = "group".to_string();
+            }
+            Type::Err => {}
+            _=> {
+                variable.value = "Value is currently unavailable".to_string();
+            }
+        }
+
     }
 }
