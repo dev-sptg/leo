@@ -17,21 +17,21 @@ jobs:
           repository: "dev-sptg/leo"
           token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           path: leo
-          ref: 'leo_debugger'
+          ref: "leo_debugger"
       - name: Checkout snarkVM
         uses: actions/checkout@v3
         with:
           repository: "dev-sptg/snarkVM"
           token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           path: snarkVM
-          ref: 'debugger'
+          ref: "debugger"
       - name: Checkout DAP
         uses: actions/checkout@v3
         with:
           repository: "AleoHQ/leo_dap"
           token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           path: leo_dap
-          ref: 'master'
+          ref: "master"
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -53,12 +53,6 @@ jobs:
           cmake ..
           cmake --build .
 
-      # - name: Build Leo
-      #   run: |
-      #     cargo build --package leo-lang --release --features noconfig && strip target/release/leo
-      #   env:
-      #     CARGO_NET_GIT_FETCH_WITH_CLI: true
-
       - id: get_version
         uses: battila7/get-version-action@v2
 
@@ -74,7 +68,6 @@ jobs:
 
       - name: Release
         uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
             leo-${{ steps.get_version.outputs.version }}-x86_64-unknown-linux-gnu.zip
@@ -171,48 +164,72 @@ jobs:
   #       env:
   #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # windows:
-  #   name: Windows
-  #   runs-on: windows-latest
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v2
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout leo
+        uses: actions/checkout@v3
+        with:
+          repository: "dev-sptg/leo"
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          path: leo
+          ref: "leo_debugger"
+      - name: Checkout snarkVM
+        uses: actions/checkout@v3
+        with:
+          repository: "dev-sptg/snarkVM"
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          path: snarkVM
+          ref: "debugger"
+      - name: Checkout DAP
+        uses: actions/checkout@v3
+        with:
+          repository: "AleoHQ/leo_dap"
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          path: leo_dap
+          ref: "master"
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: rustfmt
 
-  #     - name: Install Rust
-  #       uses: actions-rs/toolchain@v1
-  #       with:
-  #         profile: minimal
-  #         toolchain: stable
-  #         override: true
-  #         components: rustfmt
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          version: "14"
+          directory: ${{ runner.temp }}/llvm
 
-  #     - name: Install LLVM and Clang
-  #       uses: KyleMayes/install-llvm-action@v1
-  #       with:
-  #         version: "11"
-  #         directory: ${{ runner.temp }}/llvm
+      - name: Set LIBCLANG_PATH
+        run: echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
 
-  #     - name: Set LIBCLANG_PATH
-  #       run: echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
+      - name: Build leo
+        run: |
+          cd ./leo
+          cargo build
 
-  #     - name: Build Leo
-  #       run: |
-  #         cargo build --package leo-lang --release --features noconfig
-  #       env:
-  #         CARGO_NET_GIT_FETCH_WITH_CLI: true
+      - name: Build DAP
+        run: |
+          cd ./leo_dap/debugger
+          mkdir build
+          cd build
+          cmake ..
+          cmake --build .
 
-  #     - id: get_version
-  #       uses: battila7/get-version-action@v2
+      - id: get_version
+        uses: battila7/get-version-action@v2
 
-  #     - name: Zip
-  #       run: |
-  #         Compress-Archive target/release/leo.exe leo-${{ steps.get_version.outputs.version }}-x86_64-pc-windows-msvc.zip
+      - name: Zip
+        run: |
+          Compress-Archive -Path leo/target/debug/leo.exe, leo/target/debug/debugger.dll -DestinationPath leo-${{ steps.get_version.outputs.version }}-x86_64-pc-windows-msvc.zip
 
-  #     - name: Release
-  #       uses: softprops/action-gh-release@v1
-  #       if: startsWith(github.ref, 'refs/tags/')
-  #       with:
-  #         files: |
-  #           leo-${{ steps.get_version.outputs.version }}-x86_64-pc-windows-msvc.zip
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            leo-${{ steps.get_version.outputs.version }}-x86_64-pc-windows-msvc.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
