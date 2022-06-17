@@ -99,8 +99,7 @@ impl<'a> Program<'a> {
         self.current_dbg_func = self.resolve_function(function);
         let current_dbg_func = self.current_dbg_func;
         self.debug_data.add_function(self.current_dbg_func, dbg_func);
-
-
+        
         for function in secondary_functions.iter() {
             let file_path = match function.span.clone() {
                 None => {"".to_string()}
