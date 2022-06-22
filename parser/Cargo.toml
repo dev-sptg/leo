@@ -41,7 +41,7 @@ features = [ "derive" ]
 version = "0.1"
 
 [dependencies.indexmap]
-version = "1.7"
+version = "1.9"
 
 [dependencies.tendril]
 version = "0.4"
