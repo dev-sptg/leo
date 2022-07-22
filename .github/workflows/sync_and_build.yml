@@ -2,21 +2,24 @@ name: "Sync -> build -> release "
 
 on:
   workflow_dispatch:
-  schedule: 
-  - cron: "0 6 * * *"
-  
+  schedule:
+    - cron: "0 6 * * *"
+
 jobs:
-  build:
-    runs-on: windows-latest
+  sync:
+    runs-on: ubuntu-latest
     steps:
       - name: GitHub Sync to Upstream Repository
         uses: dabreadman/sync-upstream-repo@v1.3.0
-        with: 
+        with:
           upstream_repo: https://github.com/AleoHQ/leo.git
           upstream_branch: testnet3
           downstream_branch: testnet3
           token: ${{ env.GITHUB_TOKEN }}
-
+  build:
+    runs-on: windows-latest
+    needs: sync
+    steps:
       - name: Checkout
         uses: actions/checkout@v3
 
