@@ -16,3 +16,42 @@ jobs:
           upstream_branch: testnet3
           downstream_branch: testnet3
           token: ${{ env.GITHUB_TOKEN }}
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: rustfmt
+
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          version: "11"
+          directory: ${{ runner.temp }}/llvm
+
+      - name: Set LIBCLANG_PATH
+        run: echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
+
+      - name: Build Leo
+        run: |
+          cargo build --package leo-lang --release --features noconfig
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: true
+
+      - name: Zip
+        run: |
+          Compress-Archive target/release/leo.exe leo-testnet3-x86_64-pc-windows-msvc.zip
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: true
+          files: |
+            leo-testnet3-x86_64-pc-windows-msvc.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
