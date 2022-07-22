@@ -1,1 +1,0 @@
-initSidebarItems({"trait":[["IntegerTrait","The interface for a singed or unsigned integer gadget."]]});
