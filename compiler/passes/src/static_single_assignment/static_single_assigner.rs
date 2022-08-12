@@ -18,7 +18,7 @@ use crate::RenameTable;
 use std::fmt::Display;
 
 use leo_ast::{
-    AssignOperation, AssignStatement, ConditionalStatement, Expression, ExpressionReconstructor, Identifier, Statement,
+    AssignStatement, ConditionalStatement, Expression, ExpressionReconstructor, Identifier, Statement,
     StatementReconstructor,
 };
 use leo_errors::emitter::Handler;
@@ -38,6 +38,7 @@ pub struct StaticSingleAssigner<'a> {
     /// A stack of condition `Expression`s visited up to the current point in the AST.
     pub(crate) condition_stack: Vec<Expression>,
     /// A list containing tuples of guards and expressions associated with early `ReturnStatement`s.
+    /// Note that early returns are inserted in the order they are encountered during a pre-order traversal of the AST.
     pub(crate) early_returns: Vec<(Option<Expression>, Expression)>,
 }
 
@@ -63,7 +64,6 @@ impl<'a> StaticSingleAssigner<'a> {
     /// Constructs the assignment statement `place = expr;`.
     pub(crate) fn simple_assign_statement(place: Expression, value: Expression) -> Statement {
         Statement::Assign(Box::new(AssignStatement {
-            operation: AssignOperation::Assign,
             place,
             value,
             span: Default::default(),
