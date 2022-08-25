@@ -24,6 +24,8 @@ jobs:
           override: true
           components: rustfmt
 
+      - uses: Swatinem/rust-cache@v2
+
       - name: Build Leo
         run: |
           cargo build --package leo-lang --release --features noconfig && strip target/release/leo
@@ -72,6 +74,8 @@ jobs:
           toolchain: stable
           override: true
           components: rustfmt
+
+      - uses: Swatinem/rust-cache@v2
 
       - name: Build Leo
         run: |
@@ -125,6 +129,8 @@ jobs:
           toolchain: stable
           override: true
           components: rustfmt
+
+      - uses: Swatinem/rust-cache@v2
 
       - name: Build Leo
         run: |
@@ -183,6 +189,8 @@ jobs:
           version: "14"
           directory: ${{ runner.temp }}/llvm
 
+      - uses: Swatinem/rust-cache@v2
+      
       - name: Set LIBCLANG_PATH
         run: echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
 
