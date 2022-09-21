@@ -1,7 +1,23 @@
 # Build and run the auction Leo program.
 (
   cd ./project/examples/auction || exit
-  $LEO run main
+  $LEO run place_bid
+  $LEO run resolve
+  $LEO run finish
+
+  chmod +x ./run.sh
+  ./run.sh
+)
+
+# Build and run the broken_bank Leo program.
+(
+  cd ./project/examples/broken_bank || exit
+  $LEO run issue
+  $LEO run deposit
+  $LEO run withdraw
+
+  chmod +x ./run.sh
+  ./run.sh
 )
 
 # Build and run the bubblesort Leo program.
