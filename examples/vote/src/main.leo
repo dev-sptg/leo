@@ -42,7 +42,7 @@ function propose(public info: ProposalInfo) -> Proposal {
     let id: field = BHP256::hash(info.title);
 
     // Finalize the proposal id.
-    finalize(id);
+    async finalize(id);
 
     // Return a new record for the proposal.
     return Proposal {
@@ -64,7 +64,7 @@ function new_ticket(
     public voter: address,
 ) -> Ticket {
     // Finalize the proposal id for the ticket.
-    finalize(pid);
+    async finalize(pid);
 
     return Ticket {
         owner: voter,
@@ -77,20 +77,24 @@ finalize new_ticket(public pid: field) {
     increment(tickets, pid, 1u64);
 }
 
-// Vote to agree with a proposal.
+// Vote privately to agree with a proposal.
 @program
-function agree(ticket: Ticket) {// Privately cast the vote.
-    finalize(ticket.pid);
+function agree(ticket: Ticket) {
+    // Finalize this vote.
+    async finalize(ticket.pid);
 }
-finalize agree(public pid: field) {// Publicly increment the number of agree votes.
+finalize agree(public pid: field) {
+    // Publicly increment the number of agree votes.
     increment(agree_votes, pid, 1u64);
 }
 
-// Vote to disagree with a proposal.
+// Vote privately to disagree with a proposal.
 @program
-function disagree(ticket: Ticket) {// Privately cast the vote.
-    finalize(ticket.pid);
+function disagree(ticket: Ticket) {
+    // Finalize this vote.
+    async finalize(ticket.pid);
 }
-finalize disagree(pid: field) {// Publicly increment the number of disagree votes.
+finalize disagree(pid: field) {
+    // Publicly increment the number of disagree votes.
     increment(disagree_votes, pid, 1u64);
 }
