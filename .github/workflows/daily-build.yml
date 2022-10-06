@@ -238,6 +238,8 @@ jobs:
       - name: Build Leo
         run: |
           cargo build --package leo-lang --release --features noconfig
+        env:
+          RUSTDOCFLAGS="-Ctarget-feature=+crt-static"
 
       - id: get_version
         uses: battila7/get-version-action@v2
