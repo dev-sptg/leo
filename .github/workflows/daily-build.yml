@@ -237,16 +237,16 @@ jobs:
 
       - name: Build Leo
         run: |
-          cargo build --package leo-lang --features noconfig
+          cargo build --package leo-lang --release --features noconfig
         env:
-          RUSTDOCFLAGS: "-Ctarget-feature=+crt-static"
+          RUSTFLAGS: "-Ctarget-feature=+crt-static"
 
       - id: get_version
         uses: battila7/get-version-action@v2
 
       - name: Zip
         run: |
-          Compress-Archive target/debug/leo.exe leo-${{ steps.get_version.outputs.version }}-x86_64-pc-windows-msvc.zip
+          Compress-Archive target/release/leo.exe leo-${{ steps.get_version.outputs.version }}-x86_64-pc-windows-msvc.zip
 
       - name: Get current time
         uses: josStorer/get-current-time@v2
