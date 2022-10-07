@@ -246,7 +246,7 @@ jobs:
 
       - name: Zip
         run: |
-          Compress-Archive target/release/leo.exe leo-${{ steps.get_version.outputs.version }}-x86_64-pc-windows-msvc.zip
+          Compress-Archive target/debug/leo.exe leo-${{ steps.get_version.outputs.version }}-x86_64-pc-windows-msvc.zip
 
       - name: Get current time
         uses: josStorer/get-current-time@v2
