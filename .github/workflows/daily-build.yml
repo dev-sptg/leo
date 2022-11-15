@@ -257,6 +257,7 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
+          body: $(git rev-parse --short "$GITHUB_SHA")
           name: "daily(${{ steps.current-time.outputs.formattedTime }})"
           tag_name: "daily(${{ steps.current-time.outputs.formattedTime }})"
           files: |
