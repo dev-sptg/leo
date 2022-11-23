@@ -526,6 +526,13 @@
 <span id="526">526</span>
 <span id="527">527</span>
 <span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
 </pre><pre class="rust"><code><span class="comment">// Copyright (C) 2019-2022 Aleo Systems Inc.
 // This file is part of the Leo library.
 
@@ -837,14 +844,14 @@
     finalize_input_mode_must_be_public {
         args: (),
         msg: <span class="macro">format!</span>(<span class="string">&quot;An input to a finalize block must be public.&quot;</span>),
-        help: <span class="prelude-val">Some</span>(<span class="string">&quot;Add a `public` modifier to the input variable declaration or remove the visibility modifier entirely.&quot;</span>.to_string()),
+        help: <span class="prelude-val">Some</span>(<span class="string">&quot;Use a `public` modifier to the input variable declaration or remove the visibility modifier entirely.&quot;</span>.to_string()),
     }
 
     @formatted
     finalize_output_mode_must_be_public {
         args: (),
-        msg: <span class="macro">format!</span>(<span class="string">&quot;An output of a finalize block must be public.&quot;</span>),
-        help: <span class="prelude-val">Some</span>(<span class="string">&quot;Add a `public` modifier to the output type declaration or remove the visibility modifier entirely.&quot;</span>.to_string()),
+        msg: <span class="macro">format!</span>(<span class="string">&quot;An output from a finalize block must be public.&quot;</span>),
+        help: <span class="prelude-val">Some</span>(<span class="string">&quot;Use a `public` modifier to the output type declaration or remove the visibility modifier entirely.&quot;</span>.to_string()),
     }
 
     @formatted
@@ -972,6 +979,13 @@
     imported_program_cannot_import_program {
         args: (),
         msg: <span class="macro">format!</span>(<span class="string">&quot;An imported program cannot import another program.&quot;</span>),
+        help: <span class="prelude-val">None</span>,
+    }
+
+    @formatted
+    too_many_transitions {
+        args: (max: <span class="kw">impl </span>Display),
+        msg: <span class="macro">format!</span>(<span class="string">&quot;The number of transitions exceeds the maximum. snarkVM allows up to {max} transitions within a single program.&quot;</span>),
         help: <span class="prelude-val">None</span>,
     }
 
