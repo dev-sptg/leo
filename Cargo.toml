@@ -1,6 +1,6 @@
 [package]
 name = "leo-lang"
-version = "1.6.0"
+version = "1.6.1"
 authors = [ "The Aleo Team <hello@aleo.org>" ]
 description = "The Leo programming language"
 homepage = "https://aleo.org"
@@ -12,18 +12,11 @@ keywords = [
   "programming-language",
   "zero-knowledge"
 ]
-categories = [ "cryptography::cryptocurrencies", "web-programming" ]
+categories = [ "compilers", "cryptography", "web-programming" ]
 include = [ "Cargo.toml", "leo", "README.md", "LICENSE.md" ]
 license = "GPL-3.0"
 edition = "2021"
-rust-version = "1.63"
-
-[lib]
-path = "leo/lib.rs"
-
-[[bin]]
-name = "leo"
-path = "leo/main.rs"
+rust-version = "1.65"
 
 [workspace]
 members = [
@@ -39,38 +32,50 @@ members = [
   "tests/test-framework"
 ]
 
-[dependencies.leo-ast]
-path = "./compiler/ast"
-version = "1.6.0"
+[workspace.dependencies.snarkvm]
+version = "0.9.8"
 
-[dependencies.leo-compiler]
-path = "./compiler/compiler"
-version = "1.6.0"
+[workspace.dependencies.snarkvm-console]
+version = "0.9.8"
 
-[dependencies.leo-errors]
-path = "./errors"
-version = "1.6.0"
+[lib]
+path = "leo/lib.rs"
 
-[dependencies.leo-package]
-path = "./leo/package"
-version = "1.6.0"
+[[bin]]
+name = "leo"
+path = "leo/main.rs"
 
-[dependencies.leo-parser]
-path = "./compiler/parser"
-version = "1.6.0"
-
-[dependencies.leo-span]
-path = "./compiler/span"
-version = "1.6.0"
+[features]
+default = [ ]
+ci_skip = [ "leo-compiler/ci_skip" ]
+noconfig = [ ]
 
 [dependencies.aleo]
 version = "0.3.1"
-#git = "https://github.com/AleoHQ/aleo.git"
 
-[dependencies.snarkvm]
-version = "0.9.8"
-features = [ "aleo-cli", "circuit", "console", "parallel" ]
-#git = "https://github.com/AleoHQ/snarkVM.git"
+[dependencies.leo-ast]
+path = "./compiler/ast"
+version = "1.6.1"
+
+[dependencies.leo-compiler]
+path = "./compiler/compiler"
+version = "1.6.1"
+
+[dependencies.leo-errors]
+path = "./errors"
+version = "1.6.1"
+
+[dependencies.leo-package]
+path = "./leo/package"
+version = "1.6.1"
+
+[dependencies.leo-parser]
+path = "./compiler/parser"
+version = "1.6.1"
+
+[dependencies.leo-span]
+path = "./compiler/span"
+version = "1.6.1"
 
 [dependencies.backtrace]
 version = "0.3.66"
@@ -119,6 +124,10 @@ features = [ "derive" ]
 [dependencies.serde_json]
 version = "1.0"
 
+[dependencies.snarkvm]
+workspace = true
+features = [ "aleo-cli", "circuit", "console", "parallel" ]
+
 [dependencies.sys-info]
 version = "0.9.1"
 
@@ -150,11 +159,6 @@ version = "0.2.0"
 [build-dependencies.walkdir]
 version = "2"
 
-[features]
-default = [ ]
-ci_skip = [ "leo-compiler/ci_skip" ]
-noconfig = [ ]
-
 [profile.release]
 opt-level = 3
 lto = "thin"
@@ -169,9 +173,13 @@ incremental = true
 debug-assertions = false
 
 [profile.dev]
-opt-level = 0
+opt-level = 2
+lto = "thin"
+incremental = true
 
 [profile.test]
-opt-level = 0
-debug-assertions = true
+opt-level = 2
+lto = "thin"
+incremental = true
 debug = true
+debug-assertions = true
