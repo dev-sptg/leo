@@ -50,7 +50,7 @@ ci_skip = [ "leo-compiler/ci_skip" ]
 noconfig = [ ]
 
 [dependencies.aleo]
-version = "0.3.2"
+version = "0.3.3"
 
 [dependencies.leo-ast]
 path = "./compiler/ast"
@@ -131,7 +131,7 @@ features = [ "aleo-cli", "circuit", "console", "parallel" ]
 version = "0.9.1"
 
 [dependencies.toml]
-version = "0.5"
+version = "0.7"
 
 [dependencies.tracing]
 version = "0.1"
