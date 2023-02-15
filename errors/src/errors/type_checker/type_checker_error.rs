@@ -413,9 +413,9 @@ create_messages!(
     }
 
     @formatted
-    cannot_invoke_call_from_standard_function {
+    can_only_call_inline_function {
         args: (),
-        msg: format!("Cannot call another function from a standard function."),
+        msg: format!("Only `inline` can be called from a `function` or `inline`."),
         help: None,
     }
 
@@ -557,6 +557,13 @@ create_messages!(
             let path_string = path.into_iter().map(|name| format!("`{name}`")).collect::<Vec<String>>().join(" --> ");
             format!("Cyclic dependency between functions: {path_string}")
         },
+        help: None,
+    }
+
+    @formatted
+    struct_cannot_have_member_mode {
+        args: (),
+        msg: format!("A struct cannot have a member with mode `constant`, `private`, or `public`."),
         help: None,
     }
 );

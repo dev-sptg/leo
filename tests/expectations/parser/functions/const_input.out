@@ -11,12 +11,12 @@ outputs:
         functions:
           x:
             annotations: []
-            call_type: Standard
+            variant: Standard
             identifier: "{\"name\":\"x\",\"span\":\"{\\\"lo\\\":39,\\\"hi\\\":40}\"}"
             input:
               - Internal:
                   identifier: "{\"name\":\"x\",\"span\":\"{\\\"lo\\\":47,\\\"hi\\\":48}\"}"
-                  mode: Const
+                  mode: Constant
                   type_:
                     Integer: U8
                   span:
@@ -43,12 +43,12 @@ outputs:
               hi: 62
           y:
             annotations: []
-            call_type: Standard
+            variant: Standard
             identifier: "{\"name\":\"y\",\"span\":\"{\\\"lo\\\":81,\\\"hi\\\":82}\"}"
             input:
               - Internal:
                   identifier: "{\"name\":\"y\",\"span\":\"{\\\"lo\\\":92,\\\"hi\\\":93}\"}"
-                  mode: Const
+                  mode: Constant
                   type_:
                     Integer: U64
                   span:

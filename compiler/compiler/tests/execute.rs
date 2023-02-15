@@ -18,6 +18,8 @@ mod utilities;
 use utilities::{buffer_if_err, compile_and_process, parse_program, BufferEmitter};
 use utilities::{get_cwd_option, setup_build_directory, Aleo, Network};
 
+use crate::utilities::{hash_asts, hash_content};
+
 use leo_errors::emitter::Handler;
 use leo_span::symbol::create_session_if_not_set_then;
 use leo_test_framework::{
@@ -28,8 +30,8 @@ use leo_test_framework::{
 use snarkvm::console;
 use snarkvm::prelude::*;
 
-use crate::utilities::{hash_asts, hash_content};
 use leo_test_framework::test::TestExpectationMode;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 use std::collections::BTreeMap;
@@ -58,6 +60,7 @@ struct ExecuteOutput {
     pub unrolled_ast: String,
     pub ssa_ast: String,
     pub flattened_ast: String,
+    pub inlined_ast: String,
     pub bytecode: String,
     pub results: BTreeMap<String, Vec<BTreeMap<String, String>>>,
 }
@@ -128,7 +131,20 @@ fn run_test(test: Test, handler: &Handler, err_buf: &BufferEmitter) -> Result<Va
             ) {
                 Ok((response, _, _, _)) => format!(
                     "[{}]",
-                    response.outputs().iter().map(|output| output.to_string()).join(", ")
+                    response
+                        .outputs()
+                        .iter()
+                        .map(|output| {
+                            match output {
+                                // Remove the `_nonce` from the record string.
+                                console::program::Value::Record(record) => {
+                                    let pattern = Regex::new(r"_nonce: \d+group.public").unwrap();
+                                    pattern.replace(&record.to_string(), "").to_string()
+                                }
+                                _ => output.to_string(),
+                            }
+                        })
+                        .join(", ")
                 ),
                 Err(err) => format!("SnarkVMError({err})"),
             };
@@ -145,7 +161,7 @@ fn run_test(test: Test, handler: &Handler, err_buf: &BufferEmitter) -> Result<Va
     }
 
     // Hash the ast files.
-    let (initial_ast, unrolled_ast, ssa_ast, flattened_ast) = hash_asts();
+    let (initial_ast, unrolled_ast, ssa_ast, flattened_ast, inlined_ast) = hash_asts();
 
     // Clean up the output directory.
     if fs::read_dir("/tmp/output").is_ok() {
@@ -157,6 +173,7 @@ fn run_test(test: Test, handler: &Handler, err_buf: &BufferEmitter) -> Result<Va
         unrolled_ast,
         ssa_ast,
         flattened_ast,
+        inlined_ast,
         bytecode: hash_content(&bytecode),
         results,
     };

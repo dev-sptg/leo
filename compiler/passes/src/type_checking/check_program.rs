@@ -70,7 +70,7 @@ impl<'a> ProgramVisitor<'a> for TypeChecker<'a> {
         let mut transition_count = 0;
         for function in input.functions.values() {
             self.visit_function(function);
-            if matches!(function.call_type, CallType::Transition) {
+            if matches!(function.variant, Variant::Transition) {
                 transition_count += 1;
             }
         }
@@ -94,11 +94,18 @@ impl<'a> ProgramVisitor<'a> for TypeChecker<'a> {
         // Check for conflicting struct/record member names.
         let mut used = HashSet::new();
         // TODO: Better span to target duplicate member.
-        if !input.members.iter().all(|Member { identifier, type_ }| {
-            // Check that the member types are defined.
-            self.assert_type_is_defined(type_, identifier.span);
-            used.insert(identifier.name)
-        }) {
+        if !input.members.iter().all(
+            |Member {
+                 identifier,
+                 type_,
+                 span,
+                 ..
+             }| {
+                // Check that the member types are defined.
+                self.assert_type_is_defined(type_, *span);
+                used.insert(identifier.name)
+            },
+        ) {
             self.emit_err(if input.is_record {
                 TypeCheckerError::duplicate_record_variable(input.name(), input.span())
             } else {
@@ -108,32 +115,37 @@ impl<'a> ProgramVisitor<'a> for TypeChecker<'a> {
 
         // For records, enforce presence of `owner: Address` and `gates: u64` members.
         if input.is_record {
-            let check_has_field = |need, expected_ty: Type| match input
-                .members
-                .iter()
-                .find_map(|Member { identifier, type_ }| (identifier.name == need).then_some((identifier, type_)))
-            {
-                Some((_, actual_ty)) if expected_ty.eq_flat(actual_ty) => {} // All good, found + right type!
-                Some((field, _)) => {
-                    self.emit_err(TypeCheckerError::record_var_wrong_type(
-                        field,
-                        expected_ty,
-                        input.span(),
-                    ));
-                }
-                None => {
-                    self.emit_err(TypeCheckerError::required_record_variable(
-                        need,
-                        expected_ty,
-                        input.span(),
-                    ));
-                }
-            };
+            let check_has_field =
+                |need, expected_ty: Type| match input.members.iter().find_map(|Member { identifier, type_, .. }| {
+                    (identifier.name == need).then_some((identifier, type_))
+                }) {
+                    Some((_, actual_ty)) if expected_ty.eq_flat(actual_ty) => {} // All good, found + right type!
+                    Some((field, _)) => {
+                        self.emit_err(TypeCheckerError::record_var_wrong_type(
+                            field,
+                            expected_ty,
+                            input.span(),
+                        ));
+                    }
+                    None => {
+                        self.emit_err(TypeCheckerError::required_record_variable(
+                            need,
+                            expected_ty,
+                            input.span(),
+                        ));
+                    }
+                };
             check_has_field(sym::owner, Type::Address);
             check_has_field(sym::gates, Type::Integer(IntegerType::U64));
         }
 
-        for Member { identifier, type_ } in input.members.iter() {
+        for Member {
+            mode,
+            identifier,
+            type_,
+            span,
+        } in input.members.iter()
+        {
             // Check that the member type is not a tuple.
             if matches!(type_, Type::Tuple(_)) {
                 self.emit_err(TypeCheckerError::composite_data_type_cannot_contain_tuple(
@@ -147,6 +159,10 @@ impl<'a> ProgramVisitor<'a> for TypeChecker<'a> {
             // Note that we have already checked that each member is defined and valid.
             if let Type::Identifier(member_type) = type_ {
                 self.struct_graph.add_edge(input.identifier.name, member_type.name);
+            }
+            // If the input is a struct, then check that the member does not have a mode.
+            if !input.is_record && !matches!(mode, Mode::None) {
+                self.emit_err(TypeCheckerError::struct_cannot_have_member_mode(*span));
             }
         }
     }
@@ -181,7 +197,7 @@ impl<'a> ProgramVisitor<'a> for TypeChecker<'a> {
             self.emit_err(TypeCheckerError::unknown_annotation(annotation, annotation.span))
         }
 
-        self.is_transition_function = matches!(function.call_type, CallType::Transition);
+        self.variant = Some(function.variant);
 
         // Lookup function metadata in the symbol table.
         // Note that this unwrap is safe since function metadata is stored in a prior pass.
@@ -216,13 +232,14 @@ impl<'a> ProgramVisitor<'a> for TypeChecker<'a> {
                 self.emit_err(TypeCheckerError::function_cannot_take_tuple_as_input(input_var.span()))
             }
 
-            match self.is_transition_function {
+            // Note that this unwrap is safe since we assign to `self.variant` above.
+            match self.variant.unwrap() {
                 // If the function is a transition function, then check that the parameter mode is not a constant.
-                true if input_var.mode() == Mode::Const => self.emit_err(
+                Variant::Transition if input_var.mode() == Mode::Constant => self.emit_err(
                     TypeCheckerError::transition_function_inputs_cannot_be_const(input_var.span()),
                 ),
                 // If the function is not a transition function, then check that the parameters do not have an associated mode.
-                false if input_var.mode() != Mode::None => self.emit_err(
+                Variant::Standard | Variant::Inline if input_var.mode() != Mode::None => self.emit_err(
                     TypeCheckerError::regular_function_inputs_cannot_have_modes(input_var.span()),
                 ),
                 _ => {} // Do nothing.
@@ -248,7 +265,7 @@ impl<'a> ProgramVisitor<'a> for TypeChecker<'a> {
                 Output::External(external) => {
                     // If the function is not a transition function, then it cannot output a record.
                     // Note that an external output must always be a record.
-                    if !self.is_transition_function {
+                    if !matches!(function.variant, Variant::Transition) {
                         self.emit_err(TypeCheckerError::function_cannot_output_record(external.span()));
                     }
                     // Otherwise, do not type check external record function outputs.
@@ -259,7 +276,7 @@ impl<'a> ProgramVisitor<'a> for TypeChecker<'a> {
                     self.assert_type_is_defined(&function_output.type_, function_output.span);
                     // If the function is not a transition function, then it cannot output a record.
                     if let Type::Identifier(identifier) = function_output.type_ {
-                        if !self.is_transition_function
+                        if !matches!(function.variant, Variant::Transition)
                             && self
                                 .symbol_table
                                 .borrow()
@@ -276,7 +293,7 @@ impl<'a> ProgramVisitor<'a> for TypeChecker<'a> {
                     }
                     // Check that the mode of the output is valid.
                     // For functions, only public and private outputs are allowed
-                    if function_output.mode == Mode::Const {
+                    if function_output.mode == Mode::Constant {
                         self.emit_err(TypeCheckerError::cannot_have_constant_output_mode(function_output.span));
                     }
                 }
@@ -307,7 +324,7 @@ impl<'a> ProgramVisitor<'a> for TypeChecker<'a> {
             self.has_finalize = false;
 
             // Check that the function is a transition function.
-            if !self.is_transition_function {
+            if !matches!(function.variant, Variant::Transition) {
                 self.emit_err(TypeCheckerError::only_transition_functions_can_have_finalize(
                     finalize.span,
                 ));
@@ -333,7 +350,7 @@ impl<'a> ProgramVisitor<'a> for TypeChecker<'a> {
                     self.emit_err(TypeCheckerError::finalize_cannot_take_tuple_as_input(input_var.span()))
                 }
                 // Check that the input parameter is not constant or private.
-                if input_var.mode() == Mode::Const || input_var.mode() == Mode::Private {
+                if input_var.mode() == Mode::Constant || input_var.mode() == Mode::Private {
                     self.emit_err(TypeCheckerError::finalize_input_mode_must_be_public(input_var.span()));
                 }
                 // Check for conflicting variable names.
@@ -360,7 +377,7 @@ impl<'a> ProgramVisitor<'a> for TypeChecker<'a> {
                 }
                 // Check that the mode of the output is valid.
                 // Note that a finalize block can have only public outputs.
-                if matches!(output_type.mode(), Mode::Const | Mode::Private) {
+                if matches!(output_type.mode(), Mode::Constant | Mode::Private) {
                     self.emit_err(TypeCheckerError::finalize_output_mode_must_be_public(
                         output_type.span(),
                     ));
@@ -393,7 +410,7 @@ impl<'a> ProgramVisitor<'a> for TypeChecker<'a> {
         // Exit the function's scope.
         self.exit_scope(function_index);
 
-        // Unset `is_transition_function` flag.
-        self.is_transition_function = false;
+        // Unset the `variant`.
+        self.variant = None;
     }
 }

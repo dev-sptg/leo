@@ -16,7 +16,7 @@
 
 use crate::CodeGenerator;
 
-use leo_ast::{functions, CallType, Function, Mapping, Mode, Program, ProgramScope, Struct, Type};
+use leo_ast::{functions, Function, Mapping, Mode, Program, ProgramScope, Struct, Type, Variant};
 
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -94,7 +94,7 @@ impl<'a> CodeGenerator<'a> {
                     let function = program_scope.functions.get(&function_name).unwrap();
 
                     // Set the `is_transition_function` flag.
-                    self.is_transition_function = matches!(function.call_type, CallType::Transition);
+                    self.is_transition_function = matches!(function.variant, Variant::Transition);
 
                     let function_string = self.visit_function(function);
 
@@ -150,10 +150,15 @@ impl<'a> CodeGenerator<'a> {
 
         // Construct and append the record variables.
         for var in record.members.iter() {
+            let mode = match var.mode {
+                Mode::Constant => "constant",
+                Mode::Public => "public",
+                Mode::None | Mode::Private => "private",
+            };
             writeln!(
                 output_string,
-                "    {} as {}.private;", // todo: CAUTION private record variables only.
-                var.identifier, var.type_,
+                "    {} as {}.{mode};", // todo: CAUTION private record variables only.
+                var.identifier, var.type_
             )
             .expect("failed to write to string");
         }
