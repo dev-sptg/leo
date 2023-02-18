@@ -70,9 +70,9 @@ dependencies = [
 
 [[package]]
 name = "aleo"
-version = "0.3.4"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1e4929cda45548d053c11a8e08eb0c530361b441f31ad7cf6f066289368d1df"
+checksum = "3c64d1e213c2b444cdcf1c814d5aa2641c16decf0e4c761f198ca3909ca43eac"
 dependencies = [
  "aleo-rust",
  "anyhow",
@@ -95,9 +95,9 @@ dependencies = [
 
 [[package]]
 name = "aleo-rust"
-version = "0.3.4"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34efc6c260c8e720f02a96e72748e6d9392b985dd0883d923882a20500274eef"
+checksum = "45d149306877bc38f874e6636a8a70c5986247648da8493e69d867d80736837f"
 dependencies = [
  "anyhow",
  "indexmap",
@@ -105,7 +105,6 @@ dependencies = [
  "rand",
  "serde_json",
  "snarkvm",
- "snarkvm-wasm",
  "ureq",
 ]
 
@@ -932,10 +931,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c05aeb6a22b8f62540c194aac980f2115af067bfe15a0734d7277a768d396b31"
 dependencies = [
  "cfg-if",
- "js-sys",
  "libc",
  "wasi",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -1209,7 +1206,7 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "leo-abnf"
-version = "1.6.2"
+version = "1.6.3"
 dependencies = [
  "abnf",
  "anyhow",
@@ -1217,7 +1214,7 @@ dependencies = [
 
 [[package]]
 name = "leo-ast"
-version = "1.6.2"
+version = "1.6.3"
 dependencies = [
  "criterion",
  "indexmap",
@@ -1231,7 +1228,7 @@ dependencies = [
 
 [[package]]
 name = "leo-compiler"
-version = "1.6.2"
+version = "1.6.3"
 dependencies = [
  "leo-ast",
  "leo-errors",
@@ -1250,7 +1247,7 @@ dependencies = [
 
 [[package]]
 name = "leo-core"
-version = "1.6.2"
+version = "1.6.3"
 dependencies = [
  "leo-ast",
  "leo-errors",
@@ -1259,7 +1256,7 @@ dependencies = [
 
 [[package]]
 name = "leo-errors"
-version = "1.6.2"
+version = "1.6.3"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -1273,7 +1270,7 @@ dependencies = [
 
 [[package]]
 name = "leo-lang"
-version = "1.6.2"
+version = "1.6.3"
 dependencies = [
  "aleo",
  "ansi_term",
@@ -1311,7 +1308,7 @@ dependencies = [
 
 [[package]]
 name = "leo-package"
-version = "1.6.2"
+version = "1.6.3"
 dependencies = [
  "indexmap",
  "lazy_static",
@@ -1323,7 +1320,7 @@ dependencies = [
 
 [[package]]
 name = "leo-parser"
-version = "1.6.2"
+version = "1.6.3"
 dependencies = [
  "clap",
  "indexmap",
@@ -1342,7 +1339,7 @@ dependencies = [
 
 [[package]]
 name = "leo-passes"
-version = "1.6.2"
+version = "1.6.3"
 dependencies = [
  "indexmap",
  "itertools",
@@ -1356,7 +1353,7 @@ dependencies = [
 
 [[package]]
 name = "leo-span"
-version = "1.6.2"
+version = "1.6.3"
 dependencies = [
  "fxhash",
  "indexmap",
@@ -1366,7 +1363,7 @@ dependencies = [
 
 [[package]]
 name = "leo-test-framework"
-version = "1.6.2"
+version = "1.6.3"
 dependencies = [
  "backtrace",
  "clap",
@@ -2945,13 +2942,11 @@ dependencies = [
  "parking_lot",
  "paste",
  "rand",
- "reqwest",
  "serde_json",
  "sha2",
  "snarkvm-curves",
  "snarkvm-utilities",
  "thiserror",
- "wasm-bindgen-futures",
 ]
 
 [[package]]
@@ -3028,20 +3023,6 @@ dependencies = [
  "proc-macro2 1.0.51",
  "quote 1.0.23",
  "syn 1.0.107",
-]
-
-[[package]]
-name = "snarkvm-wasm"
-version = "0.9.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eab1c2fc59610557d3f4e8c215d43bdb90748aec810ba0b04e6fa7d1b6543ece"
-dependencies = [
- "getrandom",
- "rand",
- "serde",
- "snarkvm-console",
- "snarkvm-utilities",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -3632,8 +3613,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "31f8dcbc21f30d9b8f2ea926ecb58f6b91192c17e9d33594b3df58b2007ca53b"
 dependencies = [
  "cfg-if",
- "serde",
- "serde_json",
  "wasm-bindgen-macro",
 ]
 
