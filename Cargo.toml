@@ -93,7 +93,7 @@ version = "2.0"
 version = "0.15.5"
 
 [dependencies.dirs]
-version = "4.0.0"
+version = "5.0.0"
 
 [dependencies.indexmap]
 version = "1.9"
@@ -109,7 +109,7 @@ version = "0.8"
 version = "0.6.4"
 
 [dependencies.reqwest]
-version = "0.11.14"
+version = "0.11.15"
 features = [ "blocking", "json", "multipart" ]
 
 [dependencies.self_update]
@@ -147,7 +147,7 @@ version = "^0.6"
 version = "0.12.1"
 
 [dev-dependencies.assert_cmd]
-version = "2.0.8"
+version = "2.0.10"
 
 [dev-dependencies.rusty-hook]
 version = "0.11.2"
