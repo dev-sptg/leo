@@ -162,10 +162,7 @@ impl<'a> StatementVisitor<'a> for TypeChecker<'a> {
         self.assert_mapping_type(&mapping_type, input.span());
 
         match mapping_type {
-            None => self.emit_err(TypeCheckerError::could_not_determine_type(
-                input.mapping,
-                input.mapping.span,
-            )),
+            None => self.emit_err(TypeCheckerError::could_not_determine_type(input.mapping, input.mapping.span)),
             Some(Type::Mapping(mapping_type)) => {
                 // Check that the index matches the key type of the mapping.
                 let index_type = self.visit_expression(&input.index, &None);
@@ -178,20 +175,15 @@ impl<'a> StatementVisitor<'a> for TypeChecker<'a> {
                 // Check that the amount type is incrementable.
                 self.assert_field_group_scalar_int_type(&amount_type, input.amount.span());
             }
-            Some(mapping_type) => self.emit_err(TypeCheckerError::expected_one_type_of(
-                "mapping",
-                mapping_type,
-                input.mapping.span,
-            )),
+            Some(mapping_type) => {
+                self.emit_err(TypeCheckerError::expected_one_type_of("mapping", mapping_type, input.mapping.span))
+            }
         }
     }
 
     fn visit_definition(&mut self, input: &'a DefinitionStatement) {
-        let declaration = if input.declaration_type == DeclarationType::Const {
-            VariableType::Const
-        } else {
-            VariableType::Mut
-        };
+        let declaration =
+            if input.declaration_type == DeclarationType::Const { VariableType::Const } else { VariableType::Mut };
 
         // Check that the type of the definition is defined.
         self.assert_type_is_defined(&input.type_, input.span);
@@ -209,7 +201,9 @@ impl<'a> StatementVisitor<'a> for TypeChecker<'a> {
                     }
                 }
             },
-            Type::Mapping(_) | Type::Err => unreachable!(),
+            Type::Mapping(_) | Type::Err => unreachable!(
+                "Parsing guarantees that `mapping` and `err` types are not present at this location in the AST."
+            ),
             // Otherwise, the type is valid.
             _ => (), // Do nothing
         }
@@ -220,14 +214,9 @@ impl<'a> StatementVisitor<'a> for TypeChecker<'a> {
         // TODO: Dedup with unrolling pass.
         // Helper to insert the variables into the symbol table.
         let insert_variable = |symbol: Symbol, type_: Type, span: Span, declaration: VariableType| {
-            if let Err(err) = self.symbol_table.borrow_mut().insert_variable(
-                symbol,
-                VariableSymbol {
-                    type_,
-                    span,
-                    declaration,
-                },
-            ) {
+            if let Err(err) =
+                self.symbol_table.borrow_mut().insert_variable(symbol, VariableSymbol { type_, span, declaration })
+            {
                 self.handler.emit_err(err);
             }
         };
@@ -244,21 +233,17 @@ impl<'a> StatementVisitor<'a> for TypeChecker<'a> {
                         "Type checking guarantees that if the lhs is a tuple, its associated type is also a tuple."
                     ),
                 };
-                tuple_expression
-                    .elements
-                    .iter()
-                    .zip_eq(tuple_type.0.iter())
-                    .for_each(|(expression, type_)| {
-                        let identifier = match expression {
-                            Expression::Identifier(identifier) => identifier,
-                            _ => {
-                                return self.emit_err(TypeCheckerError::lhs_tuple_element_must_be_an_identifier(
-                                    expression.span(),
-                                ))
-                            }
-                        };
-                        insert_variable(identifier.name, type_.clone(), identifier.span, declaration)
-                    });
+                tuple_expression.elements.iter().zip_eq(tuple_type.0.iter()).for_each(|(expression, type_)| {
+                    let identifier = match expression {
+                        Expression::Identifier(identifier) => identifier,
+                        _ => {
+                            return self.emit_err(TypeCheckerError::lhs_tuple_element_must_be_an_identifier(
+                                expression.span(),
+                            ));
+                        }
+                    };
+                    insert_variable(identifier.name, type_.clone(), identifier.span, declaration)
+                });
             }
             _ => self.emit_err(TypeCheckerError::lhs_must_be_identifier_or_tuple(input.place.span())),
         }
@@ -267,9 +252,7 @@ impl<'a> StatementVisitor<'a> for TypeChecker<'a> {
     fn visit_expression_statement(&mut self, input: &'a ExpressionStatement) {
         // Expression statements can only be function calls.
         if !matches!(input.expression, Expression::Call(_)) {
-            self.emit_err(TypeCheckerError::expression_statement_must_be_function_call(
-                input.span(),
-            ));
+            self.emit_err(TypeCheckerError::expression_statement_must_be_function_call(input.span()));
         } else {
             // Check the expression.
             // TODO: Should the output type be restricted to unit types?
@@ -287,10 +270,7 @@ impl<'a> StatementVisitor<'a> for TypeChecker<'a> {
         self.assert_mapping_type(&mapping_type, input.span());
 
         match mapping_type {
-            None => self.emit_err(TypeCheckerError::could_not_determine_type(
-                input.mapping,
-                input.mapping.span,
-            )),
+            None => self.emit_err(TypeCheckerError::could_not_determine_type(input.mapping, input.mapping.span)),
             Some(Type::Mapping(mapping_type)) => {
                 // Check that the index matches the key type of the mapping.
                 let index_type = self.visit_expression(&input.index, &None);
@@ -303,11 +283,9 @@ impl<'a> StatementVisitor<'a> for TypeChecker<'a> {
                 // Check that the amount type is incrementable.
                 self.assert_field_group_scalar_int_type(&amount_type, input.amount.span());
             }
-            Some(mapping_type) => self.emit_err(TypeCheckerError::expected_one_type_of(
-                "mapping",
-                mapping_type,
-                input.mapping.span,
-            )),
+            Some(mapping_type) => {
+                self.emit_err(TypeCheckerError::expected_one_type_of("mapping", mapping_type, input.mapping.span))
+            }
         }
     }
 
@@ -319,14 +297,11 @@ impl<'a> StatementVisitor<'a> for TypeChecker<'a> {
         let scope_index = self.create_child_scope();
 
         // Add the loop variable to the scope of the loop body.
-        if let Err(err) = self.symbol_table.borrow_mut().insert_variable(
-            input.variable.name,
-            VariableSymbol {
-                type_: input.type_.clone(),
-                span: input.span(),
-                declaration: VariableType::Const,
-            },
-        ) {
+        if let Err(err) = self.symbol_table.borrow_mut().insert_variable(input.variable.name, VariableSymbol {
+            type_: input.type_.clone(),
+            span: input.span(),
+            declaration: VariableType::Const,
+        }) {
             self.handler.emit_err(err);
         }
 
@@ -349,11 +324,15 @@ impl<'a> StatementVisitor<'a> for TypeChecker<'a> {
         // Exit the scope.
         self.exit_scope(scope_index);
 
+        // Check that the literal is valid.
         self.visit_expression(&input.start, iter_type);
 
-        // If `input.start` is a literal, instantiate it as a value.
+        // If `input.start` is a valid literal, instantiate it as a value.
         if let Expression::Literal(literal) = &input.start {
-            input.start_value.replace(Some(Value::from(literal)));
+            // Note that this check is needed because the pass attempts to make progress, even though the literal may be invalid.
+            if let Ok(value) = Value::try_from(literal) {
+                input.start_value.replace(Some(value));
+            }
         } else {
             self.emit_err(TypeCheckerError::loop_bound_must_be_a_literal(input.start.span()));
         }
@@ -362,7 +341,10 @@ impl<'a> StatementVisitor<'a> for TypeChecker<'a> {
 
         // If `input.stop` is a literal, instantiate it as a value.
         if let Expression::Literal(literal) = &input.stop {
-            input.stop_value.replace(Some(Value::from(literal)));
+            // Note that this check is needed because the pass attempts to make progress, even though the literal may be invalid.
+            if let Ok(value) = Value::try_from(literal) {
+                input.stop_value.replace(Some(value));
+            }
         } else {
             self.emit_err(TypeCheckerError::loop_bound_must_be_a_literal(input.stop.span()));
         }
@@ -372,16 +354,12 @@ impl<'a> StatementVisitor<'a> for TypeChecker<'a> {
         // We can safely unwrap all self.parent instances because
         // statements should always have some parent block
         let parent = self.function.unwrap();
-        let return_type = &self
-            .symbol_table
-            .borrow()
-            .lookup_fn_symbol(parent)
-            .map(|f| match self.is_finalize {
-                // TODO: Check this.
-                // Note that this `unwrap()` is safe since we checked that the function has a finalize block.
-                true => f.finalize.as_ref().unwrap().output_type.clone(),
-                false => f.output_type.clone(),
-            });
+        let return_type = &self.symbol_table.borrow().lookup_fn_symbol(parent).map(|f| match self.is_finalize {
+            // TODO: Check this.
+            // Note that this `unwrap()` is safe since we checked that the function has a finalize block.
+            true => f.finalize.as_ref().unwrap().output_type.clone(),
+            false => f.output_type.clone(),
+        });
 
         // Set the `has_return` flag.
         self.has_return = true;
@@ -413,13 +391,8 @@ impl<'a> StatementVisitor<'a> for TypeChecker<'a> {
             // Check that the function has a finalize block.
             // Note that `self.function.unwrap()` is safe since every `self.function` is set for every function.
             // Note that `(self.function.unwrap()).unwrap()` is safe since all functions have been checked to exist.
-            let finalize = self
-                .symbol_table
-                .borrow()
-                .lookup_fn_symbol(self.function.unwrap())
-                .unwrap()
-                .finalize
-                .clone();
+            let finalize =
+                self.symbol_table.borrow().lookup_fn_symbol(self.function.unwrap()).unwrap().finalize.clone();
             match finalize {
                 None => self.emit_err(TypeCheckerError::finalize_without_finalize_block(input.span())),
                 Some(finalize) => {
@@ -433,13 +406,9 @@ impl<'a> StatementVisitor<'a> for TypeChecker<'a> {
                     }
 
                     // Check function argument types.
-                    finalize
-                        .input
-                        .iter()
-                        .zip(arguments.iter())
-                        .for_each(|(expected, argument)| {
-                            self.visit_expression(argument, &Some(expected.type_()));
-                        });
+                    finalize.input.iter().zip(arguments.iter()).for_each(|(expected, argument)| {
+                        self.visit_expression(argument, &Some(expected.type_()));
+                    });
                 }
             }
         }
