@@ -31,10 +31,10 @@ members = [
 ]
 
 [workspace.dependencies.snarkvm]
-version = "0.10.2"
+version = "0.10.3"
 
 [workspace.dependencies.snarkvm-console]
-version = "0.10.2"
+version = "0.10.3"
 
 [lib]
 path = "leo/lib.rs"
@@ -105,7 +105,7 @@ version = "0.8"
 version = "0.6.4"
 
 [dependencies.reqwest]
-version = "0.11.16"
+version = "0.11.17"
 features = [ "blocking", "json", "multipart" ]
 
 [dependencies.self_update]
@@ -133,7 +133,7 @@ version = "0.7"
 version = "0.1"
 
 [dependencies.tracing-subscriber]
-version = "0.3.16"
+version = "0.3.17"
 features = [ "fmt" ]
 
 [dependencies.zip]
