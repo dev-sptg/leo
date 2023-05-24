@@ -471,15 +471,15 @@ dependencies = [
 
 [[package]]
 name = "console"
-version = "0.15.5"
+version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3d79fbe8970a77e3e34151cc13d3b3e248aa0faaecb9f6091fa07ebefe5ad60"
+checksum = "c926e00cc70edefdc64d3a5ff31cc65bb97a3460097762bd23afb4d8145fccf8"
 dependencies = [
  "encode_unicode",
  "lazy_static",
  "libc",
  "unicode-width",
- "windows-sys 0.42.0",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -1204,7 +1204,7 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "leo-abnf"
-version = "1.7.0"
+version = "1.7.1"
 dependencies = [
  "abnf",
  "anyhow",
@@ -1212,7 +1212,7 @@ dependencies = [
 
 [[package]]
 name = "leo-ast"
-version = "1.7.0"
+version = "1.7.1"
 dependencies = [
  "criterion",
  "indexmap",
@@ -1226,7 +1226,7 @@ dependencies = [
 
 [[package]]
 name = "leo-compiler"
-version = "1.7.0"
+version = "1.7.1"
 dependencies = [
  "leo-ast",
  "leo-errors",
@@ -1245,7 +1245,7 @@ dependencies = [
 
 [[package]]
 name = "leo-errors"
-version = "1.7.0"
+version = "1.7.1"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -1259,7 +1259,7 @@ dependencies = [
 
 [[package]]
 name = "leo-lang"
-version = "1.7.0"
+version = "1.7.1"
 dependencies = [
  "ansi_term",
  "assert_cmd",
@@ -1287,7 +1287,7 @@ dependencies = [
  "snarkvm",
  "sys-info",
  "test_dir",
- "toml 0.7.3",
+ "toml 0.7.4",
  "tracing",
  "tracing-subscriber",
  "walkdir",
@@ -1296,19 +1296,19 @@ dependencies = [
 
 [[package]]
 name = "leo-package"
-version = "1.7.0"
+version = "1.7.1"
 dependencies = [
  "indexmap",
  "lazy_static",
  "leo-errors",
  "serde",
- "toml 0.7.3",
+ "toml 0.7.4",
  "tracing",
 ]
 
 [[package]]
 name = "leo-parser"
-version = "1.7.0"
+version = "1.7.1"
 dependencies = [
  "clap",
  "indexmap",
@@ -1327,7 +1327,7 @@ dependencies = [
 
 [[package]]
 name = "leo-passes"
-version = "1.7.0"
+version = "1.7.1"
 dependencies = [
  "indexmap",
  "itertools",
@@ -1341,7 +1341,7 @@ dependencies = [
 
 [[package]]
 name = "leo-span"
-version = "1.7.0"
+version = "1.7.1"
 dependencies = [
  "fxhash",
  "indexmap",
@@ -1351,7 +1351,7 @@ dependencies = [
 
 [[package]]
 name = "leo-test-framework"
-version = "1.7.0"
+version = "1.7.1"
 dependencies = [
  "backtrace",
  "clap",
@@ -1996,9 +1996,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.8.1"
+version = "1.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af83e617f331cc6ae2da5443c602dfa5af81e517212d9d611a5b3ba1777b5370"
+checksum = "d1a59b5d8e97dee33696bf13c5ba8ab85341c002922fba050069326b9c498974"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -2013,9 +2013,9 @@ checksum = "6c230d73fb8d8c1b9c0b3135c5142a8acee3a0558fb8db5cf1cb65f8d7862132"
 
 [[package]]
 name = "regex-syntax"
-version = "0.7.1"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5996294f19bd3aae0453a862ad728f60e6600695733dd5df01da90c54363a3c"
+checksum = "436b050e76ed2903236f032a59761c1eb99e1b0aead2c257922771dab1fc8c78"
 
 [[package]]
 name = "reqwest"
@@ -2251,9 +2251,9 @@ dependencies = [
 
 [[package]]
 name = "serde_spanned"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0efd8caf556a6cebd3b285caf480045fcc1ac04f6bd786b09a6f11af30c4fcf4"
+checksum = "93107647184f6027e3b7dcb2e11034cf95ffa1e3a682c67951963ac69c1c007d"
 dependencies = [
  "serde",
 ]
@@ -3204,9 +3204,9 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.7.3"
+version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b403acf6f2bb0859c93c7f0d967cb4a75a7ac552100f9322faf64dc047669b21"
+checksum = "d6135d499e69981f9ff0ef2167955a5333c35e36f6937d382974566b3d5b94ec"
 dependencies = [
  "serde",
  "serde_spanned",
@@ -3216,18 +3216,18 @@ dependencies = [
 
 [[package]]
 name = "toml_datetime"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ab8ed2edee10b50132aed5f331333428b011c99402b5a534154ed15746f9622"
+checksum = "5a76a9312f5ba4c2dec6b9161fdf25d87ad8a09256ccea5a556fef03c706a10f"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "toml_edit"
-version = "0.19.8"
+version = "0.19.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "239410c8609e8125456927e6707163a3b1fdb40561e4b803bc041f466ccfdc13"
+checksum = "92d964908cec0d030b812013af25a0e57fddfadb1e066ecc6681d86253129d4f"
 dependencies = [
  "indexmap",
  "serde",
