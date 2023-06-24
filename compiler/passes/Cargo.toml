@@ -1,6 +1,6 @@
 [package]
 name = "leo-passes"
-version = "1.8.0"
+version = "1.8.1"
 authors = [ "The Aleo Team <hello@aleo.org>" ]
 description = "Compiler passes for the Leo programming language"
 homepage = "https://aleo.org"
@@ -27,25 +27,25 @@ features = [ "network" ]
 
 [dependencies.leo-ast]
 path = "../ast"
-version = "1.8.0"
+version = "1.8.1"
 
 [dependencies.leo-errors]
 path = "../../errors"
-version = "1.8.0"
+version = "1.8.1"
 
 [dependencies.leo-parser]
 path = "../parser"
-version = "1.8.0"
+version = "1.8.1"
 
 [dependencies.leo-span]
 path = "../span"
-version = "1.8.0"
+version = "1.8.1"
 
 [dependencies.indexmap]
 version = "1.9"
 
 [dependencies.itertools]
-version = "0.10.5"
+version = "0.11.0"
 
 [dependencies.num-traits]
 version = "0.2.15"
