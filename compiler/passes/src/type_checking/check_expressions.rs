@@ -45,6 +45,11 @@ impl<'a> ExpressionVisitor<'a> for TypeChecker<'a> {
             AccessExpression::AssociatedFunction(access) => {
                 // Check core struct name and function.
                 if let Some(core_instruction) = self.get_core_function_call(&access.ty, &access.name) {
+                    // Check that operation is not restricted to finalize blocks.
+                    if !self.is_finalize && core_instruction.is_finalize_command() {
+                        self.emit_err(TypeCheckerError::operation_must_be_in_finalize_block(input.span()));
+                    }
+
                     // Get the types of the arguments.
                     let argument_types = access
                         .arguments
@@ -59,6 +64,7 @@ impl<'a> ExpressionVisitor<'a> for TypeChecker<'a> {
                     if let Some(expected) = expected {
                         self.assert_type(&return_type, expected, input.span());
                     }
+
                     return return_type;
                 } else {
                     self.emit_err(TypeCheckerError::invalid_core_function_call(access, access.span()));
@@ -729,6 +735,11 @@ impl<'a> ExpressionVisitor<'a> for TypeChecker<'a> {
                 // Only field type.
                 self.assert_field_type(destination, input.span());
                 self.visit_expression(&input.receiver, destination)
+            }
+            UnaryOperation::ToXCoordinate | UnaryOperation::ToYCoordinate => {
+                // Only field type.
+                self.assert_field_type(destination, input.span());
+                self.visit_expression(&input.receiver, &Some(Type::Group))
             }
         }
     }
