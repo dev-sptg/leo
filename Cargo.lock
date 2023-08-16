@@ -202,9 +202,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.72"
+version = "1.0.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b13c32d80ecc7ab747b80c3784bce54ee8a7a0cc4fbda9bf4cda2cf6fe90854"
+checksum = "f768393e7fabd388fe8409b13faa4d93ab0fef35db1508438dfdb066918bcf38"
 
 [[package]]
 name = "arrayref"
@@ -461,9 +461,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.3.19"
+version = "4.3.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fd304a20bff958a57f04c4e96a2e7594cc4490a0e809cbd48bb6437edaa452d"
+checksum = "c27cdf28c0f604ba3f512b0c9a409f8de8513e4816705deb0498b627e7c3a3fd"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -472,9 +472,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.3.19"
+version = "4.3.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01c6a3f08f1fe5662a35cfe393aec09c4df95f60ee93b7556505260f75eee9e1"
+checksum = "08a9f1ab5e9f01a9b81f202e8562eb9a10de70abf9eaeac1be465c28b75aa4aa"
 dependencies = [
  "anstream",
  "anstyle",
@@ -1275,7 +1275,7 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "leo-abnf"
-version = "1.9.2"
+version = "1.9.3"
 dependencies = [
  "abnf",
  "anyhow",
@@ -1283,7 +1283,7 @@ dependencies = [
 
 [[package]]
 name = "leo-ast"
-version = "1.9.2"
+version = "1.9.3"
 dependencies = [
  "criterion",
  "indexmap 1.9.3",
@@ -1297,7 +1297,7 @@ dependencies = [
 
 [[package]]
 name = "leo-compiler"
-version = "1.9.2"
+version = "1.9.3"
 dependencies = [
  "dotenvy",
  "leo-ast",
@@ -1318,7 +1318,7 @@ dependencies = [
 
 [[package]]
 name = "leo-errors"
-version = "1.9.2"
+version = "1.9.3"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -1332,7 +1332,7 @@ dependencies = [
 
 [[package]]
 name = "leo-lang"
-version = "1.9.2"
+version = "1.9.3"
 dependencies = [
  "ansi_term",
  "assert_cmd",
@@ -1371,7 +1371,7 @@ dependencies = [
 
 [[package]]
 name = "leo-package"
-version = "1.9.2"
+version = "1.9.3"
 dependencies = [
  "indexmap 1.9.3",
  "lazy_static",
@@ -1386,7 +1386,7 @@ dependencies = [
 
 [[package]]
 name = "leo-parser"
-version = "1.9.2"
+version = "1.9.3"
 dependencies = [
  "clap",
  "indexmap 1.9.3",
@@ -1405,7 +1405,7 @@ dependencies = [
 
 [[package]]
 name = "leo-passes"
-version = "1.9.2"
+version = "1.9.3"
 dependencies = [
  "indexmap 1.9.3",
  "itertools 0.11.0",
@@ -1419,7 +1419,7 @@ dependencies = [
 
 [[package]]
 name = "leo-span"
-version = "1.9.2"
+version = "1.9.3"
 dependencies = [
  "fxhash",
  "indexmap 1.9.3",
@@ -1429,7 +1429,7 @@ dependencies = [
 
 [[package]]
 name = "leo-test-framework"
-version = "1.9.2"
+version = "1.9.3"
 dependencies = [
  "backtrace",
  "clap",
@@ -3200,18 +3200,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.44"
+version = "1.0.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "611040a08a0439f8248d1990b111c95baa9c704c805fa1f62104b39655fd7f90"
+checksum = "dedd246497092a89beedfe2c9f176d44c1b672ea6090edc20544ade01fbb7ea0"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.44"
+version = "1.0.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "090198534930841fab3a5d1bb637cde49e339654e606195f8d9c76eeb081dc96"
+checksum = "7d7b1fadccbbc7e19ea64708629f9d8dccd007c260d66485f20a6d41bc1cf4b3"
 dependencies = [
  "proc-macro2",
  "quote 1.0.31",
