@@ -45,7 +45,7 @@ members = [
 ]
 
 [workspace.dependencies.snarkvm]
-version = "0.16.1"
+version = "0.16.2"
 
 [workspace.dependencies.snarkvm-console]
 version = "0.16.1"
@@ -94,7 +94,7 @@ version = "4.4"
 features = [ "derive", "env", "color", "unstable-styles" ]
 
 [dependencies.color-backtrace]
-version = "0.6.0"
+version = "0.6.1"
 
 [dependencies.colored]
 version = "2.0"
@@ -130,7 +130,7 @@ version = "0.11.22"
 features = [ "blocking", "json", "multipart" ]
 
 [dependencies.self_update]
-version = "0.38.0"
+version = "0.39.0"
 features = [ "archive-zip" ]
 
 [dependencies.serde]
