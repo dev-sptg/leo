@@ -130,7 +130,8 @@ impl<'a> CodeGenerator<'a> {
 
         // Construct and append the record variables.
         for var in struct_.members.iter() {
-            writeln!(output_string, "    {} as {};", var.identifier, var.type_,).expect("failed to write to string");
+            writeln!(output_string, "    {} as {};", var.identifier, Self::visit_type(&var.type_),)
+                .expect("failed to write to string");
         }
 
         output_string
@@ -152,7 +153,8 @@ impl<'a> CodeGenerator<'a> {
             writeln!(
                 output_string,
                 "    {} as {}.{mode};", // todo: CAUTION private record variables only.
-                var.identifier, var.type_
+                var.identifier,
+                Self::visit_type(&var.type_)
             )
             .expect("failed to write to string");
         }
@@ -225,7 +227,7 @@ impl<'a> CodeGenerator<'a> {
             // If the function contained calls that produced futures, then we need to add the futures to the finalize block as input.
             // Store the new future registers.
             let mut future_registers = Vec::new();
-            for (_, future_type) in &self.futures {
+            for (_, future_type) in self.futures.drain(..) {
                 let register_string = format!("r{}", self.next_register);
                 writeln!(function_string, "    input {register_string} as {future_type}.future;")
                     .expect("failed to write to string");
@@ -290,13 +292,12 @@ impl<'a> CodeGenerator<'a> {
                     // Note that this unwrap is safe since all struct and records have been added to the composite mapping.
                     let (is_record, _) = self.composite_mapping.get(&identifier.name).unwrap();
                     match is_record {
-                        // If the type is a record, then declare the type as is.
-                        true => format!("{identifier}.record"),
                         // If the type is a struct, then add the public modifier.
-                        false => format!("{identifier}.public"),
+                        false => self.visit_type_with_visibility(type_, Mode::Public),
+                        true => unreachable!("Type checking guarantees that mappings cannot contain records."),
                     }
                 }
-                type_ => format!("{type_}.public"),
+                type_ => self.visit_type_with_visibility(type_, Mode::Public),
             }
         };
 
