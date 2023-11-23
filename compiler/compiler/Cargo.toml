@@ -56,13 +56,12 @@ default-features = false
 
 [dev-dependencies.snarkvm]
 workspace = true
-features = [ "circuit", "console" ]
 
 [dev-dependencies.regex]
 version = "1.10.2"
 
 [dev-dependencies.serde]
-version = "1.0.189"
+version = "1.0.193"
 features = [ "derive" ]
 
 [dev-dependencies.serde_yaml]
