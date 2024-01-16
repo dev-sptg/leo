@@ -18,13 +18,10 @@ include = [
   "leo",
   "README.md",
   "LICENSE.md",
-  "examples/lottery/inputs/lottery.in",
   "examples/lottery/src/main.leo",
   "examples/lottery/run.sh",
-  "examples/tictactoe/inputs/tictactoe.in",
   "examples/tictactoe/src/main.leo",
   "examples/tictactoe/run.sh",
-  "examples/token/inputs/token.in",
   "examples/token/src/main.leo",
   "examples/token/run.sh"
 ]
@@ -47,7 +44,7 @@ members = [
 ]
 
 [workspace.dependencies.snarkvm]
-version = "0.16.15"
+version = "0.16.16"
 
 [lib]
 path = "leo/lib.rs"
@@ -107,7 +104,7 @@ version = "0.6.1"
 version = "2.0"
 
 [dependencies.console]
-version = "0.15.7"
+version = "0.15.8"
 
 [dependencies.dirs]
 version = "5.0.0"
@@ -148,7 +145,7 @@ features = [ "derive" ]
 version = "1.0"
 
 [dependencies.serial_test]
-version = "2.0.0"
+version = "3.0.0"
 
 [dependencies.snarkvm]
 workspace = true
@@ -174,7 +171,7 @@ version = "^0.6"
 version = "0.12.1"
 
 [dev-dependencies.assert_cmd]
-version = "2.0.12"
+version = "2.0.13"
 
 [dev-dependencies.rusty-hook]
 version = "0.11.2"
