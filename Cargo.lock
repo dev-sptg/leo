@@ -1671,7 +1671,7 @@ dependencies = [
  "reqwest 0.12.4",
  "rpassword",
  "rusty-hook",
- "self_update 0.39.0",
+ "self_update 0.40.0",
  "serde",
  "serde_json",
  "serial_test",
@@ -2733,16 +2733,16 @@ dependencies = [
 
 [[package]]
 name = "self_update"
-version = "0.39.0"
+version = "0.40.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a34ad8e4a86884ab42e9b8690e9343abdcfe5fa38a0318cfe1565ba9ad437b4"
+checksum = "4e4997484b55df069a4773d822715695b2cc27b23829eca2a4b41690e948bdeb"
 dependencies = [
- "hyper 0.14.28",
+ "hyper 1.2.0",
  "indicatif",
  "log",
  "quick-xml",
  "regex",
- "reqwest 0.11.27",
+ "reqwest 0.12.4",
  "self-replace",
  "semver",
  "serde_json",
@@ -4292,11 +4292,11 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "ureq"
-version = "2.9.6"
+version = "2.9.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11f214ce18d8b2cbe84ed3aa6486ed3f5b285cf8d8fbdbce9f3f767a724adc35"
+checksum = "d11a831e3c0b56e438a28308e7c810799e3c118417f342d30ecec080105395cd"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.0",
  "flate2",
  "log",
  "once_cell",
