@@ -1582,7 +1582,7 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "leo-abnf"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "abnf",
  "anyhow",
@@ -1590,7 +1590,7 @@ dependencies = [
 
 [[package]]
 name = "leo-ast"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "criterion",
  "indexmap 1.9.3",
@@ -1605,7 +1605,7 @@ dependencies = [
 
 [[package]]
 name = "leo-compiler"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "aleo-std-storage",
  "dotenvy",
@@ -1629,7 +1629,7 @@ dependencies = [
 
 [[package]]
 name = "leo-disassembler"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "leo-ast",
  "leo-errors",
@@ -1639,7 +1639,7 @@ dependencies = [
 
 [[package]]
 name = "leo-errors"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -1654,7 +1654,7 @@ dependencies = [
 
 [[package]]
 name = "leo-lang"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "aleo-std",
  "ansi_term",
@@ -1693,12 +1693,12 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "walkdir",
- "zip 1.2.1",
+ "zip 1.2.3",
 ]
 
 [[package]]
 name = "leo-package"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "aleo-std",
  "indexmap 1.9.3",
@@ -1715,7 +1715,7 @@ dependencies = [
 
 [[package]]
 name = "leo-parser"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "clap",
  "indexmap 1.9.3",
@@ -1734,7 +1734,7 @@ dependencies = [
 
 [[package]]
 name = "leo-passes"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "indexmap 1.9.3",
  "itertools 0.12.1",
@@ -1750,7 +1750,7 @@ dependencies = [
 
 [[package]]
 name = "leo-retriever"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "aleo-std",
  "indexmap 1.9.3",
@@ -1770,7 +1770,7 @@ dependencies = [
 
 [[package]]
 name = "leo-span"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "fxhash",
  "indexmap 1.9.3",
@@ -1780,7 +1780,7 @@ dependencies = [
 
 [[package]]
 name = "leo-test-framework"
-version = "1.11.0"
+version = "1.12.0"
 dependencies = [
  "backtrace",
  "clap",
@@ -2030,27 +2030,6 @@ checksum = "4161fcb6d602d4d2081af7c3a45852d875a03dd337a6bfdd6e06407b61342a43"
 dependencies = [
  "hermit-abi",
  "libc",
-]
-
-[[package]]
-name = "num_enum"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02339744ee7253741199f897151b38e72257d13802d4ee837285cc2990a90845"
-dependencies = [
- "num_enum_derive",
-]
-
-[[package]]
-name = "num_enum_derive"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "681030a937600a36906c185595136d26abfebb4aa9c65701cefcaf8578bb982b"
-dependencies = [
- "proc-macro-crate",
- "proc-macro2",
- "quote 1.0.35",
- "syn 2.0.55",
 ]
 
 [[package]]
@@ -2306,15 +2285,6 @@ checksum = "368ba315fb8c5052ab692e68a0eefec6ec57b23a36959c14496f0b0df2c0cecf"
 dependencies = [
  "predicates-core",
  "termtree",
-]
-
-[[package]]
-name = "proc-macro-crate"
-version = "3.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d37c51ca738a55da99dc0c4a34860fd675453b8b36209178c2249bb13651284"
-dependencies = [
- "toml_edit 0.21.1",
 ]
 
 [[package]]
@@ -2801,18 +2771,18 @@ checksum = "92d43fe69e652f3df9bdc2b85b2854a0825b86e4fb76bc44d945137d053639ca"
 
 [[package]]
 name = "serde"
-version = "1.0.200"
+version = "1.0.201"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddc6f9cc94d67c0e21aaf7eda3a010fd3af78ebf6e096aa6e2e13c79749cce4f"
+checksum = "780f1cebed1629e4753a1a38a3c72d30b97ec044f0aef68cb26650a3c5cf363c"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.200"
+version = "1.0.201"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "856f046b9400cee3c8c94ed572ecdb752444c24528c035cd35882aad6f492bcb"
+checksum = "c5e405930b9796f1c00bee880d03fc7e0bb4b9a11afc776885ffe84320da2865"
 dependencies = [
  "proc-macro2",
  "quote 1.0.35",
@@ -4154,7 +4124,7 @@ dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime",
- "toml_edit 0.22.9",
+ "toml_edit",
 ]
 
 [[package]]
@@ -4168,17 +4138,6 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.21.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a8534fd7f78b5405e860340ad6575217ce99f38d4d5c8f2442cb5ecb50090e1"
-dependencies = [
- "indexmap 2.2.6",
- "toml_datetime",
- "winnow 0.5.40",
-]
-
-[[package]]
-name = "toml_edit"
 version = "0.22.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e40bb779c5187258fd7aad0eb68cb8706a0a81fa712fbea808ab43c4b8374c4"
@@ -4187,7 +4146,7 @@ dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime",
- "winnow 0.6.5",
+ "winnow",
 ]
 
 [[package]]
@@ -4686,15 +4645,6 @@ checksum = "32b752e52a2da0ddfbdbcc6fceadfeede4c939ed16d13e648833a61dfb611ed8"
 
 [[package]]
 name = "winnow"
-version = "0.5.40"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f593a95398737aeed53e489c785df13f3618e41dbcd6718c6addbf1395aa6876"
-dependencies = [
- "memchr",
-]
-
-[[package]]
-name = "winnow"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dffa400e67ed5a4dd237983829e66475f0a4a26938c4b04c21baede6262215b8"
@@ -4785,9 +4735,9 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "1.2.1"
+version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "006d078b7b6fc587bb25e022ad39e7086f44e5c4fef6076964ea601533241beb"
+checksum = "c700ea425e148de30c29c580c1f9508b93ca57ad31c9f4e96b83c194c37a7a8f"
 dependencies = [
  "aes",
  "arbitrary",
@@ -4801,7 +4751,6 @@ dependencies = [
  "hmac",
  "indexmap 2.2.6",
  "lzma-rs",
- "num_enum",
  "pbkdf2",
  "rand",
  "sha1",
