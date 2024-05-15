@@ -67,6 +67,7 @@
 <a href="#65" id="65">65</a>
 <a href="#66" id="66">66</a>
 <a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright (C) 2019-2023 Aleo Systems Inc.
 // This file is part of the Leo library.
 
@@ -108,9 +109,11 @@
         }
     }
 
-    <span class="doccomment">/// Flattens a function's body and finalize block, if it exists.
-    /// Note that the finalize block is not flattened since it uses `branch` instructions to produce correct code in for conditional execution.
+    <span class="doccomment">/// Flattens a function's body
     </span><span class="kw">fn </span>reconstruct_function(<span class="kw-2">&amp;mut </span><span class="self">self</span>, function: Function) -&gt; Function {
+        <span class="comment">// Set when the function is an async function.
+        </span><span class="self">self</span>.is_async = function.variant.is_async_function();
+
         <span class="comment">// Flatten the function body.
         </span><span class="kw">let </span><span class="kw-2">mut </span>block = <span class="self">self</span>.reconstruct_block(function.block).<span class="number">0</span>;
 
@@ -128,7 +131,6 @@
             output: function.output,
             output_type: function.output_type,
             block,
-            finalize: function.finalize,
             span: function.span,
             id: function.id,
         }
