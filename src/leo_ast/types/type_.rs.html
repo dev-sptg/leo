@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `compiler/ast/src/types/type_.rs`."><title>type_.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="leo_ast" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0 (051478957 2024-07-21)" data-channel="1.80.0" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `compiler/ast/src/types/type_.rs`."><title>type_.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="leo_ast" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.1 (3f5fd8dd4 2024-08-06)" data-channel="1.80.1" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -199,6 +199,8 @@
 <a href="#199" id="199">199</a>
 <a href="#200" id="200">200</a>
 <a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright (C) 2019-2023 Aleo Systems Inc.
 // This file is part of the Leo library.
 
@@ -314,9 +316,11 @@
     <span class="doccomment">///
     /// Returns `true` if the self `Type` is equal to the other `Type` in all aspects besides composite program of origin.
     ///
+    /// In the case of futures, it also makes sure that if both are not explicit, they are equal.
+    ///
     /// Flattens array syntax: `[[u8; 1]; 2] == [u8; (2, 1)] == true`
     ///
-    </span><span class="kw">pub fn </span>eq_flat_relax_composite(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
+    </span><span class="kw">pub fn </span>eq_flat_relaxed(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
         <span class="kw">match </span>(<span class="self">self</span>, other) {
             (Type::Address, Type::Address)
             | (Type::Boolean, Type::Boolean)
@@ -327,18 +331,18 @@
             | (Type::String, Type::String)
             | (Type::Unit, Type::Unit) =&gt; <span class="bool-val">true</span>,
             (Type::Array(left), Type::Array(right)) =&gt; {
-                left.element_type().eq_flat_relax_composite(right.element_type()) &amp;&amp; left.length() == right.length()
+                left.element_type().eq_flat_relaxed(right.element_type()) &amp;&amp; left.length() == right.length()
             }
             (Type::Identifier(left), Type::Identifier(right)) =&gt; left.matches(right),
             (Type::Integer(left), Type::Integer(right)) =&gt; left.eq(right),
             (Type::Mapping(left), Type::Mapping(right)) =&gt; {
-                left.key.eq_flat_relax_composite(<span class="kw-2">&amp;</span>right.key) &amp;&amp; left.value.eq_flat(<span class="kw-2">&amp;</span>right.value)
+                left.key.eq_flat_relaxed(<span class="kw-2">&amp;</span>right.key) &amp;&amp; left.value.eq_flat_relaxed(<span class="kw-2">&amp;</span>right.value)
             }
             (Type::Tuple(left), Type::Tuple(right)) <span class="kw">if </span>left.length() == right.length() =&gt; left
                 .elements()
                 .iter()
                 .zip_eq(right.elements().iter())
-                .all(|(left_type, right_type)| left_type.eq_flat_relax_composite(right_type)),
+                .all(|(left_type, right_type)| left_type.eq_flat_relaxed(right_type)),
             (Type::Composite(left), Type::Composite(right)) =&gt; left.id.name == right.id.name,
             <span class="comment">// Don't type check when type hasn't been explicitly defined.
             </span>(Type::Future(left), Type::Future(right)) <span class="kw">if </span>!left.is_explicit || !right.is_explicit =&gt; <span class="bool-val">true</span>,
@@ -346,7 +350,7 @@
                 .inputs()
                 .iter()
                 .zip_eq(right.inputs().iter())
-                .all(|(left_type, right_type)| left_type.eq_flat_relax_composite(right_type)),
+                .all(|(left_type, right_type)| left_type.eq_flat_relaxed(right_type)),
             <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
         }
     }
