@@ -75,7 +75,7 @@ default-features = false
 workspace = true
 
 [dev-dependencies.regex]
-version = "1.10.6"
+version = "1.11.0"
 
 [dev-dependencies.serde]
 version = "1.0.210"
@@ -85,7 +85,7 @@ features = [ "derive" ]
 version = "0.8.25"
 
 [dev-dependencies.tempfile]
-version = "3.12"
+version = "3.13"
 
 [features]
 default = [ ]
