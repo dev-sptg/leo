@@ -23,7 +23,6 @@ use leo_span::{Span, Symbol, sym};
 use snarkvm::console::network::Network;
 
 use itertools::Itertools;
-use std::str::FromStr;
 
 fn return_incorrect_type(t1: Option<Type>, t2: Option<Type>, expected: &Option<Type>) -> Option<Type> {
     match (t1, t2) {
@@ -861,7 +860,7 @@ impl<'a, N: Network> ExpressionVisitor<'a> for TypeChecker<'a, N> {
             if matches!(var.type_, Type::Future(_)) && matches!(expected, Some(Type::Future(_))) {
                 if self.scope_state.variant == Some(Variant::AsyncTransition) && self.scope_state.is_call {
                     // Consume future.
-                    match self.scope_state.futures.remove(&input.name) {
+                    match self.scope_state.futures.shift_remove(&input.name) {
                         Some(future) => {
                             self.scope_state.call_location = Some(future.clone());
                             return Some(var.type_.clone());
@@ -883,9 +882,9 @@ impl<'a, N: Network> ExpressionVisitor<'a> for TypeChecker<'a, N> {
     }
 
     fn visit_literal(&mut self, input: &'a Literal, expected: &Self::AdditionalInput) -> Self::Output {
-        fn parse_integer_literal<I: FromStr>(handler: &Handler, raw_string: &str, span: Span, type_string: &str) {
+        fn parse_integer_literal<I: FromStrRadix>(handler: &Handler, raw_string: &str, span: Span, type_string: &str) {
             let string = raw_string.replace('_', "");
-            if string.parse::<I>().is_err() {
+            if I::from_str_by_radix(&string).is_err() {
                 handler.emit_err(TypeCheckerError::invalid_int_value(string, type_string, span));
             }
         }
