@@ -122,6 +122,8 @@ path = "leo/cli/main.rs"
 default = [ ]
 ci_skip = [ "leo-compiler/ci_skip" ]
 noconfig = [ ]
+# TODO: Consider refactoring to `testnet`, `mainnet`, and `canary` features, with all three being the default.
+only_testnet = [ ]
 
 [dependencies]
 dialoguer = "0.11.0"
@@ -242,12 +244,12 @@ debug-assertions = false
 
 [profile.dev]
 opt-level = 2
-lto = "thin"
+lto = "off"
 incremental = true
 
 [profile.test]
 opt-level = 2
-lto = "thin"
+lto = "off"
 incremental = true
 debug = true
 debug-assertions = true
