@@ -93,6 +93,12 @@ pub enum Expression {
     Unit(UnitExpression),
 }
 
+impl Default for Expression {
+    fn default() -> Self {
+        Expression::Err(Default::default())
+    }
+}
+
 impl Node for Expression {
     fn span(&self) -> Span {
         use Expression::*;
@@ -194,5 +200,29 @@ impl fmt::Display for Expression {
             Unary(n) => n.fmt(f),
             Unit(n) => n.fmt(f),
         }
+    }
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) enum Associativity {
+    Left,
+    Right,
+    None,
+}
+
+impl Expression {
+    pub(crate) fn precedence(&self) -> u32 {
+        use Expression::*;
+        match self {
+            Binary(e) => e.precedence(),
+            Cast(_) => 12,
+            Ternary(_) => 14,
+            Access(_) | Array(_) | Call(_) | Err(_) | Identifier(_) | Literal(_) | Locator(_) | Struct(_)
+            | Tuple(_) | Unary(_) | Unit(_) => 20,
+        }
+    }
+
+    pub(crate) fn associativity(&self) -> Associativity {
+        if let Expression::Binary(bin) = self { bin.associativity() } else { Associativity::None }
     }
 }
