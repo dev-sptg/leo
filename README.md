@@ -5,11 +5,10 @@
 <h1 align="center">The Leo Programming Language</h1>
 
 <p align="center">
-    <a href="https://circleci.com/gh/AleoHQ/leo"><img src="https://circleci.com/gh/AleoHQ/leo.svg?style=svg&circle-token=00960191919c40be0774e00ce8f7fa1fcaa20c00"></a>
-    <a href="https://codecov.io/gh/AleoHQ/leo"><img src="https://codecov.io/gh/AleoHQ/leo/branch/mainnet/graph/badge.svg?token=S6MWO60SYL"/></a>
+    <a href="https://circleci.com/gh/ProvableHQ/leo"><img src="https://circleci.com/gh/ProvableHQ/leo.svg?style=svg&circle-token=00960191919c40be0774e00ce8f7fa1fcaa20c00"></a>
     <a href="https://discord.gg/aleo"><img src="https://img.shields.io/discord/700454073459015690?logo=discord"/></a>
     <a href="https://github.com/ProvableHQ/leo/blob/mainnet/CONTRIBUTORS.md"><img src="https://img.shields.io/badge/contributors-393-ee8449"/></a>
-     <a href="https://twitter.com/AleoHQ"><img src="https://img.shields.io/twitter/follow/AleoHQ?style=social"/></a>
+     <a href="https://twitter.com/ProvableHQ"><img src="https://img.shields.io/twitter/follow/ProvableHQ?style=social"/></a>
 </p>
 <div id="top"></div>
 Leo is an imperative, statically-typed programming language built for writing private applications.
@@ -67,12 +66,12 @@ We recommend installing Rust using [rustup](https://www.rustup.rs/). You can ins
 We recommend installing Leo by building from the source code as follows:
 
 ```bash
-# Download the source code and initialize the submodules
-git clone --recurse-submodules https://github.com/ProvableHQ/leo
+# Download the source code
+git clone https://github.com/ProvableHQ/leo
 cd leo
 
 # Install 'leo'
-$ cargo install --path .
+cargo install --path .
 ```
 
 Now to use leo, in your terminal, run:
@@ -120,7 +119,7 @@ If the issue still persists, please [open an issue](https://github.com/ProvableH
 
 * [Hello World - Next Steps](https://docs.leo-lang.org/leo/hello)
 * [Leo Language Documentation](https://docs.leo-lang.org/leo/language)
-* [Leo ABNF Grammar](https://github.com/AleoHQ/grammars/blob/master/leo.abnf)
+* [Leo ABNF Grammar](https://github.com/ProvableHQ/grammars/blob/master/leo.abnf)
 * [Homepage](https://docs.leo-lang.org/overview/)
 
 ## 🤝 Contributing
@@ -130,7 +129,8 @@ Please see our guidelines in the [developer documentation](./CONTRIBUTING.md)
 
 ## ❤️ Contributors
 
-View all Leo contributors [here](./CONTRIBUTORS.md).
+The list of contributors has been moved to a separate repository.
+View all Leo contributors [here](https://github.com/ProvableHQ/leo-contributors/blob/master/CONTRIBUTORS.md).
 
 ## 🛡️ License
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](./LICENSE.md)
