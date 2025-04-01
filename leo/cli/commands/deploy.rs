@@ -41,7 +41,7 @@ use text_tables;
 
 /// Deploys an Aleo program.
 #[derive(Parser, Debug)]
-pub struct Deploy {
+pub struct LeoDeploy {
     #[clap(flatten)]
     pub(crate) fee_options: FeeOptions,
     #[clap(long, help = "Disables building of the project before deployment.", default_value = "false")]
@@ -58,7 +58,7 @@ pub struct Deploy {
     pub(crate) options: BuildOptions,
 }
 
-impl Command for Deploy {
+impl Command for LeoDeploy {
     type Input = ();
     type Output = ();
 
@@ -97,11 +97,11 @@ impl Command for Deploy {
 
 // A helper function to handle deployment logic.
 fn handle_deploy<A: Aleo<Network = N, BaseField = N::Field>, N: Network>(
-    command: &Deploy,
+    command: &LeoDeploy,
     context: Context,
     network: NetworkName,
     endpoint: &str,
-) -> Result<<Deploy as Command>::Output> {
+) -> Result<<LeoDeploy as Command>::Output> {
     // Get the program name.
     let project_name = context.open_manifest::<N>()?.program_id().to_string();
 
@@ -257,7 +257,7 @@ fn handle_deploy<A: Aleo<Network = N, BaseField = N::Field>, N: Network>(
 
 // A helper function to display a cost breakdown of the deployment.
 fn deploy_cost_breakdown(
-    name: &String,
+    name: &str,
     base_fee: f64,
     storage_cost: f64,
     synthesis_cost: f64,

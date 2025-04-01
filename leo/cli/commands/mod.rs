@@ -30,7 +30,7 @@ pub mod debug;
 pub use debug::LeoDebug;
 
 pub mod deploy;
-pub use deploy::Deploy;
+pub use deploy::LeoDeploy;
 
 pub mod execute;
 pub use execute::LeoExecute;
@@ -293,8 +293,8 @@ fn get_latest_block_height(endpoint: &str, network: &str, context: &Context) -> 
 }
 
 /// Determine if the transaction should be broadcast or displayed to user.
-fn handle_broadcast<N: Network>(endpoint: &String, transaction: Transaction<N>, operation: &String) -> Result<()> {
-    println!("Broadcasting transaction to {}...\n", endpoint.clone());
+fn handle_broadcast<N: Network>(endpoint: &str, transaction: Transaction<N>, operation: &str) -> Result<()> {
+    println!("Broadcasting transaction to {}...\n", endpoint);
     // Get the transaction id.
     let transaction_id = transaction.id();
 
