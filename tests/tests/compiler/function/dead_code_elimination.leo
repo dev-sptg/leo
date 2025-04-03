@@ -1,7 +1,3 @@
-/*
-namespace = "Compile"
-expectation = "Pass"
-*/
 
 /*
 The program should produce the following bytecode:
@@ -42,6 +38,7 @@ program test.aleo {
 
     transition foo(a: u8, b: u8) -> u8 {
         let c: u8 = a + b;
+        // For now allow this call to remain.
         let d: u8 = eliminate_unused_function_call(a, b);
         let e: u8 = 0u8;
         if (a == b) {

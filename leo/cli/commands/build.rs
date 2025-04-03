@@ -198,19 +198,13 @@ fn compile_leo_file<N: Network>(
     let mut aleo_file_path = build.to_path_buf();
     aleo_file_path.push(format!("main.{}", program_id.network()));
 
+    let enable_dce = options.enable_dce;
+
     // Create a new instance of the Leo compiler.
-    let mut compiler = Compiler::<N>::new(
-        program_name.clone(),
-        program_id.network().to_string(),
-        handler,
-        file_path.clone(),
-        outputs.to_path_buf(),
-        Some(options.into()),
-        stubs,
-    );
+    let mut compiler = Compiler::<N>::new(handler, outputs.to_path_buf(), Some(options.into()), stubs);
 
     // Compile the Leo program into Aleo instructions.
-    let instructions = compiler.compile()?;
+    let instructions = compiler.compile_from_file(file_path)?;
 
     // Write the instructions.
     std::fs::File::create(&aleo_file_path)
@@ -218,6 +212,10 @@ fn compile_leo_file<N: Network>(
         .write_all(instructions.as_bytes())
         .map_err(CliError::failed_to_load_instructions)?;
 
+    if enable_dce {
+        tracing::info!("    {} statements before dead code elimination.", compiler.statements_before_dce);
+        tracing::info!("    {} statements after dead code elimination.", compiler.statements_after_dce);
+    }
     tracing::info!("✅ Compiled '{program_name}.aleo' into Aleo instructions");
     Ok(())
 }
