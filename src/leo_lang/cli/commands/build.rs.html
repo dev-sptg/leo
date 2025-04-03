@@ -219,9 +219,7 @@
 <a href="#218" id="218">218</a>
 <a href="#219" id="219">219</a>
 <a href="#220" id="220">220</a>
-<a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
-<a href="#223" id="223">223</a></pre></div><pre class="rust"><code><span class="comment">// Copyright (C) 2019-2025 Provable Inc.
+<a href="#221" id="221">221</a></pre></div><pre class="rust"><code><span class="comment">// Copyright (C) 2019-2025 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -421,19 +419,13 @@
     </span><span class="kw">let </span><span class="kw-2">mut </span>aleo_file_path = build.to_path_buf();
     aleo_file_path.push(<span class="macro">format!</span>(<span class="string">"main.{}"</span>, program_id.network()));
 
+    <span class="kw">let </span>enable_dce = options.enable_dce;
+
     <span class="comment">// Create a new instance of the Leo compiler.
-    </span><span class="kw">let </span><span class="kw-2">mut </span>compiler = Compiler::&lt;N&gt;::new(
-        program_name.clone(),
-        program_id.network().to_string(),
-        handler,
-        file_path.clone(),
-        outputs.to_path_buf(),
-        <span class="prelude-val">Some</span>(options.into()),
-        stubs,
-    );
+    </span><span class="kw">let </span><span class="kw-2">mut </span>compiler = Compiler::&lt;N&gt;::new(handler, outputs.to_path_buf(), <span class="prelude-val">Some</span>(options.into()), stubs);
 
     <span class="comment">// Compile the Leo program into Aleo instructions.
-    </span><span class="kw">let </span>instructions = compiler.compile()<span class="question-mark">?</span>;
+    </span><span class="kw">let </span>instructions = compiler.compile_from_file(file_path)<span class="question-mark">?</span>;
 
     <span class="comment">// Write the instructions.
     </span>std::fs::File::create(<span class="kw-2">&amp;</span>aleo_file_path)
@@ -441,6 +433,10 @@
         </span>.write_all(instructions.as_bytes())
         .map_err(CliError::failed_to_load_instructions)<span class="question-mark">?</span>;
 
+    <span class="kw">if </span>enable_dce {
+        <span class="macro">tracing::info!</span>(<span class="string">"    {} statements before dead code elimination."</span>, compiler.statements_before_dce);
+        <span class="macro">tracing::info!</span>(<span class="string">"    {} statements after dead code elimination."</span>, compiler.statements_after_dce);
+    }
     <span class="macro">tracing::info!</span>(<span class="string">"✅ Compiled '{program_name}.aleo' into Aleo instructions"</span>);
     <span class="prelude-val">Ok</span>(())
 }
