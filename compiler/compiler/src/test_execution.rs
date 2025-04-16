@@ -55,7 +55,8 @@ pub fn whole_compile(
     handler: &Handler,
     import_stubs: IndexMap<Symbol, Stub>,
 ) -> Result<(String, String), LeoError> {
-    let mut compiler = Compiler::<TestnetV0>::new(handler, "/fakedirectory-wont-use".into(), None, import_stubs);
+    let mut compiler =
+        Compiler::<TestnetV0>::new(handler.clone(), "/fakedirectory-wont-use".into(), None, import_stubs);
 
     let filename = FileName::Custom("execution-test".into());
 
@@ -66,14 +67,15 @@ pub fn whole_compile(
 
 // Execution tests.
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct Case {
     program: String,
     function: String,
+    private_key: Option<String>,
     input: Vec<String>,
 }
 
-fn execution_run_test(test: &str, handler: &Handler, cases: &[Case]) -> Result<String, ()> {
+fn execution_run_test(test: &str, handler: &Handler, buf: &BufferEmitter, cases: &[Case]) -> Result<String, ()> {
     // Initialize a `Process`. This should always succeed.
     let process = Process::<TestnetV0>::load().unwrap();
 
@@ -154,36 +156,36 @@ fn execution_run_test(test: &str, handler: &Handler, cases: &[Case]) -> Result<S
             return Ok(format!("Program {} doesn't exist.", case.program));
         }
 
+        let private_key = case
+            .private_key
+            .as_ref()
+            .map(|key| PrivateKey::from_str(key).expect("Failed to parse private key."))
+            .unwrap_or(genesis_private_key);
+
         let mut execution = None;
         let mut verified = false;
         let mut status = "none";
 
         let result = ledger
             .vm()
-            .execute(&genesis_private_key, (&case.program, &case.function), case.input.iter(), None, 0, None, &mut rng)
+            .execute(&private_key, (&case.program, &case.function), case.input.iter(), None, 0, None, &mut rng)
             .and_then(|transaction| {
                 verified = ledger.vm().check_transaction(&transaction, None, &mut rng).is_ok();
                 execution = Some(transaction.clone());
-                ledger.prepare_advance_to_next_beacon_block(
-                    &genesis_private_key,
-                    vec![],
-                    vec![],
-                    vec![transaction],
-                    &mut rng,
-                )
+                ledger.prepare_advance_to_next_beacon_block(&private_key, vec![], vec![], vec![transaction], &mut rng)
             })
             .and_then(|block| {
-                status = match block.aborted_transaction_ids().is_empty() {
-                    false => "aborted",
-                    true => match block.transactions().num_accepted() == 1 {
-                        true => "accepted",
-                        false => "rejected",
-                    },
+                status = match (block.aborted_transaction_ids().is_empty(), block.transactions().num_accepted() == 1) {
+                    (false, _) => "aborted",
+                    (true, true) => "accepted",
+                    (true, false) => "rejected",
                 };
                 ledger.advance_to_next_block(&block)
             });
 
-        handler.extend_if_error(result.map_err(LeoError::Anyhow))?;
+        if let Err(e) = result {
+            handler.emit_err(LeoError::Anyhow(e));
+        }
 
         // Extract the execution and remove the global state root.
         let execution = if let Some(Transaction::Execute(_, _, execution, _)) = execution {
@@ -194,8 +196,19 @@ fn execution_run_test(test: &str, handler: &Handler, cases: &[Case]) -> Result<S
             None
         };
 
-        write!(output, "verified: {verified}\nstatus: {status}\n").unwrap();
-        writeln!(output, "{}", serde_json::to_string_pretty(&execution).expect("Serialization failure")).unwrap();
+        // These values are just to avoid spaces before the newline in `errors:` and `warnings`
+        // in the output.
+        let err_space = if handler.err_count() == 0 { "" } else { " " };
+        let warning_space = if handler.warning_count() == 0 { "" } else { " " };
+
+        write!(
+            output,
+            "verified: {verified}\nstatus: {status}\nerrors:{err_space}{}\nwarnings:{warning_space}{}\n",
+            buf.extract_errs(),
+            buf.extract_warnings()
+        )
+        .unwrap();
+        writeln!(output, "{}\n", serde_json::to_string_pretty(&execution).expect("Serialization failure")).unwrap();
     }
 
     Ok(output)
@@ -203,37 +216,29 @@ fn execution_run_test(test: &str, handler: &Handler, cases: &[Case]) -> Result<S
 
 fn execution_runner(source: &str) -> String {
     let buf = BufferEmitter::new();
-    let handler = Handler::new(Box::new(buf.clone()));
+    let handler = Handler::new(buf.clone());
 
     let mut cases = Vec::<Case>::new();
+
+    // Captures quote-delimited strings.
+    let re_input = regex::Regex::new(r#""([^"]+)""#).unwrap();
 
     for line in source.lines() {
         if line.starts_with("[case]") {
             cases.push(Default::default());
-        }
-
-        if let Some(rest) = line.strip_prefix("program = ") {
+        } else if let Some(rest) = line.strip_prefix("program = ") {
             cases.last_mut().unwrap().program = rest.trim_matches('"').into();
         } else if let Some(rest) = line.strip_prefix("function = ") {
             cases.last_mut().unwrap().function = rest.trim_matches('"').into();
+        } else if let Some(rest) = line.strip_prefix("private_key = ") {
+            cases.last_mut().unwrap().private_key = Some(rest.trim_matches('"').into());
         } else if let Some(rest) = line.strip_prefix("input = ") {
-            cases.last_mut().unwrap().input = rest
-                // Get rid of the braces.
-                .trim_start_matches('[').trim_end_matches(']')
-                // Iterate over each entry.
-                .split(',')
-                .map(|entry|
-                    entry
-                        // Remove its whitespace.
-                        .trim()
-                        // Remove its quotes.
-                        .trim_matches('"')
-                    .to_string()
-                ).collect()
+            // Get quote-delimited strings.
+            cases.last_mut().unwrap().input = re_input.captures_iter(rest).map(|s| s[1].to_string()).collect();
         }
     }
 
-    create_session_if_not_set_then(|_| match execution_run_test(source, &handler, &cases) {
+    create_session_if_not_set_then(|_| match execution_run_test(source, &handler, &buf, &cases) {
         Ok(s) => s,
         Err(()) => format!("{}{}", buf.extract_errs(), buf.extract_warnings()),
     })
