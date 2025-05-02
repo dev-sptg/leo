@@ -41,10 +41,7 @@ use snarkvm::{
 };
 
 use indexmap::IndexMap;
-use rand_chacha::{
-    ChaCha20Rng,
-    rand_core::{OsRng, RngCore, SeedableRng as _},
-};
+use rand_chacha::{ChaCha20Rng, rand_core::SeedableRng as _};
 use serial_test::serial;
 use std::{fmt::Write as _, str::FromStr};
 
@@ -58,13 +55,13 @@ pub fn whole_compile(
     import_stubs: IndexMap<Symbol, Stub>,
 ) -> Result<(String, String), LeoError> {
     let mut compiler =
-        Compiler::<CurrentNetwork>::new(handler.clone(), "/fakedirectory-wont-use".into(), None, import_stubs);
+        Compiler::<CurrentNetwork>::new(None, handler.clone(), "/fakedirectory-wont-use".into(), None, import_stubs);
 
     let filename = FileName::Custom("execution-test".into());
 
     let bytecode = compiler.compile(source, filename)?;
 
-    Ok((bytecode, compiler.program_name))
+    Ok((bytecode, compiler.program_name.unwrap()))
 }
 
 // Execution test configuration.
@@ -89,11 +86,7 @@ fn execution_run_test(config: Config, handler: &Handler, buf: &BufferEmitter, ca
     let process = Process::<CurrentNetwork>::load().unwrap();
 
     // Initialize an rng.
-    let mut rng = &mut ChaCha20Rng::seed_from_u64(config.seed.unwrap_or_else(|| {
-        let mut seed = [0u8; 8];
-        OsRng.try_fill_bytes(&mut seed).unwrap();
-        u64::from_le_bytes(seed)
-    }));
+    let mut rng = &mut ChaCha20Rng::seed_from_u64(config.seed.unwrap_or(1234567890));
 
     let mut import_stubs = IndexMap::new();
 
@@ -113,6 +106,8 @@ fn execution_run_test(config: Config, handler: &Handler, buf: &BufferEmitter, ca
     let ledger =
         Ledger::<CurrentNetwork, ConsensusMemory<CurrentNetwork>>::load(genesis_block, StorageMode::Production)
             .unwrap();
+
+    let mut bytecodes = Vec::<String>::new();
 
     // Compile and deploy each source file separately.
     for source in &config.sources {
@@ -160,6 +155,8 @@ fn execution_run_test(config: Config, handler: &Handler, buf: &BufferEmitter, ca
         if block.transactions().num_accepted() != 1 {
             return Ok("Deployment transaction not accepted.".into());
         }
+
+        bytecodes.push(bytecode);
     }
 
     // Fund each private key used in the test cases with 1M ALEO.
@@ -212,9 +209,7 @@ fn execution_run_test(config: Config, handler: &Handler, buf: &BufferEmitter, ca
         ledger.advance_to_next_block(&block).expect("Failed to advance to next block");
     }
 
-    println!("Current height: {}", ledger.vm().block_store().current_block_height());
-
-    let mut output = String::new();
+    let mut output = bytecodes.iter().format(&format!("{}\n", PROGRAM_DELIMITER)).to_string();
     for case in cases {
         if !ledger.vm().contains_program(&ProgramID::from_str(&case.program).unwrap()) {
             return Ok(format!("Program {} doesn't exist.", case.program));
