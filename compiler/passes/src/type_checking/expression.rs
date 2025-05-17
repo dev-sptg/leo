@@ -89,12 +89,16 @@ impl TypeCheckingVisitor<'_> {
                         sym::caller => {
                             // Check that the operation is not invoked in a `finalize` block.
                             self.check_access_allowed("self.caller", false, input.name.span());
-                            return Type::Address;
+                            let ty = Type::Address;
+                            self.maybe_assert_type(&ty, expected, input.span());
+                            return ty;
                         }
                         sym::signer => {
                             // Check that operation is not invoked in a `finalize` block.
                             self.check_access_allowed("self.signer", false, input.name.span());
-                            return Type::Address;
+                            let ty = Type::Address;
+                            self.maybe_assert_type(&ty, expected, input.span());
+                            return ty;
                         }
                         _ => {
                             self.emit_err(TypeCheckerError::invalid_self_access(input.name.span()));
@@ -888,6 +892,12 @@ impl ExpressionVisitor for TypeCheckingVisitor<'_> {
         }
 
         if struct_.is_record {
+            // First, ensure that the current scope is not an async function. Records should not be instantiated in
+            // async functions
+            if self.scope_state.variant == Some(Variant::AsyncFunction) {
+                self.state.handler.emit_err(TypeCheckerError::records_not_allowed_inside_finalize(input.span()));
+            }
+
             // Records where the `owner` is `self.caller` can be problematic because `self.caller` can be a program
             // address and programs can't spend records. Emit a warning in this case.
             //
