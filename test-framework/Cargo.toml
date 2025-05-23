@@ -18,14 +18,11 @@ license = "GPL-3.0"
 edition = "2024"
 rust-version = "1.85.1"
 
-[dependencies.leo-errors]
-workspace = true
-
-[dependencies.indexmap]
-workspace = true
-
-[dependencies.itertools]
-workspace = true
+[dependencies.rayon]
+version = "1.10"
 
 [dependencies.walkdir]
 workspace = true
+
+[features]
+no_parallel = [ ]
