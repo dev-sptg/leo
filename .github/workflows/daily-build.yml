@@ -82,9 +82,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Build
+        # Use an older version of this Docker image as newer versions don't have OpenSSL.
         run: |
-          docker pull clux/muslrust:stable
-          docker run -v cargo-cache:/root/.cargo/registry -v $PWD:/volume --rm -t clux/muslrust:stable \
+          docker pull clux/muslrust:1.85.1-stable
+          docker run -v cargo-cache:/root/.cargo/registry -v $PWD:/volume --rm -t clux/muslrust:1.85.1-stable \
             sh -c "rustup target add x86_64-unknown-linux-musl && cargo build --target x86_64-unknown-linux-musl --package leo-lang --release --features noconfig && ldd target/x86_64-unknown-linux-musl/release/leo"
 
       - id: get_version
