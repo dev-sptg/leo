@@ -39,15 +39,10 @@ impl ExpressionReconstructor for MonomorphizationVisitor<'_> {
             return (input_call.into(), Default::default());
         }
 
-        // Extract the function name from the call expression.
-        let Expression::Identifier(Identifier { name: callee_name, .. }) = &input_call.function else {
-            panic!("Parser ensures `function` is always an identifier.")
-        };
-
         // Look up the already reconstructed function by name.
         let callee_fn = self
             .reconstructed_functions
-            .get(callee_name)
+            .get(&input_call.function.name)
             .expect("Callee should already be reconstructed (post-order traversal).");
 
         // Proceed only if the function variant is `inline` and if there are some const arguments.
@@ -70,8 +65,8 @@ impl ExpressionReconstructor for MonomorphizationVisitor<'_> {
         // identifier in the user code.
         let new_callee_name = leo_span::Symbol::intern(&format!(
             "{}::[{}]",
-            callee_name,
-            input_call.const_arguments.iter().map(|arg| arg.to_string()).format(", ")
+            input_call.function.name,
+            input_call.const_arguments.iter().format(", ")
         ));
 
         // Check if the new callee name is not already present in `reconstructed_functions`. This ensures that we do not
@@ -109,14 +104,14 @@ impl ExpressionReconstructor for MonomorphizationVisitor<'_> {
             });
 
             // Now keep track of the function we just monomorphized
-            self.monomorphized_functions.insert(*callee_name);
+            self.monomorphized_functions.insert(input_call.function.name);
         }
 
         // Update call graph with edges for the monomorphized function. We do this by basically cloning the edges in
         // and out of `callee_name` and replicating them for a new node that contains `new_callee_name`.
-        if let Some(neighbors) = self.state.call_graph.neighbors(callee_name) {
+        if let Some(neighbors) = self.state.call_graph.neighbors(&input_call.function.name) {
             for neighbor in neighbors {
-                if neighbor != *callee_name {
+                if neighbor != input_call.function.name {
                     self.state.call_graph.add_edge(new_callee_name, neighbor);
                 }
             }
@@ -126,11 +121,11 @@ impl ExpressionReconstructor for MonomorphizationVisitor<'_> {
         // Finally, construct the updated call expression that points to the monomorphized version and return it.
         (
             CallExpression {
-                function: Expression::Identifier(Identifier {
+                function: Identifier {
                     name: new_callee_name, // use the new name
                     span: leo_span::Span::default(),
                     id: self.state.node_builder.next_id(),
-                }),
+                },
                 const_arguments: vec![], // remove const arguments
                 arguments: input_call.arguments,
                 program: input_call.program,
