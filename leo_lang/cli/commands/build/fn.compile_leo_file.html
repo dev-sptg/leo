@@ -3,8 +3,8 @@
     program_name: <a class="struct" href="../../../../leo_span/symbol/struct.Symbol.html" title="struct leo_span::symbol::Symbol">Symbol</a>,
     is_test: <a class="primitive" href="https://doc.rust-lang.org/1.88.0/std/primitive.bool.html">bool</a>,
     output_path: &amp;<a class="struct" href="https://doc.rust-lang.org/1.88.0/std/path/struct.Path.html" title="struct std::path::Path">Path</a>,
-    handler: &amp;<a class="struct" href="../../../../leo_errors/emitter/struct.Handler.html" title="struct leo_errors::emitter::Handler">Handler</a>,
+    handler: &amp;Handler,
     options: <a class="struct" href="../common/options/struct.BuildOptions.html" title="struct leo_lang::cli::commands::common::options::BuildOptions">BuildOptions</a>,
-    stubs: IndexMap&lt;<a class="struct" href="../../../../leo_span/symbol/struct.Symbol.html" title="struct leo_span::symbol::Symbol">Symbol</a>, <a class="struct" href="../../../../leo_ast/stub/struct.Stub.html" title="struct leo_ast::stub::Stub">Stub</a>&gt;,
-) -&gt; <a class="type" href="../../../../leo_errors/errors/type.Result.html" title="type leo_errors::errors::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.88.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Compiles a Leo file. Writes and returns the compiled bytecode.</p>
+    stubs: IndexMap&lt;<a class="struct" href="../../../../leo_span/symbol/struct.Symbol.html" title="struct leo_span::symbol::Symbol">Symbol</a>, Stub&gt;,
+) -&gt; Result&lt;<a class="struct" href="https://doc.rust-lang.org/1.88.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Compiles a Leo file. Writes and returns the compiled bytecode.</p>
 </div></details></section></div></main></body></html>
