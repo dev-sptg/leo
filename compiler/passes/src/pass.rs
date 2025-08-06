@@ -14,12 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{Assigner, CallGraph, StructGraph, SymbolTable, TypeTable};
+use crate::{Assigner, SymbolTable, TypeTable};
 
-use leo_ast::{Ast, NodeBuilder};
-use leo_errors::{Handler, Result};
+use leo_ast::{Ast, CallGraph, NetworkName, NodeBuilder, StructGraph};
+use leo_errors::{Handler, LeoWarning, Result};
 
-/// Contains data share by many compiler passes.
+use std::collections::HashSet;
+
+/// Contains data shared by many compiler passes.
 #[derive(Default)]
 pub struct CompilerState {
     /// The Abstract Syntax Tree.
@@ -38,8 +40,12 @@ pub struct CompilerState {
     pub struct_graph: StructGraph,
     /// A graph of which functions call each other.
     pub call_graph: CallGraph,
+    /// A set of the warnings collected. This is used to make sure we don't emit the same exact warning twice.
+    pub warnings: HashSet<LeoWarning>,
     /// Is this a test program?
     pub is_test: bool,
+    /// The network.
+    pub network: NetworkName,
 }
 
 /// A compiler pass.

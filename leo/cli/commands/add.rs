@@ -15,7 +15,7 @@
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
 use super::*;
-use leo_package::{Dependency, Location, Manifest, NetworkName};
+use leo_package::{Dependency, Location, Manifest};
 use std::path::PathBuf;
 
 /// Add a new on-chain or local dependency to the current package.
@@ -25,17 +25,32 @@ pub struct LeoAdd {
     #[clap(name = "NAME", help = "The dependency name. Ex: `credits.aleo` or `credits`.")]
     pub(crate) name: String,
 
-    #[clap(short = 'l', long, help = "Path to local dependency")]
-    pub(crate) local: Option<PathBuf>,
-
-    #[clap(short = 'n', long, help = "Name of the network to use", default_value = "testnet")]
-    pub(crate) network: String,
+    #[clap(flatten)]
+    pub(crate) source: DependencySource,
 
     #[clap(short = 'c', long, help = "Clear all previous dependencies.", default_value = "false")]
     pub(crate) clear: bool,
 
     #[clap(long, help = "This is a development dependency.", default_value = "false")]
     pub(crate) dev: bool,
+}
+
+#[derive(Parser, Debug)]
+#[group(required = true, multiple = false)]
+pub struct DependencySource {
+    #[clap(short = 'l', long, help = "Whether the dependency is local to the machine.", group = "source")]
+    pub(crate) local: Option<PathBuf>,
+
+    #[clap(short = 'n', long, help = "Whether the dependency is on a live network.", group = "source")]
+    pub(crate) network: bool,
+
+    #[clap(
+        short = 'e',
+        long,
+        help = "The expected edition of the program. DO NOT USE THIS UNLESS YOU KNOW WHAT YOU ARE DOING.",
+        group = "source"
+    )]
+    pub(crate) edition: Option<u16>,
 }
 
 impl Command for LeoAdd {
@@ -64,13 +79,11 @@ impl Command for LeoAdd {
             return Err(CliError::invalid_program_name(name).into());
         }
 
-        let network: NetworkName = self.network.parse()?;
-
         let new_dependency = Dependency {
             name: name.clone(),
-            location: if self.local.is_some() { Location::Local } else { Location::Network },
-            network: if self.local.is_some() { None } else { Some(network) },
-            path: self.local.clone(),
+            location: if self.source.local.is_some() { Location::Local } else { Location::Network },
+            path: self.source.local.clone(),
+            edition: self.source.edition,
         };
 
         let deps = if self.dev { &mut manifest.dev_dependencies } else { &mut manifest.dependencies };
@@ -78,19 +91,19 @@ impl Command for LeoAdd {
         if let Some(matched_dep) = deps.get_or_insert_default().iter_mut().find(|dep| dep.name == new_dependency.name) {
             if let Some(path) = &matched_dep.path {
                 tracing::warn!(
-                    "⚠️  Program `{name}` already exists as a local dependency at `{}`. Overwriting.",
+                    "⚠️ Program `{name}` already exists as a local dependency at `{}`. Overwriting.",
                     path.display()
                 );
             } else {
-                tracing::warn!("⚠️  Program `{name}` already exists as a network dependency. Overwriting.");
+                tracing::warn!("⚠️ Program `{name}` already exists as a network dependency. Overwriting.");
             }
             *matched_dep = new_dependency;
         } else {
             deps.as_mut().unwrap().push(new_dependency);
-            if let Some(path) = self.local.as_ref() {
+            if let Some(path) = self.source.local.as_ref() {
                 tracing::info!("✅ Added local dependency to program `{name}` at path `{}`.", path.display());
             } else {
-                tracing::info!("✅ Added network dependency `{name}` from network `{}`.", self.network);
+                tracing::info!("✅ Added network dependency `{name}` from network `{}`.", self.source.network);
             }
         }
 

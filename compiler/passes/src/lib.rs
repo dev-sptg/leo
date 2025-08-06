@@ -29,8 +29,8 @@ pub use common::*;
 mod const_propagation;
 pub use const_propagation::*;
 
-mod const_propagation_and_unrolling;
-pub use const_propagation_and_unrolling::*;
+mod const_prop_unroll_and_morphing;
+pub use const_prop_unroll_and_morphing::*;
 
 mod dead_code_elimination;
 pub use dead_code_elimination::*;
@@ -44,11 +44,17 @@ pub use flattening::*;
 mod function_inlining;
 pub use function_inlining::*;
 
+mod monomorphization;
+pub use monomorphization::*;
+
 mod loop_unrolling;
 pub use loop_unrolling::*;
 
 mod pass;
 pub use pass::*;
+
+mod processing_async;
+pub use processing_async::*;
 
 mod processing_script;
 pub use processing_script::*;

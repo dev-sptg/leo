@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-use super::CodeGeneratingVisitor;
+use super::*;
 
-use leo_ast::{Location, Mode, Type};
+use leo_ast::{CompositeType, Location, Mode, Type};
 
 impl CodeGeneratingVisitor<'_> {
     pub fn visit_type(input: &Type) -> String {
@@ -28,15 +28,19 @@ impl CodeGeneratingVisitor<'_> {
             | Type::Signature
             | Type::String
             | Type::Future(..)
-            | Type::Composite(..)
             | Type::Identifier(..)
             | Type::Integer(..) => format!("{input}"),
+            Type::Composite(CompositeType { id, .. }) => Self::legalize_struct_name(id.name.to_string()),
             Type::Boolean => {
                 // Leo calls this just `bool`, which isn't what we need.
                 "boolean".into()
             }
             Type::Array(array_type) => {
-                format!("[{}; {}u32]", Self::visit_type(array_type.element_type()), array_type.length())
+                format!(
+                    "[{}; {}u32]",
+                    Self::visit_type(array_type.element_type()),
+                    array_type.length.as_u32().expect("length should be known at this point")
+                )
             }
             Type::Mapping(_) => {
                 panic!("Mapping types are not supported at this phase of compilation")
@@ -44,6 +48,7 @@ impl CodeGeneratingVisitor<'_> {
             Type::Tuple(_) => {
                 panic!("Tuple types should not be visited at this phase of compilation")
             }
+            Type::Numeric => panic!("`Numeric` types should not exist at this phase of compilation"),
             Type::Err => panic!("Error types should not exist at this phase of compilation"),
             Type::Unit => panic!("Unit types are not supported at this phase of compilation"),
         }

@@ -1,6 +1,6 @@
 [package]
 name = "leo-compiler"
-version = "2.6.0"
+version = "3.0.0"
 authors = [ "The Leo Team <leo@provable.com>" ]
 description = "Compiler for Leo programming language"
 homepage = "https://leo-lang.org"
@@ -16,7 +16,7 @@ categories = [ "compilers", "cryptography", "web-programming" ]
 include = [ "Cargo.toml", "src", "README.md", "LICENSE.md" ]
 license = "GPL-3.0"
 edition = "2024"
-rust-version = "1.85.1"
+rust-version = "1.88.0"
 
 [dependencies.leo-ast]
 workspace = true
@@ -33,17 +33,11 @@ workspace = true
 [dependencies.leo-span]
 workspace = true
 
-[dependencies.anyhow]
-workspace = true
-
-[dependencies.aleo-std-storage]
+[dependencies.aleo-std]
 workspace = true
 
 [dependencies.rand_chacha]
 workspace = true
-
-[dependencies.sha2]
-version = "0.10"
 
 [dependencies.snarkvm]
 workspace = true
@@ -65,6 +59,10 @@ workspace = true
 
 [dev-dependencies.snarkvm]
 workspace = true
+# During execution tests, we need to use the "test" configuration of each network, so that
+# we only have to get to block 16 to produce records. This is only available by enabling
+# the "test" feature.
+features = [ "test" ]
 
 [dev-dependencies.serde]
 workspace = true
@@ -75,9 +73,7 @@ version = "1.11.1"
 [dev-dependencies.serial_test]
 workspace = true
 
-[dev-dependencies.tempfile]
-workspace = true
-
 [features]
 default = [ ]
 ci_skip = [ "leo-ast/ci_skip" ]
+test_network = ["snarkvm/test_consensus_heights"]

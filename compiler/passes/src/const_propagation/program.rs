@@ -16,7 +16,18 @@
 
 use super::ConstPropagationVisitor;
 
-use leo_ast::{Function, Node, ProgramReconstructor, ProgramScope, Statement, StatementReconstructor as _};
+use leo_ast::{
+    AstReconstructor as _,
+    ConstParameter,
+    Constructor,
+    Function,
+    Input,
+    Node,
+    Output,
+    ProgramReconstructor,
+    ProgramScope,
+    Statement,
+};
 
 impl ProgramReconstructor for ConstPropagationVisitor<'_> {
     fn reconstruct_program_scope(&mut self, mut input: ProgramScope) -> ProgramScope {
@@ -33,13 +44,44 @@ impl ProgramReconstructor for ConstPropagationVisitor<'_> {
             *f = self.reconstruct_function(std::mem::take(f));
         }
 
+        if let Some(c) = input.constructor.as_mut() {
+            *c = self.reconstruct_constructor(std::mem::take(c));
+        }
+
+        input.structs = input.structs.into_iter().map(|(i, c)| (i, self.reconstruct_struct(c))).collect();
+        input.mappings =
+            input.mappings.into_iter().map(|(id, mapping)| (id, self.reconstruct_mapping(mapping))).collect();
+
         input
     }
 
     fn reconstruct_function(&mut self, mut function: Function) -> Function {
         self.in_scope(function.id(), |slf| {
+            function.const_parameters = function
+                .const_parameters
+                .iter()
+                .map(|param| ConstParameter { type_: slf.reconstruct_type(param.type_.clone()).0, ..param.clone() })
+                .collect();
+            function.input = function
+                .input
+                .iter()
+                .map(|input| Input { type_: slf.reconstruct_type(input.type_.clone()).0, ..input.clone() })
+                .collect();
+            function.output = function
+                .output
+                .iter()
+                .map(|output| Output { type_: slf.reconstruct_type(output.type_.clone()).0, ..output.clone() })
+                .collect();
+            function.output_type = slf.reconstruct_type(function.output_type).0;
             function.block = slf.reconstruct_block(function.block).0;
             function
+        })
+    }
+
+    fn reconstruct_constructor(&mut self, mut constructor: Constructor) -> Constructor {
+        self.in_scope(constructor.id(), |slf| {
+            constructor.block = slf.reconstruct_block(constructor.block).0;
+            constructor
         })
     }
 }

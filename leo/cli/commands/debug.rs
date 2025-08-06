@@ -29,15 +29,14 @@ use super::*;
 pub struct LeoDebug {
     #[arg(long, help = "Use these source files instead of finding source files through the project structure.", num_args = 1..)]
     pub(crate) paths: Vec<String>,
-
     #[arg(long, help = "The block height, accessible via block.height.", default_value = "0")]
     pub(crate) block_height: u32,
-
     #[arg(long, action, help = "Use the text user interface.")]
     pub(crate) tui: bool,
-
     #[clap(flatten)]
     pub(crate) compiler_options: BuildOptions,
+    #[clap(flatten)]
+    pub(crate) env_override: EnvOptions,
 }
 
 impl Command for LeoDebug {
@@ -50,7 +49,8 @@ impl Command for LeoDebug {
 
     fn prelude(&self, context: Context) -> Result<Self::Input> {
         if self.paths.is_empty() {
-            let package = LeoBuild { options: self.compiler_options.clone() }.execute(context)?;
+            let package = LeoBuild { options: self.compiler_options.clone(), env_override: self.env_override.clone() }
+                .execute(context)?;
             Ok(Some(package))
         } else {
             Ok(None)
@@ -70,12 +70,12 @@ fn handle_debug(command: &LeoDebug, context: Context, package: Option<Package>) 
         let private_key = context.get_private_key(&None)?;
         let address = Address::try_from(&private_key)?;
 
-        // Get the paths of all local dependencies.
+        // Get the paths of all local Leo dependencies.
         let local_dependency_paths: Vec<PathBuf> = package
             .programs
             .iter()
             .flat_map(|program| match &program.data {
-                ProgramData::SourcePath(path) => Some(path.clone()),
+                ProgramData::SourcePath { source, .. } => Some(source.clone()),
                 ProgramData::Bytecode(..) => None,
             })
             .collect();
@@ -84,12 +84,12 @@ fn handle_debug(command: &LeoDebug, context: Context, package: Option<Package>) 
             .programs
             .iter()
             .flat_map(|program| match &program.data {
-                ProgramData::SourcePath(..) => {
-                    // It's a local dependency.
+                ProgramData::SourcePath { .. } => {
+                    // It's a local Leo dependency.
                     Some(program.name)
                 }
                 ProgramData::Bytecode(..) => {
-                    // It's a network dependency.
+                    // It's a network dependency or local .aleo dependency.
                     None
                 }
             })
@@ -116,10 +116,20 @@ fn handle_debug(command: &LeoDebug, context: Context, package: Option<Package>) 
             })
             .collect();
 
+        // Get the network from the package environment.
+        let network = package.env.network;
+
         // No need to keep this around while the interpreter runs.
         std::mem::drop(package);
 
-        leo_interpreter::interpret(&local_dependency_paths, &aleo_paths, address, command.block_height, command.tui)
+        leo_interpreter::interpret(
+            &local_dependency_paths,
+            &aleo_paths,
+            address,
+            command.block_height,
+            command.tui,
+            network,
+        )
     } else {
         let private_key: PrivateKey<TestnetV0> = PrivateKey::from_str(leo_package::TEST_PRIVATE_KEY)?;
         let address = Address::try_from(&private_key)?;
@@ -137,6 +147,13 @@ fn handle_debug(command: &LeoDebug, context: Context, package: Option<Package>) 
             .map(|path_str| path_str.into())
             .collect();
 
-        leo_interpreter::interpret(&leo_paths, &aleo_paths, address, command.block_height, command.tui)
+        leo_interpreter::interpret(
+            &leo_paths,
+            &aleo_paths,
+            address,
+            command.block_height,
+            command.tui,
+            package.map(|p| p.env.network).unwrap_or_default(),
+        )
     }
 }

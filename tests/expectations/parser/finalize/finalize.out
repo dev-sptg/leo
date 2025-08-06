@@ -38,6 +38,7 @@
               },
               "id": 2
             },
+            "const_parameters": [],
             "input": [],
             "output": [
               {
@@ -79,6 +80,7 @@
               },
               "id": 6
             },
+            "const_parameters": [],
             "input": [],
             "output": [],
             "output_type": "Unit",
@@ -110,6 +112,7 @@
               },
               "id": 9
             },
+            "const_parameters": [],
             "input": [],
             "output": [
               {
@@ -151,6 +154,7 @@
               },
               "id": 13
             },
+            "const_parameters": [],
             "input": [
               {
                 "identifier": {
@@ -172,6 +176,7 @@
                       },
                       "id": 15
                     },
+                    "const_arguments": [],
                     "program": null
                   }
                 },
@@ -201,6 +206,7 @@
                       },
                       "id": 18
                     },
+                    "const_arguments": [],
                     "program": null
                   }
                 },
@@ -224,6 +230,7 @@
                       },
                       "id": 20
                     },
+                    "const_arguments": [],
                     "program": null
                   }
                 },
@@ -244,6 +251,7 @@
                   },
                   "id": 20
                 },
+                "const_arguments": [],
                 "program": null
               }
             },
@@ -263,6 +271,7 @@
           }
         ]
       ],
+      "constructor": null,
       "span": {
         "lo": 1,
         "hi": 208

@@ -17,10 +17,10 @@
 use crate::CompilerState;
 
 use leo_ast::{
+    AstReconstructor,
     DefinitionPlace,
     DefinitionStatement,
     Expression,
-    ExpressionReconstructor as _,
     Identifier,
     Node as _,
     Statement,

@@ -31,6 +31,7 @@ use leo_ast::{
     Location,
     LocatorExpression,
     MemberAccess,
+    RepeatExpression,
     Statement,
     StructExpression,
     StructVariableInitializer,
@@ -226,6 +227,13 @@ impl ExpressionConsumer for SsaFormingVisitor<'_> {
         (input.into(), Vec::new())
     }
 
+    fn consume_repeat(&mut self, input: RepeatExpression) -> Self::Output {
+        let (expr, statements) = self.consume_expression_and_define(input.expr);
+
+        // By now, the repeat count should be a literal. So we just ignore it. There is no need to SSA it.
+        (RepeatExpression { expr, ..input }.into(), statements)
+    }
+
     /// Consumes a ternary expression, accumulating any statements that are generated.
     fn consume_ternary(&mut self, input: TernaryExpression) -> Self::Output {
         // Reconstruct the condition of the ternary expression.
@@ -295,5 +303,9 @@ impl ExpressionConsumer for SsaFormingVisitor<'_> {
         .into();
 
         (expr, statements)
+    }
+
+    fn consume_async(&mut self, input: leo_ast::AsyncExpression) -> Self::Output {
+        (input.into(), Default::default())
     }
 }

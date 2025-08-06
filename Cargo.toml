@@ -1,6 +1,6 @@
 [package]
 name = "leo-lang"
-version = "2.6.0"
+version = "3.0.0"
 authors = [ "The Leo Team <leo@provable.com>" ]
 description = "The Leo programming language"
 homepage = "https://leo-lang.org"
@@ -27,7 +27,7 @@ include = [
 ]
 license = "GPL-3.0"
 edition = "2024"
-rust-version = "1.85.1"
+rust-version = "1.88.0"
 
 [workspace]
 members = [
@@ -46,43 +46,43 @@ members = [
 
 [workspace.dependencies.leo-ast]
 path = "./compiler/ast"
-version = "2.6.0"
+version = "=3.0.0"
 
 [workspace.dependencies.leo-compiler]
 path = "./compiler/compiler"
-version = "2.6.0"
+version = "=3.0.0"
 
 [workspace.dependencies.leo-disassembler]
 path = "./utils/disassembler"
-version = "2.6.0"
+version = "=3.0.0"
 
 [workspace.dependencies.leo-errors]
 path = "./errors"
-version = "2.6.0"
+version = "=3.0.0"
 
 [workspace.dependencies.leo-interpreter]
 path = "./interpreter"
-version = "2.6.0"
+version = "=3.0.0"
 
 [workspace.dependencies.leo-package]
 path = "./leo/package"
-version = "2.6.0"
+version = "=3.0.0"
 
 [workspace.dependencies.leo-parser]
 path = "./compiler/parser"
-version = "2.6.0"
+version = "=3.0.0"
 
 [workspace.dependencies.leo-passes]
 path = "./compiler/passes"
-version = "2.6.0"
+version = "=3.0.0"
 
 [workspace.dependencies.leo-span]
 path = "./compiler/span"
-version = "2.6.0"
+version = "=3.0.0"
 
 [workspace.dependencies.leo-test-framework]
 path = "./test-framework"
-version = "2.6.0"
+version = "=3.0.0"
 
 [workspace.dependencies.anyhow]
 version = "1.0"
@@ -94,6 +94,9 @@ default-features = false
 [workspace.dependencies.aleo-std-storage]
 version = "1.0.1"
 default-features = false
+
+[workspace.dependencies.base62]
+version = "2.2.1"
 
 [workspace.dependencies.colored]
 version = "2.0"
@@ -116,18 +119,16 @@ default-features = false
 [workspace.dependencies.regex]
 version = "1.11.1"
 
+[workspace.dependencies.sha2]
+version = "0.10.9"
+
 # snarkvm doesn't use semantic versioning, so pin to a
 # specific version.
 [workspace.dependencies.snarkvm]
-version = "=3.7.1"
-
-# ditto
-[workspace.dependencies.snarkvm-circuit]
-version = "=3.7.1"
-
-# ditto
-[workspace.dependencies.snarkvm-synthesizer-program]
-version = "=3.7.1"
+#version = "=4.0.0"
+git = "https://github.com/ProvableHQ/snarkVM.git"
+rev = "e1365a7"
+features = [ "cli" ]
 
 [workspace.dependencies.serde]
 version = "1.0.214"
@@ -147,7 +148,7 @@ version = "3.13"
 version = "0.1"
 
 [workspace.dependencies.ureq]
-version = "2.10.1"
+version = "3.0.12"
 
 [workspace.dependencies.walkdir]
 version = "2.5"
@@ -164,11 +165,15 @@ default = [ ]
 ci_skip = [ "leo-compiler/ci_skip" ]
 noconfig = [ ]
 only_testnet = [ ]
+test_network = [
+  "snarkvm/test_targets",
+  "snarkvm/test_consensus_heights",
+  "leo-compiler/test_network"
+]
 
 [dependencies]
 dialoguer = "0.11.0"
 num-format = "0.4.4"
-text-tables = "0.3.1"
 
 [dependencies.leo-ast]
 workspace = true
@@ -257,6 +262,7 @@ version = "7.3.1"
 
 [dependencies.ureq]
 workspace = true
+features = ["json"]
 
 [dependencies.walkdir]
 workspace = true

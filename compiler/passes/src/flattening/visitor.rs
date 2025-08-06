@@ -20,13 +20,13 @@ use leo_ast::{
     ArrayAccess,
     ArrayExpression,
     ArrayType,
+    AstReconstructor,
     BinaryExpression,
     BinaryOperation,
     Block,
     Composite,
     CompositeType,
     Expression,
-    ExpressionReconstructor,
     Identifier,
     IntegerType,
     Literal,
@@ -393,7 +393,7 @@ impl FlatteningVisitor<'_> {
         // Initialize a vector to accumulate any statements generated.
         let mut statements = Vec::new();
         // For each array element, construct a new ternary expression.
-        let elements = (0..array.length())
+        let elements = (0..array.length.as_u32().expect("length should be known at this point") as usize)
             .map(|i| {
                 // Create an assignment statement for the first access expression.
                 let (first, stmt) = self.make_array_access_definition(i, *first, array);
@@ -504,15 +504,21 @@ impl FlatteningVisitor<'_> {
 
         let (expr, stmts) = self.reconstruct_struct_init(StructExpression {
             name: struct_.identifier,
+            const_arguments: Vec::new(), // All const arguments should have been resolved by now
             members,
             span: Default::default(),
             id: {
                 // Create a new node ID for the struct expression.
                 let id = self.state.node_builder.next_id();
                 // Set the type of the node ID.
-                self.state
-                    .type_table
-                    .insert(id, Type::Composite(CompositeType { id: struct_.identifier, program: struct_.external }));
+                self.state.type_table.insert(
+                    id,
+                    Type::Composite(CompositeType {
+                        id: struct_.identifier,
+                        const_arguments: Vec::new(), // all const generics should have been resolved by now
+                        program: struct_.external,
+                    }),
+                );
                 id
             },
         });

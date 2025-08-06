@@ -227,7 +227,7 @@ create_messages!(
     invalid_network_name {
         args: (network: impl Display),
         msg: format!("Invalid network name: {network}"),
-        help: Some("Valid network names are `testnet` and `mainnet`.".to_string()),
+        help: Some("Valid network names are `testnet`, `mainnet`, and `canary`.".to_string()),
     }
 
     @backtraced
@@ -288,15 +288,15 @@ create_messages!(
 
     @backtraced
     constraint_limit_exceeded {
-        args: (program: impl Display, limit: u64, network: impl Display),
-        msg: format!("Program `{program}` exceeds the constraint limit {limit} for deployment on network {network}."),
+        args: (program: impl Display, actual: u64, limit: u64, network: impl Display),
+        msg: format!("Program `{program}` has {actual} constraints, which exceeds the limit of {limit} for deployment on network {network}."),
         help: Some("Reduce the number of constraints in the program by reducing the number of instructions in transition functions.".to_string()),
     }
 
     @backtraced
     variable_limit_exceeded {
-        args: (program: impl Display, limit: u64, network: impl Display),
-        msg: format!("Program `{program}` exceeds the variable limit {limit} for deployment on network {network}."),
+        args: (program: impl Display, actual: u64, limit: u64, network: impl Display),
+        msg: format!("Program `{program}` has {actual} variables, which exceeds the limit of {limit} for deployment on network {network}."),
         help: Some("Reduce the number of variables in the program by reducing the number of instructions in transition functions.".to_string()),
     }
 
@@ -325,6 +325,13 @@ create_messages!(
     invalid_program_name {
         args: (name: impl Display),
         msg: format!("Invalid program name `{name}`"),
+        help: None,
+    }
+
+    @backtraced
+    custom {
+        args: (msg: impl Display),
+        msg: format!("{msg}"),
         help: None,
     }
 );

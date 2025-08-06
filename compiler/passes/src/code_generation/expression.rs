@@ -14,13 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-use super::CodeGeneratingVisitor;
+use super::*;
 
 use leo_ast::{
     ArrayAccess,
     ArrayExpression,
     AssociatedConstantExpression,
     AssociatedFunctionExpression,
+    AsyncExpression,
     BinaryExpression,
     BinaryOperation,
     CallExpression,
@@ -33,6 +34,9 @@ use leo_ast::{
     Location,
     LocatorExpression,
     MemberAccess,
+    Node,
+    ProgramId,
+    RepeatExpression,
     StructExpression,
     TernaryExpression,
     TupleExpression,
@@ -54,6 +58,7 @@ impl CodeGeneratingVisitor<'_> {
             Expression::ArrayAccess(expr) => self.visit_array_access(expr),
             Expression::AssociatedConstant(expr) => self.visit_associated_constant(expr),
             Expression::AssociatedFunction(expr) => self.visit_associated_function(expr),
+            Expression::Async(expr) => self.visit_async(expr),
             Expression::Binary(expr) => self.visit_binary(expr),
             Expression::Call(expr) => self.visit_call(expr),
             Expression::Cast(expr) => self.visit_cast(expr),
@@ -63,6 +68,7 @@ impl CodeGeneratingVisitor<'_> {
             Expression::Literal(expr) => self.visit_value(expr),
             Expression::Locator(expr) => self.visit_locator(expr),
             Expression::MemberAccess(expr) => self.visit_member_access(expr),
+            Expression::Repeat(expr) => self.visit_repeat(expr),
             Expression::Ternary(expr) => self.visit_ternary(expr),
             Expression::Tuple(expr) => self.visit_tuple(expr),
             Expression::TupleAccess(_) => panic!("Tuple accesses should not appear in the AST at this point."),
@@ -84,8 +90,38 @@ impl CodeGeneratingVisitor<'_> {
 
     fn visit_value(&mut self, input: &Literal) -> (String, String) {
         // AVM can only parse decimal numbers.
-        let decimal_input = input.display_decimal();
-        (format!("{decimal_input}"), String::new())
+        let literal = if let LiteralVariant::Unsuffixed(value) = &input.variant {
+            // For unsuffixed lierals, consult the `type_table` for their types. The type checker
+            // ensures that their type can only be `Integer`, `Field`, `Group`, or `Scalar`.
+            match self.state.type_table.get(&input.id) {
+                Some(Type::Integer(int_ty)) => Literal {
+                    variant: LiteralVariant::Integer(int_ty, value.clone()),
+                    id: self.state.node_builder.next_id(),
+                    span: input.span,
+                },
+                Some(Type::Field) => Literal {
+                    variant: LiteralVariant::Field(value.clone()),
+                    id: self.state.node_builder.next_id(),
+                    span: input.span,
+                },
+                Some(Type::Group) => Literal {
+                    variant: LiteralVariant::Group(value.clone()),
+                    id: self.state.node_builder.next_id(),
+                    span: input.span,
+                },
+                Some(Type::Scalar) => Literal {
+                    variant: LiteralVariant::Scalar(value.clone()),
+                    id: self.state.node_builder.next_id(),
+                    span: input.span,
+                },
+                _ => panic!(
+                    "Unexpected type for unsuffixed integer literal. This should have been caught by the type checker"
+                ),
+            }
+        } else {
+            input.clone()
+        };
+        (format!("{}", literal.display_decimal()), String::new())
     }
 
     fn visit_locator(&mut self, input: &LocatorExpression) -> (String, String) {
@@ -181,7 +217,7 @@ impl CodeGeneratingVisitor<'_> {
         let array_type: String = Self::visit_type(&array_type);
 
         let array_instruction =
-            format!("    cast {expression_operands} into {destination_register} as {};\n", array_type);
+            format!("    cast {expression_operands} into {destination_register} as {array_type};\n");
 
         // Concatenate the instructions.
         instructions.push_str(&array_instruction);
@@ -243,7 +279,7 @@ impl CodeGeneratingVisitor<'_> {
                 format!("{}.{type_}", input.name)
             } else {
                 // foo; // no visibility for structs
-                input.name.to_string()
+                Self::legalize_struct_name(input.name.to_string())
             }
         } else {
             panic!("All composite types should be known at this phase of compilation")
@@ -285,22 +321,70 @@ impl CodeGeneratingVisitor<'_> {
 
     fn visit_array_access(&mut self, input: &ArrayAccess) -> (String, String) {
         let (array_operand, _) = self.visit_expression(&input.array);
+
+        assert!(
+            matches!(self.state.type_table.get(&input.index.id()), Some(Type::Integer(_))),
+            "unexpected type for for array index. This should have been caught by the type checker."
+        );
+
         let index_operand = match &input.index {
-            Expression::Literal(Literal { variant: LiteralVariant::Integer(_, string), .. }) => {
-                format!("{}u32", string)
-            }
+            Expression::Literal(Literal {
+                variant: LiteralVariant::Integer(_, s) | LiteralVariant::Unsuffixed(s),
+                ..
+            }) => format!("{s}u32"),
             _ => panic!("Array indices must be integer literals"),
         };
-        let array_access = format!("{}[{}]", array_operand, index_operand);
 
-        (array_access, String::new())
+        (format!("{array_operand}[{index_operand}]"), String::new())
     }
 
     fn visit_member_access(&mut self, input: &MemberAccess) -> (String, String) {
+        // Handle `self.address`, `self.caller`, `self.checksum`, `self.edition`, `self.id`, `self.program_owner`, `self.signer`.
+        if let Expression::Identifier(Identifier { name: sym::SelfLower, .. }) = input.inner.borrow() {
+            // Get the current program ID.
+            let program_id = self.program_id.expect("Program ID should be set before traversing the program");
+
+            match input.name.name {
+                // Return the program ID directly.
+                sym::address | sym::id => {
+                    return (program_id.to_string(), String::new());
+                }
+                // Return the appropriate snarkVM operand.
+                name @ (sym::checksum | sym::edition | sym::program_owner) => {
+                    return (name.to_string(), String::new());
+                }
+                _ => {} // Do nothing as `self.signer` and `self.caller` are handled below.
+            }
+        }
+
         let (inner_expr, _) = self.visit_expression(&input.inner);
         let member_access = format!("{}.{}", inner_expr, input.name);
 
         (member_access, String::new())
+    }
+
+    fn visit_repeat(&mut self, input: &RepeatExpression) -> (String, String) {
+        let (operand, mut operand_instructions) = self.visit_expression(&input.expr);
+        let count = input.count.as_u32().expect("repeat count should be known at this point");
+
+        let expression_operands = std::iter::repeat_n(operand, count as usize).collect::<Vec<_>>().join(" ");
+
+        // Construct the destination register.
+        let destination_register = self.next_register();
+
+        // Get the array type.
+        let Some(array_type @ Type::Array(..)) = self.state.type_table.get(&input.id) else {
+            panic!("All types should be known at this phase of compilation");
+        };
+        let array_type: String = Self::visit_type(&array_type);
+
+        let array_instruction =
+            format!("    cast {expression_operands} into {destination_register} as {array_type};\n");
+
+        // Concatenate the instructions.
+        operand_instructions.push_str(&array_instruction);
+
+        (destination_register, operand_instructions)
     }
 
     // group::GEN -> group::GEN
@@ -420,7 +504,7 @@ impl CodeGeneratingVisitor<'_> {
                             .expect("failed to write to string");
                         (destination_register, instruction)
                     }
-                    _ => panic!("The only associated methods of group are to_x_coordinate and to_y_coordinate"),
+                    _ => panic!("The only associated methods of `group` are `to_x_coordinate` and `to_y_coordinate`"),
                 }
             }
             sym::ChaCha => {
@@ -467,6 +551,29 @@ impl CodeGeneratingVisitor<'_> {
                 writeln!(instruction, " {};", arguments[0]).expect("failed to write to string");
                 (String::new(), instruction)
             }
+            sym::ProgramCore => {
+                match input.name.name {
+                    // Generate code for `Program::checksum`, `Program::edition`, and `Program::program_owner`
+                    name @ (sym::checksum | sym::edition | sym::program_owner) => {
+                        // Get the program ID from the first argument.
+                        let program_id =
+                            ProgramId::from_str_with_network(&arguments[0].replace("\"", ""), self.state.network)
+                                .expect("Type checking guarantees that the program name is valid");
+                        // If the program name matches the current program ID, then use the operand directly, otherwise fully qualify the operand.
+                        let operand = match program_id.to_string()
+                            == self.program_id.expect("The program ID is set before traversing the program").to_string()
+                        {
+                            true => name.to_string(),
+                            false => format!("{program_id}/{name}"),
+                        };
+                        (operand, String::new())
+                    }
+                    // No other variants are allowed.
+                    _ => panic!(
+                        "The only associated methods of `Program` are `checksum`, `edition`, and `program_owner`"
+                    ),
+                }
+            }
             sym::CheatCode => {
                 (String::new(), String::new())
                 // Do nothing. Cheat codes do not generate instructions.
@@ -481,20 +588,18 @@ impl CodeGeneratingVisitor<'_> {
         (destination, instructions)
     }
 
-    fn visit_call(&mut self, input: &CallExpression) -> (String, String) {
-        // Lookup the function return type.
-        let function_name = match input.function.borrow() {
-            Expression::Identifier(identifier) => identifier.name,
-            _ => panic!("Parsing guarantees that a function name is always an identifier."),
-        };
+    fn visit_async(&mut self, _input: &AsyncExpression) -> (String, String) {
+        panic!("`AsyncExpression`s should not be in the AST at this phase of compilation.")
+    }
 
+    fn visit_call(&mut self, input: &CallExpression) -> (String, String) {
         let caller_program = self.program_id.expect("Calls only appear within programs.").name.name;
         let callee_program = input.program.unwrap_or(caller_program);
 
         let func_symbol = self
             .state
             .symbol_table
-            .lookup_function(Location::new(callee_program, function_name))
+            .lookup_function(Location::new(callee_program, input.function.name))
             .expect("Type checking guarantees functions exist");
 
         // Need to determine the program the function originated from as well as if the function has a finalize block.
@@ -550,7 +655,7 @@ impl CodeGeneratingVisitor<'_> {
         if !destinations.is_empty() {
             write!(call_instruction, " into").expect("failed to write to string");
             for destination in &destinations {
-                write!(call_instruction, " {}", destination).expect("failed to write to string");
+                write!(call_instruction, " {destination}").expect("failed to write to string");
             }
         }
 
@@ -603,7 +708,7 @@ impl CodeGeneratingVisitor<'_> {
             Type::Array(array_type) => {
                 // We need to cast the old array's members into the new array.
                 let mut instruction = "    cast ".to_string();
-                for i in 0..array_type.length() {
+                for i in 0..array_type.length.as_u32().expect("length should be known at this point") as usize {
                     write!(&mut instruction, "{register}[{i}u32] ").unwrap();
                 }
                 writeln!(&mut instruction, "into {new_reg} as {};", Self::visit_type(typ)).unwrap();
@@ -640,6 +745,7 @@ impl CodeGeneratingVisitor<'_> {
             | Type::Identifier(..)
             | Type::String
             | Type::Unit
+            | Type::Numeric
             | Type::Err => panic!("Objects of type {typ} cannot be cloned."),
         }
     }

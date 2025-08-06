@@ -16,53 +16,59 @@
 
 use super::*;
 
-use leo_package::{NetworkName, Package, ProgramData};
+use check_transaction::TransactionStatus;
+use leo_ast::NetworkName;
+use leo_package::{Package, ProgramData, fetch_program_from_network};
 
+use aleo_std::StorageMode;
+#[cfg(not(feature = "only_testnet"))]
+use snarkvm::prelude::{CanaryV0, MainnetV0};
 use snarkvm::{
-    circuit::{Aleo, AleoTestnetV0},
-    ledger::query::Query as SnarkVMQuery,
-    package::Package as SnarkVMPackage,
+    ledger::store::helpers::memory::BlockMemory,
     prelude::{
-        ProgramOwner,
+        ConsensusVersion,
+        Deployment,
+        Program,
+        ProgramID,
         TestnetV0,
         VM,
         deployment_cost,
+        query::Query as SnarkVMQuery,
         store::{ConsensusStore, helpers::memory::ConsensusMemory},
     },
 };
-#[cfg(not(feature = "only_testnet"))]
-use snarkvm::{
-    circuit::{AleoCanaryV0, AleoV0},
-    prelude::{CanaryV0, MainnetV0},
-};
 
-use aleo_std::StorageMode;
-use dialoguer::{Confirm, theme::ColorfulTheme};
-use num_format::{Locale, ToFormattedString};
-use std::path::PathBuf;
-use text_tables;
+use colored::*;
+use std::{collections::HashSet, fs, path::PathBuf};
 
 /// Deploys an Aleo program.
 #[derive(Parser, Debug)]
 pub struct LeoDeploy {
     #[clap(flatten)]
     pub(crate) fee_options: FeeOptions,
-    #[clap(long, help = "Disables building of the project before deployment.", default_value = "false")]
-    pub(crate) no_build: bool,
-    #[clap(long, help = "Enables recursive deployment of dependencies.", default_value = "false")]
-    pub(crate) recursive: bool,
-    #[clap(
-        long,
-        help = "Time in seconds to wait between consecutive deployments. This is to help prevent a program from trying to be included in an earlier block than its dependency program.",
-        default_value = "12"
-    )]
-    pub(crate) wait: u64,
     #[clap(flatten)]
-    pub(crate) options: BuildOptions,
+    pub(crate) action: TransactionAction,
+    #[clap(flatten)]
+    pub(crate) env_override: EnvOptions,
+    #[clap(flatten)]
+    pub(crate) extra: ExtraOptions,
+    #[clap(long, help = "Skips deployment of any program that contains one of the given substrings.")]
+    pub(crate) skip: Vec<String>,
+    #[clap(flatten)]
+    pub(crate) build_options: BuildOptions,
+}
+
+pub struct Task<N: Network> {
+    pub id: ProgramID<N>,
+    pub program: Program<N>,
+    pub edition: Option<u16>,
+    pub is_local: bool,
+    pub priority_fee: Option<u64>,
+    pub record: Option<Record<N, Plaintext<N>>>,
 }
 
 impl Command for LeoDeploy {
-    type Input = Option<Package>;
+    type Input = Package;
     type Output = ();
 
     fn log_span(&self) -> Span {
@@ -70,232 +76,512 @@ impl Command for LeoDeploy {
     }
 
     fn prelude(&self, context: Context) -> Result<Self::Input> {
-        if self.no_build {
-            Ok(None)
-        } else {
-            let package = LeoBuild { options: self.options.clone() }.execute(context)?;
-            Ok(Some(package))
+        LeoBuild {
+            env_override: self.env_override.clone(),
+            options: {
+                let mut options = self.build_options.clone();
+                options.no_cache = true;
+                options
+            },
         }
+        .execute(context)
     }
 
     fn apply(self, context: Context, input: Self::Input) -> Result<Self::Output> {
-        // Parse the network.
-        let network: NetworkName = context.get_network(&self.options.network)?.parse()?;
-        let endpoint = context.get_endpoint(&self.options.endpoint)?;
+        // Get the network, accounting for overrides.
+        let network = context.get_network(&self.env_override.network)?.parse()?;
+        // Handle each network with the appropriate parameterization.
         match network {
-            NetworkName::TestnetV0 => {
-                handle_deploy::<AleoTestnetV0, TestnetV0>(&self, context, network, &endpoint, input)
-            }
+            NetworkName::TestnetV0 => handle_deploy::<TestnetV0>(&self, context, network, input),
             NetworkName::MainnetV0 => {
                 #[cfg(feature = "only_testnet")]
                 panic!("Mainnet chosen with only_testnet feature");
                 #[cfg(not(feature = "only_testnet"))]
-                return handle_deploy::<AleoV0, MainnetV0>(&self, context, network, &endpoint, input);
+                handle_deploy::<MainnetV0>(&self, context, network, input)
             }
             NetworkName::CanaryV0 => {
                 #[cfg(feature = "only_testnet")]
                 panic!("Canary chosen with only_testnet feature");
                 #[cfg(not(feature = "only_testnet"))]
-                return handle_deploy::<AleoCanaryV0, CanaryV0>(&self, context, network, &endpoint, input);
+                handle_deploy::<CanaryV0>(&self, context, network, input)
             }
         }
     }
 }
 
 // A helper function to handle deployment logic.
-fn handle_deploy<A: Aleo<Network = N, BaseField = N::Field>, N: Network>(
+fn handle_deploy<N: Network>(
     command: &LeoDeploy,
     context: Context,
     network: NetworkName,
-    endpoint: &str,
-    package: Option<Package>,
+    package: Package,
 ) -> Result<<LeoDeploy as Command>::Output> {
-    // Get the program name.
-    let project_name = context.open_manifest()?.program.clone();
+    // Get the private key and associated address, accounting for overrides.
+    let private_key = context.get_private_key(&command.env_override.private_key)?;
+    let address =
+        Address::try_from(&private_key).map_err(|e| CliError::custom(format!("Failed to parse address: {e}")))?;
 
-    // Get the private key.
-    let private_key = context.get_private_key(&command.fee_options.private_key)?;
-    let address = Address::try_from(&private_key)?;
+    // Get the endpoint, accounting for overrides.
+    let endpoint = context.get_endpoint(&command.env_override.endpoint)?;
 
-    // Specify the query
-    let query = SnarkVMQuery::from(endpoint);
+    // Get all the programs but tests.
+    let programs = package.programs.iter().filter(|program| !program.is_test).cloned();
 
-    let mut all_paths: Vec<(String, PathBuf)> = Vec::new();
+    let programs_and_bytecode: Vec<(leo_package::Program, String)> = programs
+        .into_iter()
+        .map(|program| {
+            let bytecode = match &program.data {
+                ProgramData::Bytecode(s) => s.clone(),
+                ProgramData::SourcePath { .. } => {
+                    // We need to read the bytecode from the filesystem.
+                    let aleo_name = format!("{}.aleo", program.name);
+                    let aleo_path = if package.manifest.program == aleo_name {
+                        // The main program in the package, so its .aleo file
+                        // will be in the build directory.
+                        package.build_directory().join("main.aleo")
+                    } else {
+                        // Some other dependency, so look in `imports`.
+                        package.imports_directory().join(aleo_name)
+                    };
+                    fs::read_to_string(aleo_path.clone())
+                        .map_err(|e| CliError::custom(format!("Failed to read file {}: {e}", aleo_path.display())))?
+                }
+            };
 
-    // Extract post-ordered list of local dependencies' paths.
-    if command.recursive {
-        // Cannot combine with private fee.
-        if command.fee_options.record.is_some() {
-            return Err(CliError::recursive_deploy_with_record().into());
-        }
-        let package = if let Some(package) = package {
-            package
-        } else {
-            Package::from_directory(context.dir()?, context.home()?)?
-        };
-        all_paths = package
-            .programs
-            .iter()
-            .flat_map(|program| match &program.data {
-                ProgramData::Bytecode(..) => None,
-                ProgramData::SourcePath(path) => Some((program.name.to_string(), path.clone())),
+            Ok((program, bytecode))
+        })
+        .collect::<Result<_>>()?;
+
+    // Parse the fee options.
+    let fee_options = parse_fee_options(&private_key, &command.fee_options, programs_and_bytecode.len())?;
+
+    let tasks: Vec<Task<N>> = programs_and_bytecode
+        .into_iter()
+        .zip(fee_options)
+        .map(|((program, bytecode), (_base_fee, priority_fee, record))| {
+            let id_str = format!("{}.aleo", program.name);
+            let id =
+                id_str.parse().map_err(|e| CliError::custom(format!("Failed to parse program ID {id_str}: {e}")))?;
+            let bytecode = bytecode.parse().map_err(|e| CliError::custom(format!("Failed to parse program: {e}")))?;
+            Ok(Task {
+                id,
+                program: bytecode,
+                edition: program.edition,
+                is_local: program.is_local,
+                priority_fee,
+                record,
             })
-            .collect();
+        })
+        .collect::<Result<_>>()?;
+
+    // Split the tasks into local and remote dependencies.
+    let (local, remote) = tasks.into_iter().partition::<Vec<_>, _>(|task| task.is_local);
+
+    // Get the skipped programs.
+    let skipped: HashSet<ProgramID<N>> = local
+        .iter()
+        .filter_map(|task| {
+            let id_string = task.id.to_string();
+            command.skip.iter().any(|skip| id_string.contains(skip)).then_some(task.id)
+        })
+        .collect();
+
+    // Get the consensus version.
+    let consensus_version = get_consensus_version(&command.extra.consensus_version, &endpoint, network, &context)?;
+
+    // Print a summary of the deployment plan.
+    print_deployment_plan(
+        &private_key,
+        &address,
+        &endpoint,
+        &network,
+        &local,
+        &skipped,
+        &remote,
+        &check_tasks_for_warnings(&endpoint, network, &local, consensus_version, command),
+        consensus_version,
+        command,
+    );
+
+    // Prompt the user to confirm the plan.
+    if !confirm("Do you want to proceed with deployment?", command.extra.yes)? {
+        println!("❌ Deployment aborted.");
+        return Ok(());
     }
 
-    // Add the parent program to be deployed last.
-    all_paths.push((project_name, context.dir()?.join("build")));
+    // Initialize an RNG.
+    let rng = &mut rand::thread_rng();
 
-    for (index, (name, path)) in all_paths.iter().enumerate() {
-        // Fetch the package from the directory.
-        let package = SnarkVMPackage::<N>::open(path)?;
+    // Initialize a new VM.
+    let vm = VM::from(ConsensusStore::<N, ConsensusMemory<N>>::open(StorageMode::Production)?)?;
 
-        println!("📦 Creating deployment transaction for '{}'...\n", &name.bold());
+    // Load the remote dependencies into the VM.
+    let programs_and_editions = remote
+        .into_iter()
+        .map(|task| {
+            // Note: We default to edition 1 since snarkVM execute may produce spurious errors if the program does not have a constructor but uses edition 0.
+            (task.program, task.edition.unwrap_or(1))
+        })
+        .collect::<Vec<_>>();
+    vm.process().write().add_programs_with_editions(&programs_and_editions)?;
 
-        // Generate the deployment
-        let deployment = package.deploy::<A>(None)?;
+    // Specify the query
+    let query = SnarkVMQuery::<N, BlockMemory<N>>::from(&endpoint);
 
-        let variables = deployment.num_combined_variables()?;
-        let constraints = deployment.num_combined_constraints()?;
-
-        // Check if the number of variables and constraints are within the limits.
-        if variables > N::MAX_DEPLOYMENT_VARIABLES {
-            return Err(CliError::variable_limit_exceeded(name, N::MAX_DEPLOYMENT_VARIABLES, network).into());
-        }
-        if constraints > N::MAX_DEPLOYMENT_CONSTRAINTS {
-            return Err(CliError::constraint_limit_exceeded(name, N::MAX_DEPLOYMENT_CONSTRAINTS, network).into());
-        }
-
-        // Print deployment summary
-        println!(
-            "📊 Deployment Summary:\n      Total Variables:   {:>10}\n      Total Constraints: {:>10}",
-            variables.to_formatted_string(&Locale::en),
-            constraints.to_formatted_string(&Locale::en)
-        );
-
-        let deployment_id = deployment.to_deployment_id()?;
-
-        let store = ConsensusStore::<N, ConsensusMemory<N>>::open(StorageMode::Production)?;
-
-        // Initialize the VM.
-        let vm = VM::from(store)?;
-
-        let base_fee = match command.fee_options.base_fee {
-            Some(base_fee) => base_fee,
-            None => {
-                // Compute the minimum deployment cost.
-                let (base_fee, (storage_cost, synthesis_cost, namespace_cost)) = deployment_cost(&deployment)?;
-
-                // Display the deployment cost breakdown using `credit` denomination.
-                deploy_cost_breakdown(
-                    name,
-                    base_fee as f64 / 1_000_000.0,
-                    storage_cost as f64 / 1_000_000.0,
-                    synthesis_cost as f64 / 1_000_000.0,
-                    namespace_cost as f64 / 1_000_000.0,
-                    command.fee_options.priority_fee as f64 / 1_000_000.0,
-                )?;
-                base_fee
-            }
-        };
-
-        // Initialize an RNG.
-        let rng = &mut rand::thread_rng();
-
-        // Prepare the fees.
-        let fee = match &command.fee_options.record {
-            Some(record) => {
-                let fee_record = parse_record(&private_key, record)?;
-                let fee_authorization = vm.authorize_fee_private(
-                    &private_key,
-                    fee_record,
-                    base_fee,
-                    command.fee_options.priority_fee,
-                    deployment_id,
-                    rng,
-                )?;
-                vm.execute_fee_authorization(fee_authorization, Some(query.clone()), rng)?
-            }
-            None => {
-                // Make sure the user has enough public balance to pay for the deployment.
-                check_balance(
-                    &private_key,
-                    endpoint,
-                    &network.to_string(),
-                    &context,
-                    base_fee + command.fee_options.priority_fee,
-                )?;
-                let fee_authorization = vm.authorize_fee_public(
-                    &private_key,
-                    base_fee,
-                    command.fee_options.priority_fee,
-                    deployment_id,
-                    rng,
-                )?;
-                vm.execute_fee_authorization(fee_authorization, Some(query.clone()), rng)?
-            }
-        };
-        // Construct the owner.
-        let owner = ProgramOwner::new(&private_key, deployment_id, rng)?;
-
-        // Generate the deployment transaction.
-        let transaction = Transaction::from_deployment(owner, deployment, fee)?;
-
-        // Determine if the transaction should be broadcast, stored, or displayed to the user.
-        if !command.fee_options.dry_run {
-            if !command.fee_options.yes {
-                let prompt = format!(
-                    "Do you want to submit deployment of program `{name}` to network {} via endpoint {} using address {}?",
-                    network, endpoint, address
+    // For each of the programs, generate a deployment transaction.
+    let mut transactions = Vec::new();
+    for Task { id, program, priority_fee, record, .. } in local {
+        // If the program is a local dependency that is not skipped, generate a deployment transaction.
+        if !skipped.contains(&id) {
+            // If the program contains an upgrade config, confirm with the user that they want to proceed.
+            if let Some(constructor) = program.constructor() {
+                println!(
+                    r"
+🔧 Your program '{}' has the following constructor.
+──────────────────────────────────────────────
+{constructor}
+──────────────────────────────────────────────
+Once it is deployed, it CANNOT be changed.
+",
+                    id.to_string().bold()
                 );
-                let confirmation =
-                    Confirm::with_theme(&ColorfulTheme::default()).with_prompt(prompt).default(false).interact();
-
-                // Check if the user confirmed the transaction.
-                if let Ok(confirmation) = confirmation {
-                    if !confirmation {
-                        println!("✅ Successfully aborted the execution transaction for '{}'\n", name.bold());
-                        return Ok(());
-                    }
-                } else {
-                    return Err(CliError::confirmation_failed().into());
+                if !confirm("Would you like to proceed?", command.extra.yes)? {
+                    println!("❌ Deployment aborted.");
+                    return Ok(());
                 }
             }
-            println!("✅ Created deployment transaction for '{}'\n", name.bold());
-            handle_broadcast(&format!("{}/{}/transaction/broadcast", endpoint, network), transaction, name)?;
-            // Wait between successive deployments to prevent out of order deployments.
-            if index < all_paths.len() - 1 {
-                std::thread::sleep(std::time::Duration::from_secs(command.wait));
+            println!("📦 Creating deployment transaction for '{}'...\n", id.to_string().bold());
+            // Generate the transaction.
+            let transaction =
+                vm.deploy(&private_key, &program, record, priority_fee.unwrap_or(0), Some(&query), rng)
+                    .map_err(|e| CliError::custom(format!("Failed to generate deployment transaction: {e}")))?;
+            // Get the deployment.
+            let deployment = transaction.deployment().expect("Expected a deployment in the transaction");
+            // Print the deployment stats.
+            print_deployment_stats(&vm, &id.to_string(), deployment, priority_fee)?;
+            // Save the transaction.
+            transactions.push((id, transaction));
+        }
+        // Add the program to the VM.
+        vm.process().write().add_program(&program)?;
+    }
+
+    for (program_id, transaction) in transactions.iter() {
+        // Validate the deployment limits.
+        let deployment = transaction.deployment().expect("Expected a deployment in the transaction");
+        validate_deployment_limits(deployment, program_id, &network)?;
+    }
+
+    // If the `print` option is set, print the deployment transaction to the console.
+    // The transaction is printed in JSON format.
+    if command.action.print {
+        for (program_name, transaction) in transactions.iter() {
+            // Pretty-print the transaction.
+            let transaction_json = serde_json::to_string_pretty(transaction)
+                .map_err(|e| CliError::custom(format!("Failed to serialize transaction: {e}")))?;
+            println!("🖨️ Printing deployment for {program_name}\n{transaction_json}")
+        }
+    }
+
+    // If the `save` option is set, save each deployment transaction to a file in the specified directory.
+    // The file format is `program_name.deployment.json`.
+    // The directory is created if it doesn't exist.
+    if let Some(path) = &command.action.save {
+        // Create the directory if it doesn't exist.
+        std::fs::create_dir_all(path).map_err(|e| CliError::custom(format!("Failed to create directory: {e}")))?;
+        for (program_name, transaction) in transactions.iter() {
+            // Save the transaction to a file.
+            let file_path = PathBuf::from(path).join(format!("{program_name}.deployment.json"));
+            println!("💾 Saving deployment for {program_name} at {}", file_path.display());
+            let transaction_json = serde_json::to_string_pretty(transaction)
+                .map_err(|e| CliError::custom(format!("Failed to serialize transaction: {e}")))?;
+            std::fs::write(file_path, transaction_json)
+                .map_err(|e| CliError::custom(format!("Failed to write transaction to file: {e}")))?;
+        }
+    }
+
+    // If the `broadcast` option is set, broadcast each deployment transaction to the network.
+    if command.action.broadcast {
+        for (i, (program_id, transaction)) in transactions.iter().enumerate() {
+            println!("\n📡 Broadcasting deployment for {}...", program_id.to_string().bold());
+            // Get and confirm the fee with the user.
+            let fee = transaction.fee_transition().expect("Expected a fee in the transaction");
+            if !confirm_fee(&fee, &private_key, &address, &endpoint, network, &context, command.extra.yes)? {
+                println!("⏩ Deployment skipped.");
+                continue;
             }
-        } else {
-            println!("✅ Successful dry run deployment for '{}'\n", name.bold());
+            let fee_id = fee.id().to_string();
+            let id = transaction.id().to_string();
+            let height_before = check_transaction::current_height(&endpoint, network)?;
+            // Broadcast the transaction to the network.
+            let (message, status) = handle_broadcast(
+                &format!("{endpoint}/{network}/transaction/broadcast"),
+                transaction,
+                &program_id.to_string(),
+            )?;
+
+            let fail_and_prompt = |msg| {
+                println!("❌ Failed to deploy program {program_id}: {msg}.");
+                let count = transactions.len() - i - 1;
+                // Check if the user wants to continue with the next deployment.
+                if count > 0 {
+                    confirm("Do you want to continue with the next deployment?", command.extra.yes)
+                } else {
+                    Ok(false)
+                }
+            };
+
+            match status {
+                200..=299 => {
+                    let status = check_transaction::check_transaction_with_message(
+                        &id,
+                        Some(&fee_id),
+                        &endpoint,
+                        network,
+                        height_before + 1,
+                        command.extra.max_wait,
+                        command.extra.blocks_to_check,
+                    )?;
+                    if status == Some(TransactionStatus::Accepted) {
+                        println!("✅ Deployment confirmed!");
+                    } else if fail_and_prompt("could not find the transaction on the network")? {
+                        continue;
+                    } else {
+                        return Ok(());
+                    }
+                }
+                _ => {
+                    if fail_and_prompt(&message)? {
+                        continue;
+                    } else {
+                        return Ok(());
+                    }
+                }
+            }
         }
     }
 
     Ok(())
 }
 
-// A helper function to display a cost breakdown of the deployment.
-fn deploy_cost_breakdown(
-    name: &str,
-    base_fee: f64,
-    storage_cost: f64,
-    synthesis_cost: f64,
-    namespace_cost: f64,
-    priority_fee: f64,
+/// Check the tasks to warn the user about any potential issues.
+/// The following properties are checked:
+/// - If the transaction is to be broadcast:
+///     - The program does not exist on the network.
+///     - If the consensus version is less than V9, the program does not use V9 features.
+///     - If the consensus version is V9 or greater, the program contains a constructor.
+fn check_tasks_for_warnings<N: Network>(
+    endpoint: &str,
+    network: NetworkName,
+    tasks: &[Task<N>],
+    consensus_version: ConsensusVersion,
+    command: &LeoDeploy,
+) -> Vec<String> {
+    let mut warnings = Vec::new();
+    for Task { id, is_local, program, .. } in tasks {
+        if !is_local || !command.action.broadcast {
+            continue;
+        }
+        // Check if the program exists on the network.
+        if fetch_program_from_network(&id.to_string(), endpoint, network).is_ok() {
+            warnings
+                .push(format!("The program '{id}' already exists on the network. The deployment will likely fail.",));
+        }
+        // If the upgrade flag is not set, check that the program exists on the network.
+        if fetch_program_from_network(&id.to_string(), endpoint, network).is_ok() {
+            warnings
+                .push(format!("The program '{id}' already exists on the network. The deployment will likely fail.",));
+        }
+        // Check if the program uses V9 features.
+        if consensus_version < ConsensusVersion::V9 && program.contains_v9_syntax() {
+            warnings.push(format!("The program '{id}' uses V9 features but the consensus version is less than V9. The deployment will likely fail"));
+        }
+        // Check if the program contains a constructor.
+        if consensus_version >= ConsensusVersion::V9 && !program.contains_constructor() {
+            warnings
+                .push(format!("The program '{id}' does not contain a constructor. The deployment will likely fail",));
+        }
+    }
+    warnings
+}
+
+/// Check if the number of variables and constraints are within the limits.
+pub(crate) fn validate_deployment_limits<N: Network>(
+    deployment: &Deployment<N>,
+    program_id: &ProgramID<N>,
+    network: &NetworkName,
 ) -> Result<()> {
-    println!("\nBase deployment cost for '{}' is {} credits.\n", name.bold(), base_fee);
-    // Display the cost breakdown in a table.
-    let data = [
-        [name, "Cost (credits)"],
-        ["Transaction Storage", &format!("{:.6}", storage_cost)],
-        ["Program Synthesis", &format!("{:.6}", synthesis_cost)],
-        ["Namespace", &format!("{:.6}", namespace_cost)],
-        ["Priority Fee", &format!("{:.6}", priority_fee)],
-        ["Total", &format!("{:.6}", base_fee + priority_fee)],
-    ];
-    let mut out = Vec::new();
-    text_tables::render(&mut out, data).map_err(CliError::table_render_failed)?;
-    println!("{}", ::std::str::from_utf8(&out).map_err(CliError::table_render_failed)?);
+    // Check if the number of variables is within the limits.
+    let combined_variables = deployment.num_combined_variables()?;
+    if combined_variables > N::MAX_DEPLOYMENT_VARIABLES {
+        return Err(CliError::variable_limit_exceeded(
+            program_id,
+            combined_variables,
+            N::MAX_DEPLOYMENT_VARIABLES,
+            network,
+        )
+        .into());
+    }
+
+    // Check if the number of constraints is within the limits.
+    let constraints = deployment.num_combined_constraints()?;
+    if constraints > N::MAX_DEPLOYMENT_CONSTRAINTS {
+        return Err(CliError::constraint_limit_exceeded(
+            program_id,
+            constraints,
+            N::MAX_DEPLOYMENT_CONSTRAINTS,
+            network,
+        )
+        .into());
+    }
+
+    Ok(())
+}
+
+/// Pretty‑print the deployment plan without using a table.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn print_deployment_plan<N: Network>(
+    private_key: &PrivateKey<N>,
+    address: &Address<N>,
+    endpoint: &str,
+    network: &NetworkName,
+    local: &[Task<N>],
+    skipped: &HashSet<ProgramID<N>>,
+    remote: &[Task<N>],
+    warnings: &[String],
+    consensus_version: ConsensusVersion,
+    command: &LeoDeploy,
+) {
+    use colored::*;
+
+    println!("\n{}", "🛠️  Deployment Plan Summary".bold());
+    println!("{}", "──────────────────────────────────────────────".dimmed());
+
+    // ── Configuration ────────────────────────────────────────────────────
+    println!("{}", "🔧 Configuration:".bold());
+    println!("  {:20}{}", "Private Key:".cyan(), format!("{}...", &private_key.to_string()[..24]).yellow());
+    println!("  {:20}{}", "Address:".cyan(), format!("{}...", &address.to_string()[..24]).yellow());
+    println!("  {:20}{}", "Endpoint:".cyan(), endpoint.yellow());
+    println!("  {:20}{}", "Network:".cyan(), network.to_string().yellow());
+    println!("  {:20}{}", "Consensus Version:".cyan(), (consensus_version as u8).to_string().yellow());
+
+    // ── Deployment tasks (bullet list) ───────────────────────────────────
+    println!("\n{}", "📦 Deployment Tasks:".bold());
+    if local.is_empty() {
+        println!("  (none)");
+    } else {
+        for Task { id, priority_fee, record, .. } in local.iter().filter(|task| !skipped.contains(&task.id)) {
+            let priority_fee_str = priority_fee.map_or("0".into(), |v| v.to_string());
+            let record_str = if record.is_some() { "yes" } else { "no (public fee)" };
+            println!(
+                "  • {}  │ priority fee: {}  │ fee record: {}",
+                id.to_string().cyan(),
+                priority_fee_str,
+                record_str
+            );
+        }
+    }
+
+    // ── Skipped programs ─────────────────────────────────────────────────
+    if !skipped.is_empty() {
+        println!("\n{}", "🚫 Skipped Programs:".bold().red());
+        for symbol in skipped {
+            println!("  • {}", symbol.to_string().dimmed());
+        }
+    }
+
+    // ── Remote dependencies ──────────────────────────────────────────────
+    if !remote.is_empty() {
+        println!("\n{}", "🌐 Remote Dependencies:".bold().red());
+        println!("{}", "(Leo will not generate transactions for these programs)".bold().red());
+        for Task { id, .. } in remote {
+            println!("  • {}", id.to_string().dimmed());
+        }
+    }
+
+    // ── Actions ──────────────────────────────────────────────────────────
+    println!("\n{}", "⚙️ Actions:".bold());
+    if command.action.print {
+        println!("  • Transaction(s) will be printed to the console.");
+    } else {
+        println!("  • Transaction(s) will NOT be printed to the console.");
+    }
+    if let Some(path) = &command.action.save {
+        println!("  • Transaction(s) will be saved to {}", path.bold());
+    } else {
+        println!("  • Transaction(s) will NOT be saved to a file.");
+    }
+    if command.action.broadcast {
+        println!("  • Transaction(s) will be broadcast to {}", endpoint.bold());
+    } else {
+        println!("  • Transaction(s) will NOT be broadcast to the network.");
+    }
+
+    // ── Warnings ─────────────────────────────────────────────────────────
+    if !warnings.is_empty() {
+        println!("\n{}", "⚠️ Warnings:".bold().red());
+        for warning in warnings {
+            println!("  • {}", warning.dimmed());
+        }
+    }
+
+    println!("{}", "──────────────────────────────────────────────\n".dimmed());
+}
+
+/// Pretty‑print deployment statistics without a table, using the same UI
+/// conventions as `print_deployment_plan`.
+pub(crate) fn print_deployment_stats<N: Network>(
+    vm: &VM<N, ConsensusMemory<N>>,
+    program_id: &str,
+    deployment: &Deployment<N>,
+    priority_fee: Option<u64>,
+) -> Result<()> {
+    use colored::*;
+    use num_format::{Locale, ToFormattedString};
+
+    // ── Collect statistics ────────────────────────────────────────────────
+    let variables = deployment.num_combined_variables()?;
+    let constraints = deployment.num_combined_constraints()?;
+    let (base_fee, (storage_cost, synthesis_cost, constructor_cost, namespace_cost)) =
+        deployment_cost(&vm.process().read(), deployment)?;
+
+    let base_fee_cr = base_fee as f64 / 1_000_000.0;
+    let prio_fee_cr = priority_fee.unwrap_or(0) as f64 / 1_000_000.0;
+    let total_fee_cr = base_fee_cr + prio_fee_cr;
+
+    // ── Header ────────────────────────────────────────────────────────────
+    println!("\n{} {}", "📊 Deployment Summary for".bold(), program_id.bold());
+    println!("{}", "──────────────────────────────────────────────".dimmed());
+
+    // ── High‑level metrics ────────────────────────────────────────────────
+    println!("  {:22}{}", "Total Variables:".cyan(), variables.to_formatted_string(&Locale::en).yellow());
+    println!("  {:22}{}", "Total Constraints:".cyan(), constraints.to_formatted_string(&Locale::en).yellow());
+    println!(
+        "  {:22}{}",
+        "Max Variables:".cyan(),
+        N::MAX_DEPLOYMENT_VARIABLES.to_formatted_string(&Locale::en).green()
+    );
+    println!(
+        "  {:22}{}",
+        "Max Constraints:".cyan(),
+        N::MAX_DEPLOYMENT_CONSTRAINTS.to_formatted_string(&Locale::en).green()
+    );
+
+    // ── Cost breakdown ────────────────────────────────────────────────────
+    println!("\n{}", "💰 Cost Breakdown (credits)".bold());
+    println!(
+        "  {:22}{}{:.6}",
+        "Transaction Storage:".cyan(),
+        "".yellow(), // spacer for alignment
+        storage_cost as f64 / 1_000_000.0
+    );
+    println!("  {:22}{}{:.6}", "Program Synthesis:".cyan(), "".yellow(), synthesis_cost as f64 / 1_000_000.0);
+    println!("  {:22}{}{:.6}", "Namespace:".cyan(), "".yellow(), namespace_cost as f64 / 1_000_000.0);
+    println!("  {:22}{}{:.6}", "Constructor:".cyan(), "".yellow(), constructor_cost as f64 / 1_000_000.0);
+    println!("  {:22}{}{:.6}", "Priority Fee:".cyan(), "".yellow(), prio_fee_cr);
+    println!("  {:22}{}{:.6}", "Total Fee:".cyan(), "".yellow(), total_fee_cr);
+
+    // ── Footer rule ───────────────────────────────────────────────────────
+    println!("{}", "──────────────────────────────────────────────".dimmed());
     Ok(())
 }

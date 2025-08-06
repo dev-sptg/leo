@@ -42,7 +42,8 @@
 //! Such a directory structure, together with a `.gitignore` file, may be created
 //! on the file system using `Package::initialize`.
 //! ```no_run
-//! # use leo_package::{NetworkName, Package};
+//! # use leo_ast::NetworkName;
+//! # use leo_package::{Package};
 //! let path = Package::initialize("my_package", "path/to/parent", NetworkName::TestnetV0, "http://localhost:3030").unwrap();
 //! ```
 //!
@@ -52,11 +53,12 @@
 //! `Package::from_directory`:
 //! ```no_run
 //! # use leo_package::Package;
-//! let package = Package::from_directory("path/to/package", "/home/me/.aleo").unwrap();
+//! let package = Package::from_directory("path/to/package", "/home/me/.aleo", false, false).unwrap();
 //! ```
 //! This will read the manifest and env file and keep their data in `package.manifest` and `package.env`.
 //! It will also process dependencies and store them in topological order in `package.programs`. This processing
 //! will involve fetching bytecode from the network for network dependencies.
+//! If the `no_cache` option (3rd parameter) is set to `true`, the package will not use the dependency cache.
 //!
 //! If you want to simply read the manifest and env file without processing dependencies, use
 //! `Package::from_directory_no_graph`.
@@ -67,6 +69,7 @@
 
 #![forbid(unsafe_code)]
 
+use leo_ast::NetworkName;
 use leo_errors::{PackageError, Result, UtilError};
 use leo_span::Symbol;
 
@@ -83,9 +86,6 @@ pub use location::*;
 
 mod manifest;
 pub use manifest::*;
-
-mod network_name;
-pub use network_name::*;
 
 mod package;
 pub use package::*;
@@ -152,18 +152,31 @@ pub fn is_valid_aleo_name(name: &str) -> bool {
 
 // Fetch the given endpoint url and return the sanitized response.
 pub fn fetch_from_network(url: &str) -> Result<String, UtilError> {
-    let response = ureq::AgentBuilder::new()
-        .redirects(0)
+    fetch_from_network_plain(url).map(|s| s.replace("\\n", "\n").replace('\"', ""))
+}
+
+pub fn fetch_from_network_plain(url: &str) -> Result<String, UtilError> {
+    let mut response = ureq::Agent::config_builder()
+        .max_redirects(0)
         .build()
+        .new_agent()
         .get(url)
-        .set("X-Leo-Version", env!("CARGO_PKG_VERSION"))
+        .header("X-Leo-Version", env!("CARGO_PKG_VERSION"))
         .call()
-        .map_err(|err| UtilError::failed_to_retrieve_from_endpoint(err, Default::default()))?;
-    match response.status() {
-        200 => Ok(response.into_string().unwrap().replace("\\n", "\n").replace('\"', "")),
+        .map_err(|e| UtilError::failed_to_retrieve_from_endpoint(url, e))?;
+    match response.status().as_u16() {
+        200..=299 => Ok(response.body_mut().read_to_string().unwrap()),
         301 => Err(UtilError::endpoint_moved_error(url)),
-        _ => Err(UtilError::network_error(url, response.status(), Default::default())),
+        _ => Err(UtilError::network_error(url, response.status())),
     }
+}
+
+/// Fetch the given program from the network and return the program as a string.
+// TODO (@d0cd) Unify with `leo_package::Program::fetch`.
+pub fn fetch_program_from_network(name: &str, endpoint: &str, network: NetworkName) -> Result<String, UtilError> {
+    let url = format!("{endpoint}/{network}/program/{name}");
+    let program = fetch_from_network(&url)?;
+    Ok(program)
 }
 
 // Verify that a fetched program is valid aleo instructions.

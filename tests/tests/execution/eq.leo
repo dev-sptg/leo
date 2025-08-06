@@ -1,5 +1,6 @@
 /*
 seed = 123456789
+min_height = 16
 
 [case]
 program = "test.aleo"
@@ -24,4 +25,7 @@ program test.aleo {
         assert_eq(x, y);
         return x == y;
     }
+
+    @noupgrade
+    async constructor() {}
 }

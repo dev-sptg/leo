@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-use super::CodeGeneratingVisitor;
+use super::*;
 
 use leo_ast::{
     AssertStatement,
@@ -112,8 +112,16 @@ impl CodeGeneratingVisitor<'_> {
         } else {
             // Not a tuple - only one output.
             let (operand, op_instructions) = self.visit_expression(&input.expression);
-            instructions = op_instructions;
-            operands.insert(operand);
+            if self.internal_record_inputs.contains(&operand) {
+                // We can't output an internal record we received as input.
+                let (new_operand, new_instr) =
+                    self.clone_register(&operand, &self.current_function.unwrap().output_type);
+                instructions.push_str(&new_instr);
+                operands.insert(new_operand);
+            } else {
+                instructions = op_instructions;
+                operands.insert(operand);
+            }
         }
 
         for (operand, output) in operands.iter().zip(&self.current_function.unwrap().output) {
@@ -209,7 +217,7 @@ impl CodeGeneratingVisitor<'_> {
             }
 
             // Add a label for the end of the `then` block.
-            instructions.push_str(&format!("    position {};\n", end_then_label));
+            instructions.push_str(&format!("    position {end_then_label};\n"));
 
             // Visit the `otherwise` block.
             if let Some(else_block) = &_input.otherwise {

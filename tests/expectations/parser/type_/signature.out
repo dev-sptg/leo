@@ -38,6 +38,7 @@
               },
               "id": 2
             },
+            "const_parameters": [],
             "input": [
               {
                 "identifier": {
@@ -93,6 +94,7 @@
                       },
                       "id": 8
                     },
+                    "const_arguments": [],
                     "program": null
                   }
                 },
@@ -321,6 +323,7 @@
               },
               "id": 31
             },
+            "const_parameters": [],
             "input": [
               {
                 "identifier": {
@@ -463,6 +466,7 @@
               },
               "id": 44
             },
+            "const_parameters": [],
             "input": [
               {
                 "identifier": {
@@ -518,6 +522,7 @@
                       },
                       "id": 50
                     },
+                    "const_arguments": [],
                     "program": null
                   }
                 },
@@ -657,6 +662,7 @@
           }
         ]
       ],
+      "constructor": null,
       "span": {
         "lo": 1,
         "hi": 437

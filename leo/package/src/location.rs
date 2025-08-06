@@ -29,7 +29,4 @@ pub enum Location {
     /// A dependency in the `tests` directory - a test.
     #[serde(rename = "test")]
     Test,
-    /// Unused.
-    #[serde(rename = "git")]
-    Git,
 }

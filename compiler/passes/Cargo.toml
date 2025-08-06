@@ -1,6 +1,6 @@
 [package]
 name = "leo-passes"
-version = "2.6.0"
+version = "3.0.0"
 authors = [ "The Leo Team <leo@provable.com>" ]
 description = "Compiler passes for the Leo programming language"
 homepage = "https://leo-lang.org"
@@ -16,10 +16,13 @@ categories = [ "compilers", "cryptography", "web-programming" ]
 include = [ "Cargo.toml", "src", "README.md", "LICENSE.md" ]
 license = "GPL-3.0"
 edition = "2024"
-rust-version = "1.85.1"
+rust-version = "1.88.0"
 
 [lib]
 path = "src/lib.rs"
+
+[dependencies.base62]
+workspace = true
 
 [dependencies.snarkvm]
 workspace = true
@@ -30,7 +33,10 @@ workspace = true
 [dependencies.leo-errors]
 workspace = true
 
-[dependencies.leo-interpreter]
+[dependencies.leo-package]
+workspace = true
+
+[dependencies.leo-parser]
 workspace = true
 
 [dependencies.leo-span]
@@ -44,6 +50,12 @@ workspace = true
 
 [dependencies.num-traits]
 version = "0.2.19"
+
+[dependencies.regex]
+workspace = true
+
+[dependencies.sha2]
+workspace = true
 
 [dependencies.serde]
 workspace = true

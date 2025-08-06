@@ -37,11 +37,13 @@ pub enum LiteralVariant {
     Field(String),
     /// A group literal, eg `42group`.
     Group(String),
-    /// An integer literal, e.g., `42`.
+    /// An integer literal, e.g., `42u32`.
     Integer(IntegerType, String),
     /// A scalar literal, e.g. `1scalar`.
     /// An unsigned number followed by the keyword `scalar`.
     Scalar(String),
+    /// An unsuffixed literal, e.g. `42` (without a type suffix)
+    Unsuffixed(String),
     /// A string literal, e.g., `"foobar"`.
     String(String),
 }
@@ -55,6 +57,7 @@ impl fmt::Display for LiteralVariant {
             Self::Group(group) => write!(f, "{group}group"),
             Self::Integer(type_, value) => write!(f, "{value}{type_}"),
             Self::Scalar(scalar) => write!(f, "{scalar}scalar"),
+            Self::Unsuffixed(value) => write!(f, "{value}"),
             Self::String(string) => write!(f, "\"{string}\""),
         }
     }
@@ -95,6 +98,10 @@ impl Literal {
         Literal { variant: LiteralVariant::Integer(integer_type, s), span, id }
     }
 
+    pub fn unsuffixed(s: String, span: Span, id: NodeID) -> Self {
+        Literal { variant: LiteralVariant::Unsuffixed(s), span, id }
+    }
+
     /// For displaying a literal as decimal, regardless of the radix in which it was parsed.
     ///
     /// In particular this is useful for outputting .aleo files.
@@ -103,13 +110,11 @@ impl Literal {
     }
 
     /// For an integer literal, parse it and cast it to a u32.
-    ///
-    /// Panics if `self` is not an integer literal.
     pub fn as_u32(&self) -> Option<u32> {
         if let LiteralVariant::Integer(_, s) = &self.variant {
             u32::from_str_by_radix(&s.replace("_", "")).ok()
         } else {
-            panic!("`as_u32` must only be called on integer literals");
+            None
         }
     }
 }
@@ -146,6 +151,7 @@ impl fmt::Display for DisplayDecimal<'_> {
                 }
             }
             LiteralVariant::Scalar(scalar) => write!(f, "{}", prepare_snarkvm_string(scalar, "scalar")),
+            LiteralVariant::Unsuffixed(value) => write!(f, "{value}"),
             LiteralVariant::String(string) => write!(f, "\"{string}\""),
         }
     }

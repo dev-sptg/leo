@@ -18,7 +18,10 @@ use super::*;
 use leo_errors::{ParserError, Result};
 
 use leo_span::sym;
-use snarkvm::console::{account::Address, network::Network};
+use snarkvm::{
+    console::account::Address,
+    prelude::{CanaryV0, MainnetV0, TestnetV0},
+};
 
 const INT_TYPES: &[Token] = &[
     Token::I8,
@@ -36,7 +39,7 @@ const INT_TYPES: &[Token] = &[
     Token::Scalar,
 ];
 
-impl<N: Network> ParserContext<'_, N> {
+impl ParserContext<'_> {
     /// Returns an [`Expression`] AST node if the next token is an expression.
     /// Includes struct init expressions.
     pub(crate) fn parse_expression(&mut self) -> Result<Expression> {
@@ -441,8 +444,9 @@ impl<N: Network> ParserContext<'_, N> {
 
         Ok(CallExpression {
             span: expr.span() + span,
-            function: name.into(),
+            function: name,
             program: Some(program.name),
+            const_arguments: vec![], // we do not expect const arguments for external calls at this time
             arguments,
             id: self.node_builder.next_id(),
         }
@@ -484,18 +488,21 @@ impl<N: Network> ParserContext<'_, N> {
                     }
                 } else {
                     // Parse instances of `self.address`.
-                    if let Expression::Identifier(id) = expr {
-                        if id.name == sym::SelfLower && self.token.token == Token::Address {
-                            let span = self.expect(&Token::Address)?;
-                            // Convert `self.address` to the current program name. TODO: Move this conversion to canonicalization pass when the new pass is added.
-                            // Note that the unwrap is safe as in order to get to this stage of parsing a program name must have already been parsed.
-                            return Ok(Literal::address(
-                                format!("{}.aleo", self.program_name.unwrap()),
-                                expr.span() + span,
-                                self.node_builder.next_id(),
-                            )
-                            .into());
+                    // This needs to be handled as a special case because `address` is a keyword in Leo,
+                    if matches!(expr, Expression::Identifier(id) if id.name == sym::SelfLower)
+                        && self.token.token == Token::Address
+                    {
+                        // Eat the address token.
+                        let span = self.expect(&Token::Address)?;
+                        // Return a member access expression.
+                        expr = MemberAccess {
+                            span: expr.span() + span,
+                            inner: expr,
+                            name: Identifier { name: sym::address, span, id: self.node_builder.next_id() },
+                            id: self.node_builder.next_id(),
                         }
+                        .into();
+                        continue;
                     }
 
                     // Parse identifier name.
@@ -517,8 +524,48 @@ impl<N: Network> ParserContext<'_, N> {
                     }
                 }
             } else if self.eat(&Token::DoubleColon) {
-                // Eat a core associated constant or core associated function call.
-                expr = self.parse_associated_access_expression(expr)?;
+                // If we see a `::`, then we either expect a core associated expression or a list of const arguments in
+                // square brackets.
+                if self.check(&Token::LeftSquare) {
+                    // Check that the expression is an identifier.
+                    let Expression::Identifier(ident) = &expr else {
+                        return Err(leo_errors::LeoError::ParserError(ParserError::unexpected(
+                            expr.to_string(),
+                            "an identifier",
+                            expr.span(),
+                        )));
+                    };
+
+                    // Parse a list of const arguments in between `[..]`
+                    let const_arguments = self.parse_bracket_comma_list(|p| p.parse_expression().map(Some))?.0;
+
+                    // If the next token is a `(` then we parse a call expression.
+                    // If the next token is a `{`, then we parse a struct init expression.
+                    if self.check(&Token::LeftParen) {
+                        // Parse a list of input arguments in between `(..)`
+                        let (arguments, _, span) = self.parse_paren_comma_list(|p| p.parse_expression().map(Some))?;
+
+                        // Now form a `CallExpression`
+                        expr = CallExpression {
+                            span: expr.span() + span,
+                            function: *ident,
+                            program: self.program_name,
+                            const_arguments,
+                            arguments,
+                            id: self.node_builder.next_id(),
+                        }
+                        .into();
+                    } else if !self.disallow_struct_construction && self.check(&Token::LeftCurly) {
+                        // Parse struct and records inits as struct expressions with const arguments.
+                        // Enforce struct or record type later at type checking.
+                        expr = self.parse_struct_init_expression(*ident, const_arguments)?;
+                    } else {
+                        self.emit_err(ParserError::unexpected(expr.to_string(), "( or {{", expr.span()))
+                    }
+                } else {
+                    // Eat a core associated constant or core associated function call.
+                    expr = self.parse_associated_access_expression(expr)?;
+                }
             } else if self.eat(&Token::LeftSquare) {
                 // Eat an array access.
                 let index = self.parse_expression()?;
@@ -529,15 +576,21 @@ impl<N: Network> ParserContext<'_, N> {
                     ArrayAccess { array: expr, index, span: expr_span + span, id: self.node_builder.next_id() }.into();
             } else if self.check(&Token::LeftParen) {
                 // Check that the expression is an identifier.
-                if !matches!(expr, Expression::Identifier(_)) {
-                    self.emit_err(ParserError::unexpected(expr.to_string(), "an identifier", expr.span()))
-                }
+                let Expression::Identifier(ident) = &expr else {
+                    return Err(leo_errors::LeoError::ParserError(ParserError::unexpected(
+                        expr.to_string(),
+                        "an identifier",
+                        expr.span(),
+                    )));
+                };
+
                 // Parse a function call that's by itself.
                 let (arguments, _, span) = self.parse_paren_comma_list(|p| p.parse_expression().map(Some))?;
                 expr = CallExpression {
                     span: expr.span() + span,
-                    function: expr,
+                    function: *ident,
                     program: self.program_name,
+                    const_arguments: vec![],
                     arguments,
                     id: self.node_builder.next_id(),
                 }
@@ -574,17 +627,33 @@ impl<N: Network> ParserContext<'_, N> {
         }
     }
 
-    /// Returns an [`Expression`] AST node if the next tokens represent an array initialization expression.
-    fn parse_array_expression(&mut self) -> Result<Expression> {
-        let (elements, _, span) = self.parse_bracket_comma_list(|p| p.parse_expression().map(Some))?;
+    /// Attempts to parse an array initialization expression and returns an [`Expression`] AST node if successful.
+    fn parse_array_or_repeat_expression(&mut self) -> Result<Expression> {
+        let (open, close) = Delimiter::Bracket.open_close_pair();
+        let open_span = self.expect(&open)?;
 
-        match elements.is_empty() {
-            // If the array expression is empty, return an error.
-            true => Err(ParserError::array_must_have_at_least_one_element("expression", span).into()),
-            // Otherwise, return an array expression.
-            // Note: This is the only place where `ArrayExpression` is constructed in the parser.
-            false => Ok(ArrayExpression { elements, span, id: self.node_builder.next_id() }.into()),
+        // Attempt to parse the first expression in the array.
+        let Ok(first_expr) = self.parse_expression() else {
+            // If we're unable to parse an expression, just expect a `]` and error out on empty array.
+            let close_span = self.expect(&close)?;
+            return Err(ParserError::array_must_have_at_least_one_element("expression", open_span + close_span).into());
+        };
+
+        // Handle array repetition syntax: [expr; count]
+        if self.eat(&Token::Semicolon) {
+            let count = self.parse_expression()?;
+            let span = open_span + self.expect(&close)?;
+            return Ok(RepeatExpression { expr: first_expr, count, span, id: self.node_builder.next_id() }.into());
         }
+
+        // Handle array with multiple elements: [expr1, expr2, ...] or single element with or without trailing comma:
+        // [expr,]
+        let mut elements = vec![first_expr];
+        while self.eat(&Token::Comma) && !self.check(&close) {
+            elements.push(self.parse_expression()?);
+        }
+        let span = open_span + self.expect(&close)?;
+        Ok(ArrayExpression { elements, span, id: self.node_builder.next_id() }.into())
     }
 
     fn parse_struct_member(&mut self) -> Result<StructVariableInitializer> {
@@ -605,12 +674,22 @@ impl<N: Network> ParserContext<'_, N> {
     /// Returns an [`Expression`] AST node if the next tokens represent a
     /// struct initialization expression.
     /// let foo = Foo { x: 1u8 };
-    pub fn parse_struct_init_expression(&mut self, identifier: Identifier) -> Result<Expression> {
+    pub fn parse_struct_init_expression(
+        &mut self,
+        identifier: Identifier,
+        const_arguments: Vec<Expression>,
+    ) -> Result<Expression> {
         let (members, _, end) =
             self.parse_list(Delimiter::Brace, Some(Token::Comma), |p| p.parse_struct_member().map(Some))?;
 
-        Ok(StructExpression { span: identifier.span + end, name: identifier, members, id: self.node_builder.next_id() }
-            .into())
+        Ok(StructExpression {
+            span: identifier.span + end,
+            name: identifier,
+            const_arguments,
+            members,
+            id: self.node_builder.next_id(),
+        }
+        .into())
     }
 
     /// Returns an [`Expression`] AST node if the next token is a primary expression:
@@ -633,7 +712,12 @@ impl<N: Network> ParserContext<'_, N> {
         if let Token::LeftParen = self.token.token {
             return self.parse_tuple_expression();
         } else if let Token::LeftSquare = self.token.token {
-            return self.parse_array_expression();
+            return self.parse_array_or_repeat_expression();
+        } else if let Token::Async = self.token.token {
+            let async_keyword_span = self.expect(&Token::Async)?;
+            let block = self.parse_block()?;
+            let span = async_keyword_span + block.span;
+            return Ok(AsyncExpression { block, span, id: self.node_builder.next_id() }.into());
         }
 
         let SpannedToken { token, span } = self.token.clone();
@@ -678,13 +762,21 @@ impl<N: Network> ParserContext<'_, N> {
                         let int_ty = Self::token_to_int_type(suffix).expect("unknown int type token");
                         Literal::integer(int_ty, value, full_span, self.node_builder.next_id()).into()
                     }
-                    None => return Err(ParserError::implicit_values_not_allowed(value, span).into()),
+                    None => {
+                        // `Integer` tokens with no suffix are `unsuffixed`. We try to infer their
+                        // type in the type inference phase of the type checker.
+                        Literal::unsuffixed(value, span, self.node_builder.next_id()).into()
+                    }
                 }
             }
             Token::True => Literal::boolean(true, span, self.node_builder.next_id()).into(),
             Token::False => Literal::boolean(false, span, self.node_builder.next_id()).into(),
             Token::AddressLit(address_string) => {
-                if address_string.parse::<Address<N>>().is_err() {
+                if match self.network {
+                    NetworkName::MainnetV0 => address_string.parse::<Address<MainnetV0>>().is_err(),
+                    NetworkName::TestnetV0 => address_string.parse::<Address<TestnetV0>>().is_err(),
+                    NetworkName::CanaryV0 => address_string.parse::<Address<CanaryV0>>().is_err(),
+                } {
                     self.emit_err(ParserError::invalid_address_lit(&address_string, span));
                 }
                 Literal::address(address_string, span, self.node_builder.next_id()).into()
@@ -695,9 +787,9 @@ impl<N: Network> ParserContext<'_, N> {
             Token::Identifier(name) => {
                 let ident = Identifier { name, span, id: self.node_builder.next_id() };
                 if !self.disallow_struct_construction && self.check(&Token::LeftCurly) {
-                    // Parse struct and records inits as struct expressions.
+                    // Parse struct and records inits as struct expressions without const arguments.
                     // Enforce struct or record type later at type checking.
-                    self.parse_struct_init_expression(ident)?
+                    self.parse_struct_init_expression(ident, Vec::new())?
                 } else {
                     ident.into()
                 }

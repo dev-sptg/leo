@@ -29,6 +29,7 @@ pub trait ExpressionConsumer {
             Expression::ArrayAccess(access) => self.consume_array_access(*access),
             Expression::AssociatedConstant(constant) => self.consume_associated_constant(constant),
             Expression::AssociatedFunction(function) => self.consume_associated_function(function),
+            Expression::Async(async_) => self.consume_async(async_),
             Expression::Binary(binary) => self.consume_binary(*binary),
             Expression::Call(call) => self.consume_call(*call),
             Expression::Cast(cast) => self.consume_cast(*cast),
@@ -38,6 +39,7 @@ pub trait ExpressionConsumer {
             Expression::Literal(value) => self.consume_literal(value),
             Expression::Locator(locator) => self.consume_locator(locator),
             Expression::MemberAccess(access) => self.consume_member_access(*access),
+            Expression::Repeat(repeat) => self.consume_repeat(*repeat),
             Expression::Ternary(ternary) => self.consume_ternary(*ternary),
             Expression::Tuple(tuple) => self.consume_tuple(tuple),
             Expression::TupleAccess(access) => self.consume_tuple_access(*access),
@@ -55,6 +57,8 @@ pub trait ExpressionConsumer {
     fn consume_associated_constant(&mut self, _input: AssociatedConstantExpression) -> Self::Output;
 
     fn consume_associated_function(&mut self, _input: AssociatedFunctionExpression) -> Self::Output;
+
+    fn consume_async(&mut self, _input: AsyncExpression) -> Self::Output;
 
     fn consume_array(&mut self, _input: ArrayExpression) -> Self::Output;
 
@@ -75,6 +79,8 @@ pub trait ExpressionConsumer {
     fn consume_literal(&mut self, _input: Literal) -> Self::Output;
 
     fn consume_locator(&mut self, _input: LocatorExpression) -> Self::Output;
+
+    fn consume_repeat(&mut self, _input: RepeatExpression) -> Self::Output;
 
     fn consume_ternary(&mut self, _input: TernaryExpression) -> Self::Output;
 
@@ -127,6 +133,13 @@ pub trait FunctionConsumer {
     type Output;
 
     fn consume_function(&mut self, input: Function) -> Self::Output;
+}
+
+/// A Consumer trait for constructors in the AST.
+pub trait ConstructorConsumer {
+    type Output;
+
+    fn consume_constructor(&mut self, input: Constructor) -> Self::Output;
 }
 
 /// A Consumer trait for structs in the AST.

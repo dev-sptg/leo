@@ -16,7 +16,7 @@
 
 use crate::{CompilerState, VariableSymbol, VariableType, type_checking::scope_state::ScopeState};
 
-use super::TypeCheckingInput;
+use super::*;
 
 use leo_ast::*;
 use leo_errors::{TypeCheckerError, TypeCheckerWarning};
@@ -40,6 +40,8 @@ pub struct TypeCheckingVisitor<'a> {
     pub limits: TypeCheckingInput,
     /// For detecting the error `TypeCheckerError::async_cannot_assign_outside_conditional`.
     pub conditional_scopes: Vec<IndexSet<Symbol>>,
+    /// If we're inside an async block, this is the node ID of the contained `Block`. Otherwise, this is `None`.
+    pub async_block_id: Option<NodeID>,
 }
 
 impl TypeCheckingVisitor<'_> {
@@ -71,19 +73,16 @@ impl TypeCheckingVisitor<'_> {
     }
 
     /// Emits a type checker warning
-    pub fn emit_warning(&self, warning: TypeCheckerWarning) {
-        self.state.handler.emit_warning(warning.into());
+    pub fn emit_warning(&mut self, warning: TypeCheckerWarning) {
+        if self.state.warnings.insert(warning.clone().into()) {
+            self.state.handler.emit_warning(warning.into());
+        }
     }
 
     /// Emits an error if the two given types are not equal.
     pub fn check_eq_types(&self, t1: &Option<Type>, t2: &Option<Type>, span: Span) {
         match (t1, t2) {
             (Some(t1), Some(t2)) if !Type::eq_flat_relaxed(t1, t2) => {
-                // If both types are futures, print them out.
-                if let (Type::Future(f1), Type::Future(f2)) = (t1, t2) {
-                    println!("Future 1: {:?}", f1);
-                    println!("Future 2: {:?}", f2);
-                }
                 self.emit_err(TypeCheckerError::type_should_be(t1, t2, span))
             }
             (Some(type_), None) | (None, Some(type_)) => {
@@ -96,7 +95,8 @@ impl TypeCheckingVisitor<'_> {
     /// Use this method when you know the actual type.
     /// Emits an error to the handler if the `actual` type is not equal to the `expected` type.
     pub fn assert_and_return_type(&mut self, actual: Type, expected: &Option<Type>, span: Span) -> Type {
-        if expected.is_some() {
+        // If expected is `Type::Err`, we don't want to actually report a redundant error.
+        if expected.is_some() && !matches!(expected, Some(Type::Err)) {
             self.check_eq_types(&Some(actual.clone()), expected, span);
         }
         actual
@@ -216,7 +216,7 @@ impl TypeCheckingVisitor<'_> {
     pub fn check_core_function_call(
         &mut self,
         core_function: CoreFunction,
-        arguments: &[(Type, Span)],
+        arguments: &[(Type, &Expression)],
         function_span: Span,
     ) -> Type {
         // Check that the number of arguments is correct.
@@ -286,30 +286,33 @@ impl TypeCheckingVisitor<'_> {
             }
         };
 
+        // Define a regex to match valid program IDs.
+        let program_id_regex = regex::Regex::new(r"^[a-zA-Z][a-zA-Z0-9_]*\.aleo$").unwrap();
+
         // Check that the arguments are of the correct type.
         match core_function {
             CoreFunction::BHP256CommitToAddress
             | CoreFunction::BHP512CommitToAddress
             | CoreFunction::BHP768CommitToAddress
             | CoreFunction::BHP1024CommitToAddress => {
-                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1);
-                self.assert_type(&arguments[1].0, &Type::Scalar, arguments[1].1);
+                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1.span());
+                self.assert_type(&arguments[1].0, &Type::Scalar, arguments[1].1.span());
                 Type::Address
             }
             CoreFunction::BHP256CommitToField
             | CoreFunction::BHP512CommitToField
             | CoreFunction::BHP768CommitToField
             | CoreFunction::BHP1024CommitToField => {
-                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1);
-                self.assert_type(&arguments[1].0, &Type::Scalar, arguments[1].1);
+                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1.span());
+                self.assert_type(&arguments[1].0, &Type::Scalar, arguments[1].1.span());
                 Type::Field
             }
             CoreFunction::BHP256CommitToGroup
             | CoreFunction::BHP512CommitToGroup
             | CoreFunction::BHP768CommitToGroup
             | CoreFunction::BHP1024CommitToGroup => {
-                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1);
-                self.assert_type(&arguments[1].0, &Type::Scalar, arguments[1].1);
+                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1.span());
+                self.assert_type(&arguments[1].0, &Type::Scalar, arguments[1].1.span());
                 Type::Group
             }
             CoreFunction::BHP256HashToAddress
@@ -325,7 +328,7 @@ impl TypeCheckingVisitor<'_> {
             | CoreFunction::SHA3_256HashToAddress
             | CoreFunction::SHA3_384HashToAddress
             | CoreFunction::SHA3_512HashToAddress => {
-                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1);
+                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1.span());
                 Type::Address
             }
             CoreFunction::BHP256HashToField
@@ -341,7 +344,7 @@ impl TypeCheckingVisitor<'_> {
             | CoreFunction::SHA3_256HashToField
             | CoreFunction::SHA3_384HashToField
             | CoreFunction::SHA3_512HashToField => {
-                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1);
+                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1.span());
                 Type::Field
             }
             CoreFunction::BHP256HashToGroup
@@ -357,7 +360,7 @@ impl TypeCheckingVisitor<'_> {
             | CoreFunction::SHA3_256HashToGroup
             | CoreFunction::SHA3_384HashToGroup
             | CoreFunction::SHA3_512HashToGroup => {
-                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1);
+                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1.span());
                 Type::Group
             }
             CoreFunction::BHP256HashToI8
@@ -373,7 +376,7 @@ impl TypeCheckingVisitor<'_> {
             | CoreFunction::SHA3_256HashToI8
             | CoreFunction::SHA3_384HashToI8
             | CoreFunction::SHA3_512HashToI8 => {
-                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1);
+                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::I8)
             }
             CoreFunction::BHP256HashToI16
@@ -389,7 +392,7 @@ impl TypeCheckingVisitor<'_> {
             | CoreFunction::SHA3_256HashToI16
             | CoreFunction::SHA3_384HashToI16
             | CoreFunction::SHA3_512HashToI16 => {
-                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1);
+                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::I16)
             }
             CoreFunction::BHP256HashToI32
@@ -405,7 +408,7 @@ impl TypeCheckingVisitor<'_> {
             | CoreFunction::SHA3_256HashToI32
             | CoreFunction::SHA3_384HashToI32
             | CoreFunction::SHA3_512HashToI32 => {
-                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1);
+                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::I32)
             }
             CoreFunction::BHP256HashToI64
@@ -421,7 +424,7 @@ impl TypeCheckingVisitor<'_> {
             | CoreFunction::SHA3_256HashToI64
             | CoreFunction::SHA3_384HashToI64
             | CoreFunction::SHA3_512HashToI64 => {
-                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1);
+                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::I64)
             }
             CoreFunction::BHP256HashToI128
@@ -437,7 +440,7 @@ impl TypeCheckingVisitor<'_> {
             | CoreFunction::SHA3_256HashToI128
             | CoreFunction::SHA3_384HashToI128
             | CoreFunction::SHA3_512HashToI128 => {
-                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1);
+                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::I128)
             }
             CoreFunction::BHP256HashToU8
@@ -453,7 +456,7 @@ impl TypeCheckingVisitor<'_> {
             | CoreFunction::SHA3_256HashToU8
             | CoreFunction::SHA3_384HashToU8
             | CoreFunction::SHA3_512HashToU8 => {
-                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1);
+                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::U8)
             }
             CoreFunction::BHP256HashToU16
@@ -469,7 +472,7 @@ impl TypeCheckingVisitor<'_> {
             | CoreFunction::SHA3_256HashToU16
             | CoreFunction::SHA3_384HashToU16
             | CoreFunction::SHA3_512HashToU16 => {
-                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1);
+                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::U16)
             }
             CoreFunction::BHP256HashToU32
@@ -485,7 +488,7 @@ impl TypeCheckingVisitor<'_> {
             | CoreFunction::SHA3_256HashToU32
             | CoreFunction::SHA3_384HashToU32
             | CoreFunction::SHA3_512HashToU32 => {
-                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1);
+                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::U32)
             }
             CoreFunction::BHP256HashToU64
@@ -501,7 +504,7 @@ impl TypeCheckingVisitor<'_> {
             | CoreFunction::SHA3_256HashToU64
             | CoreFunction::SHA3_384HashToU64
             | CoreFunction::SHA3_512HashToU64 => {
-                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1);
+                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::U64)
             }
             CoreFunction::BHP256HashToU128
@@ -517,7 +520,7 @@ impl TypeCheckingVisitor<'_> {
             | CoreFunction::SHA3_256HashToU128
             | CoreFunction::SHA3_384HashToU128
             | CoreFunction::SHA3_512HashToU128 => {
-                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1);
+                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::U128)
             }
             CoreFunction::BHP256HashToScalar
@@ -533,174 +536,174 @@ impl TypeCheckingVisitor<'_> {
             | CoreFunction::SHA3_256HashToScalar
             | CoreFunction::SHA3_384HashToScalar
             | CoreFunction::SHA3_512HashToScalar => {
-                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1);
+                assert_not_mapping_tuple_unit(&arguments[0].0, arguments[0].1.span());
                 Type::Scalar
             }
             CoreFunction::Pedersen64CommitToAddress => {
-                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1.span());
                 // Check that the second argument is a scalar.
-                self.assert_type(&arguments[1].0, &Type::Scalar, arguments[1].1);
+                self.assert_type(&arguments[1].0, &Type::Scalar, arguments[1].1.span());
                 Type::Address
             }
             CoreFunction::Pedersen64CommitToField => {
-                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1.span());
                 // Check that the second argument is a scalar.
-                self.assert_type(&arguments[1].0, &Type::Scalar, arguments[1].1);
+                self.assert_type(&arguments[1].0, &Type::Scalar, arguments[1].1.span());
                 Type::Field
             }
             CoreFunction::Pedersen64CommitToGroup => {
-                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1.span());
                 // Check that the second argument is a scalar.
-                self.assert_type(&arguments[1].0, &Type::Scalar, arguments[1].1);
+                self.assert_type(&arguments[1].0, &Type::Scalar, arguments[1].1.span());
                 Type::Group
             }
             CoreFunction::Pedersen64HashToAddress => {
-                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Address
             }
             CoreFunction::Pedersen64HashToField => {
-                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Field
             }
             CoreFunction::Pedersen64HashToGroup => {
-                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Group
             }
             CoreFunction::Pedersen64HashToI8 => {
-                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::I8)
             }
             CoreFunction::Pedersen64HashToI16 => {
-                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::I16)
             }
             CoreFunction::Pedersen64HashToI32 => {
-                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::I32)
             }
             CoreFunction::Pedersen64HashToI64 => {
-                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::I64)
             }
             CoreFunction::Pedersen64HashToI128 => {
-                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::I128)
             }
             CoreFunction::Pedersen64HashToU8 => {
-                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::U8)
             }
             CoreFunction::Pedersen64HashToU16 => {
-                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::U16)
             }
             CoreFunction::Pedersen64HashToU32 => {
-                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::U32)
             }
             CoreFunction::Pedersen64HashToU64 => {
-                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::U64)
             }
             CoreFunction::Pedersen64HashToU128 => {
-                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::U128)
             }
             CoreFunction::Pedersen64HashToScalar => {
-                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_64_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Scalar
             }
             CoreFunction::Pedersen128CommitToAddress => {
-                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1);
-                self.assert_type(&arguments[1].0, &Type::Scalar, arguments[1].1);
+                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1.span());
+                self.assert_type(&arguments[1].0, &Type::Scalar, arguments[1].1.span());
                 Type::Address
             }
             CoreFunction::Pedersen128CommitToField => {
-                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1);
-                self.assert_type(&arguments[1].0, &Type::Scalar, arguments[1].1);
+                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1.span());
+                self.assert_type(&arguments[1].0, &Type::Scalar, arguments[1].1.span());
                 Type::Field
             }
             CoreFunction::Pedersen128CommitToGroup => {
-                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1);
-                self.assert_type(&arguments[1].0, &Type::Scalar, arguments[1].1);
+                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1.span());
+                self.assert_type(&arguments[1].0, &Type::Scalar, arguments[1].1.span());
                 Type::Group
             }
             CoreFunction::Pedersen128HashToAddress => {
                 // Check that the first argument is not a mapping, tuple, err, unit type, or integer over 64 bits.
-                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Address
             }
             CoreFunction::Pedersen128HashToField => {
-                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Field
             }
             CoreFunction::Pedersen128HashToGroup => {
-                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Group
             }
             CoreFunction::Pedersen128HashToI8 => {
-                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::I8)
             }
             CoreFunction::Pedersen128HashToI16 => {
-                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::I16)
             }
             CoreFunction::Pedersen128HashToI32 => {
-                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::I32)
             }
             CoreFunction::Pedersen128HashToI64 => {
-                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::I64)
             }
             CoreFunction::Pedersen128HashToI128 => {
-                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::I128)
             }
             CoreFunction::Pedersen128HashToU8 => {
-                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::U8)
             }
             CoreFunction::Pedersen128HashToU16 => {
-                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::U16)
             }
             CoreFunction::Pedersen128HashToU32 => {
-                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::U32)
             }
             CoreFunction::Pedersen128HashToU64 => {
-                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::U64)
             }
             CoreFunction::Pedersen128HashToU128 => {
-                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Integer(IntegerType::U128)
             }
             CoreFunction::Pedersen128HashToScalar => {
-                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1);
+                assert_pedersen_128_bit_input(&arguments[0].0, arguments[0].1.span());
                 Type::Scalar
             }
             CoreFunction::MappingGet => {
                 // Check that the operation is invoked in a `finalize` block.
                 self.check_access_allowed("Mapping::get", true, function_span);
                 // Check that the first argument is a mapping.
-                self.assert_mapping_type(&arguments[0].0, arguments[0].1);
+                self.assert_mapping_type(&arguments[0].0, arguments[0].1.span());
                 let Type::Mapping(mapping_type) = &arguments[0].0 else {
                     // We will have already handled the error in the assertion.
                     return Type::Err;
                 };
 
-                self.assert_type(&arguments[1].0, &mapping_type.key, arguments[1].1);
+                self.assert_type(&arguments[1].0, &mapping_type.key, arguments[1].1.span());
 
                 mapping_type.value.deref().clone()
             }
             CoreFunction::MappingGetOrUse => {
                 // Check that the operation is invoked in a `finalize` block.
-                self.check_access_allowed("Mapping::get_or", true, function_span);
+                self.check_access_allowed("Mapping::get_or_use", true, function_span);
                 // Check that the first argument is a mapping.
-                self.assert_mapping_type(&arguments[0].0, arguments[0].1);
+                self.assert_mapping_type(&arguments[0].0, arguments[0].1.span());
 
                 let Type::Mapping(mapping_type) = &arguments[0].0 else {
                     // We will have already handled the error in the assertion.
@@ -708,9 +711,9 @@ impl TypeCheckingVisitor<'_> {
                 };
 
                 // Check that the second argument matches the key type of the mapping.
-                self.assert_type(&arguments[1].0, &mapping_type.key, arguments[1].1);
+                self.assert_type(&arguments[1].0, &mapping_type.key, arguments[1].1.span());
                 // Check that the third argument matches the value type of the mapping.
-                self.assert_type(&arguments[2].0, &mapping_type.value, arguments[2].1);
+                self.assert_type(&arguments[2].0, &mapping_type.value, arguments[2].1.span());
 
                 mapping_type.value.deref().clone()
             }
@@ -718,7 +721,7 @@ impl TypeCheckingVisitor<'_> {
                 // Check that the operation is invoked in a `finalize` block.
                 self.check_access_allowed("Mapping::set", true, function_span);
                 // Check that the first argument is a mapping.
-                self.assert_mapping_type(&arguments[0].0, arguments[0].1);
+                self.assert_mapping_type(&arguments[0].0, arguments[0].1.span());
 
                 let Type::Mapping(mapping_type) = &arguments[0].0 else {
                     // We will have already handled the error in the assertion.
@@ -726,9 +729,9 @@ impl TypeCheckingVisitor<'_> {
                 };
 
                 // Check that the second argument matches the key type of the mapping.
-                self.assert_type(&arguments[1].0, &mapping_type.key, arguments[1].1);
+                self.assert_type(&arguments[1].0, &mapping_type.key, arguments[1].1.span());
                 // Check that the third argument matches the value type of the mapping.
-                self.assert_type(&arguments[2].0, &mapping_type.value, arguments[2].1);
+                self.assert_type(&arguments[2].0, &mapping_type.value, arguments[2].1.span());
 
                 Type::Unit
             }
@@ -736,7 +739,7 @@ impl TypeCheckingVisitor<'_> {
                 // Check that the operation is invoked in a `finalize` block.
                 self.check_access_allowed("Mapping::remove", true, function_span);
                 // Check that the first argument is a mapping.
-                self.assert_mapping_type(&arguments[0].0, arguments[0].1);
+                self.assert_mapping_type(&arguments[0].0, arguments[0].1.span());
 
                 let Type::Mapping(mapping_type) = &arguments[0].0 else {
                     // We will have already handled the error in the assertion.
@@ -751,7 +754,7 @@ impl TypeCheckingVisitor<'_> {
                 }
 
                 // Check that the second argument matches the key type of the mapping.
-                self.assert_type(&arguments[1].0, &mapping_type.key, arguments[1].1);
+                self.assert_type(&arguments[1].0, &mapping_type.key, arguments[1].1.span());
 
                 Type::Unit
             }
@@ -759,7 +762,7 @@ impl TypeCheckingVisitor<'_> {
                 // Check that the operation is invoked in a `finalize` block.
                 self.check_access_allowed("Mapping::contains", true, function_span);
                 // Check that the first argument is a mapping.
-                self.assert_mapping_type(&arguments[0].0, arguments[0].1);
+                self.assert_mapping_type(&arguments[0].0, arguments[0].1.span());
 
                 let Type::Mapping(mapping_type) = &arguments[0].0 else {
                     // We will have already handled the error in the assertion.
@@ -767,13 +770,13 @@ impl TypeCheckingVisitor<'_> {
                 };
 
                 // Check that the second argument matches the key type of the mapping.
-                self.assert_type(&arguments[1].0, &mapping_type.key, arguments[1].1);
+                self.assert_type(&arguments[1].0, &mapping_type.key, arguments[1].1.span());
 
                 Type::Boolean
             }
             CoreFunction::GroupToXCoordinate | CoreFunction::GroupToYCoordinate => {
                 // Check that the first argument is a group.
-                self.assert_type(&arguments[0].0, &Type::Group, arguments[0].1);
+                self.assert_type(&arguments[0].0, &Type::Group, arguments[0].1.span());
                 Type::Field
             }
             CoreFunction::ChaChaRandAddress => Type::Address,
@@ -794,21 +797,89 @@ impl TypeCheckingVisitor<'_> {
             CoreFunction::SignatureVerify => {
                 // Check that the third argument is not a mapping nor a tuple. We have to do this
                 // before the other checks below to appease the borrow checker
-                assert_not_mapping_tuple_unit(&arguments[2].0, arguments[2].1);
+                assert_not_mapping_tuple_unit(&arguments[2].0, arguments[2].1.span());
 
                 // Check that the first argument is a signature.
-                self.assert_type(&arguments[0].0, &Type::Signature, arguments[0].1);
+                self.assert_type(&arguments[0].0, &Type::Signature, arguments[0].1.span());
                 // Check that the second argument is an address.
-                self.assert_type(&arguments[1].0, &Type::Address, arguments[1].1);
+                self.assert_type(&arguments[1].0, &Type::Address, arguments[1].1.span());
                 Type::Boolean
             }
             CoreFunction::FutureAwait => Type::Unit,
+            CoreFunction::ProgramChecksum => {
+                // Get the argument type, expression, and span.
+                let (type_, expression) = &arguments[0];
+                let span = expression.span();
+                // Check that the expression is a program ID.
+                match expression {
+                    Expression::Literal(Literal { variant: LiteralVariant::Address(s), .. })
+                        if program_id_regex.is_match(s) => {}
+                    _ => {
+                        self.emit_err(TypeCheckerError::custom(
+                            "`Program::checksum` must be called on a program ID, e.g. `foo.aleo`",
+                            span,
+                        ));
+                    }
+                }
+                // Verify that the argument is a string.
+                self.assert_type(type_, &Type::Address, span);
+                // Return the type.
+                Type::Array(ArrayType::new(
+                    Type::Integer(IntegerType::U8),
+                    Expression::Literal(Literal::integer(
+                        IntegerType::U8,
+                        "32".to_string(),
+                        Default::default(),
+                        Default::default(),
+                    )),
+                ))
+            }
+            CoreFunction::ProgramEdition => {
+                // Get the argument type, expression, and span.
+                let (type_, expression) = &arguments[0];
+                let span = expression.span();
+                // Check that the expression is a member access.
+                match expression {
+                    Expression::Literal(Literal { variant: LiteralVariant::Address(s), .. })
+                        if program_id_regex.is_match(s) => {}
+                    _ => {
+                        self.emit_err(TypeCheckerError::custom(
+                            "`Program::edition` must be called on a program ID, e.g. `foo.aleo`",
+                            span,
+                        ));
+                    }
+                }
+                // Verify that the argument is a string.
+                self.assert_type(type_, &Type::Address, span);
+                // Return the type.
+                Type::Integer(IntegerType::U16)
+            }
+            CoreFunction::ProgramOwner => {
+                // Get the argument type, expression, and span.
+                let (type_, expression) = &arguments[0];
+                let span = expression.span();
+                // Check that the expression is a member access.
+                match expression {
+                    Expression::Literal(Literal { variant: LiteralVariant::Address(s), .. })
+                        if program_id_regex.is_match(s) => {}
+                    _ => {
+                        self.emit_err(TypeCheckerError::custom(
+                            "`Program::program_owner` must be called on a program ID, e.g. `foo.aleo`",
+                            span,
+                        ));
+                    }
+                }
+                // Verify that the argument is a string.
+                self.assert_type(type_, &Type::Address, span);
+                // Return the type.
+                Type::Address
+            }
             CoreFunction::CheatCodePrintMapping => {
-                self.assert_mapping_type(&arguments[0].0, arguments[0].1);
+                self.assert_mapping_type(&arguments[0].0, arguments[0].1.span());
                 Type::Unit
             }
             CoreFunction::CheatCodeSetBlockHeight => {
-                self.assert_type(&arguments[0].0, &Type::Integer(IntegerType::U32), arguments[0].1);
+                self.assert_type(&arguments[0].0, &Type::Integer(IntegerType::U32), arguments[0].1.span());
                 Type::Unit
             }
         }
@@ -864,18 +935,19 @@ impl TypeCheckingVisitor<'_> {
             // Check that the array element types are valid.
             Type::Array(array_type) => {
                 // Check that the array length is valid.
-                match array_type.length() {
-                    0 => self.emit_err(TypeCheckerError::array_empty(span)),
-                    length => {
-                        if length > self.limits.max_array_elements {
-                            self.emit_err(TypeCheckerError::array_too_large(
-                                length,
-                                self.limits.max_array_elements,
-                                span,
-                            ))
-                        }
+
+                if let Some(length) = array_type.length.as_u32() {
+                    if length == 0 {
+                        self.emit_err(TypeCheckerError::array_empty(span));
+                    } else if length > self.limits.max_array_elements as u32 {
+                        self.emit_err(TypeCheckerError::array_too_large(length, self.limits.max_array_elements, span));
                     }
+                } else if let Expression::Literal(_) = &*array_type.length {
+                    // Literal, but not valid u32 (e.g. too big or invalid format)
+                    self.emit_err(TypeCheckerError::array_too_large_for_u32(span));
                 }
+                // else: not a literal, so defer for later
+
                 // Check that the array element type is valid.
                 match array_type.element_type() {
                     // Array elements cannot be futures.
@@ -946,24 +1018,61 @@ impl TypeCheckingVisitor<'_> {
 
             if let Some(first) = caller_finalizers.next() {
                 inferred_inputs = first.inferred_inputs.clone();
+
+                // If any input is a future that doesn't have the same member type for all
+                // finalizers, set that member to `Type::Err`.
+                for finalizer in caller_finalizers {
+                    assert_eq!(inferred_inputs.len(), finalizer.inferred_inputs.len());
+                    for (t1, t2) in inferred_inputs.iter_mut().zip(finalizer.inferred_inputs.iter()) {
+                        self.merge_types(t1, t2);
+                    }
+                }
             } else {
                 self.emit_warning(TypeCheckerWarning::async_function_is_never_called_by_transition_function(
                     function.identifier.name,
                     function.span(),
                 ));
             }
-
-            // If any input is a future that doesn't have the same member type for all
-            // finalizers, set that member to `Type::Err`.
-            for finalizer in caller_finalizers {
-                assert_eq!(inferred_inputs.len(), finalizer.inferred_inputs.len());
-                for (t1, t2) in inferred_inputs.iter_mut().zip(finalizer.inferred_inputs.iter()) {
-                    self.merge_types(t1, t2);
-                }
-            }
         }
 
+        // Ensure that, if the function has generic const paramaters, then it must be an `inline`.
+        // Otherwise, emit an error.
+        if self.scope_state.variant != Some(Variant::Inline) && !function.const_parameters.is_empty() {
+            self.emit_err(TypeCheckerError::only_inline_can_have_const_generics(function.identifier.span()));
+        }
+
+        for const_param in &function.const_parameters {
+            self.visit_type(const_param.type_());
+
+            // Restrictions for const parameters
+            if !matches!(
+                const_param.type_(),
+                Type::Boolean | Type::Integer(_) | Type::Address | Type::Scalar | Type::Group | Type::Field
+            ) {
+                self.emit_err(TypeCheckerError::bad_const_generic_type(const_param.type_(), const_param.span()));
+            }
+
+            // Add the input to the symbol table.
+            if let Err(err) = self.state.symbol_table.insert_variable(
+                self.scope_state.program_name.unwrap(),
+                const_param.identifier().name,
+                VariableSymbol {
+                    type_: const_param.type_().clone(),
+                    span: const_param.identifier.span(),
+                    declaration: VariableType::ConstParameter,
+                },
+            ) {
+                self.state.handler.emit_err(err);
+            }
+
+            // Add the input to the type table.
+            self.state.type_table.insert(const_param.identifier().id(), const_param.type_().clone());
+        }
+
+        // The inputs should have access to the const parameters, so handle them after.
         for (i, input) in function.input.iter().enumerate() {
+            self.visit_type(input.type_());
+
             // No need to check compatibility of these types; that's already been done
             let table_type = inferred_inputs.get(i).unwrap_or_else(|| input.type_());
 
@@ -1037,6 +1146,8 @@ impl TypeCheckingVisitor<'_> {
         // Type check the function's return type.
         // Note that checking that each of the component types are defined is sufficient to check that `output_type` is defined.
         function.output.iter().enumerate().for_each(|(index, function_output)| {
+            self.visit_type(&function_output.type_);
+
             // If the function is not a transition function, then it cannot output a record.
             // Note that an external output must always be a record.
             if let Type::Composite(struct_) = function_output.type_.clone() {
@@ -1075,6 +1186,8 @@ impl TypeCheckingVisitor<'_> {
                 self.emit_err(TypeCheckerError::only_async_transition_can_return_future(function_output.span));
             }
         });
+
+        self.visit_type(&function.output_type);
     }
 
     /// Merge inferred types into `lhs`.
@@ -1105,6 +1218,10 @@ impl TypeCheckingVisitor<'_> {
     /// In particular, any comparison involving an `Err` is `true`,
     /// composite types are resolved to the current program if not specified,
     /// and Futures which aren't explicit compare equal to other Futures.
+    ///
+    /// An array with an undetermined length (e.g., one that depends on a `const`) is considered equal to other arrays
+    /// if their element types match. This allows const propagation to potentially resolve the length before type
+    /// checking is performed again.
     pub fn eq_user(&self, t1: &Type, t2: &Type) -> bool {
         match (t1, t2) {
             (Type::Err, _)
@@ -1118,7 +1235,14 @@ impl TypeCheckingVisitor<'_> {
             | (Type::String, Type::String)
             | (Type::Unit, Type::Unit) => true,
             (Type::Array(left), Type::Array(right)) => {
-                left.length() == right.length() && self.eq_user(left.element_type(), right.element_type())
+                (match (left.length.as_u32(), right.length.as_u32()) {
+                    (Some(l1), Some(l2)) => l1 == l2,
+                    _ => {
+                        // An array with an undetermined length (e.g., one that depends on a `const`) is considered
+                        // equal to other arrays because their lengths _may_ eventually be proven equal.
+                        true
+                    }
+                }) && self.eq_user(left.element_type(), right.element_type())
             }
             (Type::Identifier(left), Type::Identifier(right)) => left.name == right.name,
             (Type::Integer(left), Type::Integer(right)) => left == right,
@@ -1196,15 +1320,24 @@ impl TypeCheckingVisitor<'_> {
         }
     }
 
-    // Checks if the access operation is valid inside the current function variant.
+    // Validates whether an access operation is allowed in the current function or block context.
+    // This prevents illegal use of certain operations depending on whether the code is inside
+    // an async function, an async block, or a finalize block.
     pub fn check_access_allowed(&mut self, name: &str, finalize_op: bool, span: Span) {
-        // Check that the function context matches.
+        // Case 1: Operation is not a finalize op, and we're inside an `async` function.
         if self.scope_state.variant == Some(Variant::AsyncFunction) && !finalize_op {
-            self.state.handler.emit_err(TypeCheckerError::invalid_operation_inside_finalize(name, span))
-        } else if !matches!(self.scope_state.variant, Some(Variant::AsyncFunction) | Some(Variant::Script))
+            self.state.handler.emit_err(TypeCheckerError::invalid_operation_inside_finalize(name, span));
+        }
+        // Case 2: Operation is not a finalize op, and we're inside an `async` block.
+        else if self.async_block_id.is_some() && !finalize_op {
+            self.state.handler.emit_err(TypeCheckerError::invalid_operation_inside_async_block(name, span));
+        }
+        // Case 3: Operation *is* a finalize op, but we're *not* inside an async context.
+        else if !matches!(self.scope_state.variant, Some(Variant::AsyncFunction) | Some(Variant::Script))
+            && self.async_block_id.is_none()
             && finalize_op
         {
-            self.state.handler.emit_err(TypeCheckerError::invalid_operation_outside_finalize(name, span))
+            self.state.handler.emit_err(TypeCheckerError::invalid_operation_outside_finalize(name, span));
         }
     }
 
@@ -1217,5 +1350,79 @@ impl TypeCheckingVisitor<'_> {
         } else {
             false
         }
+    }
+
+    pub fn parse_integer_literal<I: FromStrRadix>(&self, raw_string: &str, span: Span, type_string: &str) {
+        let string = raw_string.replace('_', "");
+        if I::from_str_by_radix(&string).is_err() {
+            self.state.handler.emit_err(TypeCheckerError::invalid_int_value(string, type_string, span));
+        }
+    }
+
+    // Emit an error and update `ty` to be `Type::Err` indicating that the type of the expression could not be inferred.
+    // Also update `type_table` accordingly
+    pub fn emit_inference_failure_error(&self, ty: &mut Type, expr: &Expression) {
+        self.emit_err(TypeCheckerError::could_not_determine_type(expr.clone(), expr.span()));
+        *ty = Type::Err;
+        self.state.type_table.insert(expr.id(), Type::Err);
+    }
+
+    // Given a `Literal` and its type, if the literal is a numeric `Unsuffixed` literal, ensure it's a valid literal
+    // given the type. E.g., a `256` is not a valid `u8`.
+    pub fn check_numeric_literal(&self, input: &Literal, ty: &Type) -> bool {
+        if let Literal { variant: LiteralVariant::Unsuffixed(s), .. } = input {
+            let span = input.span();
+            let has_nondecimal_prefix =
+                |s: &str| ["0x", "0o", "0b", "-0x", "-0o", "-0b"].iter().any(|p| s.starts_with(p));
+
+            macro_rules! parse_int {
+                ($t:ty, $name:expr) => {
+                    self.parse_integer_literal::<$t>(s, span, $name)
+                };
+            }
+
+            match ty {
+                Type::Integer(kind) => match kind {
+                    IntegerType::U8 => parse_int!(u8, "u8"),
+                    IntegerType::U16 => parse_int!(u16, "u16"),
+                    IntegerType::U32 => parse_int!(u32, "u32"),
+                    IntegerType::U64 => parse_int!(u64, "u64"),
+                    IntegerType::U128 => parse_int!(u128, "u128"),
+                    IntegerType::I8 => parse_int!(i8, "i8"),
+                    IntegerType::I16 => parse_int!(i16, "i16"),
+                    IntegerType::I32 => parse_int!(i32, "i32"),
+                    IntegerType::I64 => parse_int!(i64, "i64"),
+                    IntegerType::I128 => parse_int!(i128, "i128"),
+                },
+                Type::Group => {
+                    if has_nondecimal_prefix(s) {
+                        // This is not checked in the parser for unsuffixed numerals. So do that here.
+                        self.emit_err(TypeCheckerError::hexbin_literal_nonintegers(span));
+                        return false;
+                    } else {
+                        let trimmed = s.trim_start_matches('-').trim_start_matches('0');
+                        if !trimmed.is_empty()
+                            && format!("{trimmed}group")
+                                .parse::<snarkvm::prelude::Group<snarkvm::prelude::TestnetV0>>()
+                                .is_err()
+                        {
+                            self.emit_err(TypeCheckerError::invalid_int_value(trimmed, "group", span));
+                            return false;
+                        }
+                    }
+                }
+                Type::Field | Type::Scalar => {
+                    if has_nondecimal_prefix(s) {
+                        // This is not checked in the parser for unsuffixed numerals. So do that here.
+                        self.emit_err(TypeCheckerError::hexbin_literal_nonintegers(span));
+                        return false;
+                    }
+                }
+                _ => {
+                    // Other types aren't expected here
+                }
+            }
+        }
+        true
     }
 }

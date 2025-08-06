@@ -24,12 +24,13 @@ use leo_ast::{
     Literal,
     NodeBuilder,
     NodeID,
+    RepeatExpression,
     StructExpression,
     StructVariableInitializer,
     TupleExpression,
+    interpreter_value::Value,
 };
 use leo_errors::StaticAnalyzerError;
-use leo_interpreter::Value;
 use leo_span::{Span, Symbol};
 
 pub struct ConstPropagationVisitor<'a> {
@@ -42,6 +43,10 @@ pub struct ConstPropagationVisitor<'a> {
     pub const_not_evaluated: Option<Span>,
     /// An array index which was not able to be evaluated.
     pub array_index_not_evaluated: Option<Span>,
+    /// An array length which was not able to be evaluated.
+    pub array_length_not_evaluated: Option<Span>,
+    /// A repeat expression count which was not able to be evaluated.
+    pub repeat_count_not_evaluated: Option<Span>,
 }
 
 impl ConstPropagationVisitor<'_> {
@@ -109,8 +114,16 @@ pub fn value_to_expression(value: &Value, span: Span, node_builder: &NodeBuilder
             }
             ArrayExpression { elements, span, id }.into()
         }
+        Repeat(expr, count) => RepeatExpression {
+            expr: value_to_expression(expr, span, node_builder)?,
+            count: value_to_expression(count, span, node_builder)?,
+            span,
+            id,
+        }
+        .into(),
         Struct(x) => StructExpression {
             name: Identifier { name: x.name, id: node_builder.next_id(), span },
+            const_arguments: Vec::new(), // `Value`s don't have const arguments
             members: {
                 let mut members = Vec::with_capacity(x.contents.len());
                 for (name, val) in x.contents.iter() {
@@ -129,6 +142,7 @@ pub fn value_to_expression(value: &Value, span: Span, node_builder: &NodeBuilder
         }
         .into(),
         Future(..) => return None,
+        Unsuffixed(..) => return None,
     };
 
     Some(result)

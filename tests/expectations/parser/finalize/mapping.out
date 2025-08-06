@@ -45,6 +45,7 @@
                   },
                   "id": 3
                 },
+                "const_arguments": [],
                 "program": null
               }
             },
@@ -58,6 +59,7 @@
                   },
                   "id": 4
                 },
+                "const_arguments": [],
                 "program": null
               }
             },
@@ -94,6 +96,7 @@
         ]
       ],
       "functions": [],
+      "constructor": null,
       "span": {
         "lo": 1,
         "hi": 79

@@ -14,11 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-use leo_ast::{Ast, CallExpression, ExpressionStatement, Identifier, Node as _, NodeBuilder, Statement};
+use leo_ast::{
+    Ast,
+    CallExpression,
+    ExpressionStatement,
+    Identifier,
+    NetworkName,
+    Node as _,
+    NodeBuilder,
+    Statement,
+    interpreter_value::{GlobalId, SvmAddress},
+};
 use leo_errors::{InterpreterHalt, LeoError, Result};
 use leo_span::{Span, Symbol, source_map::FileName, sym, with_session_globals};
 
-use snarkvm::prelude::{Program, TestnetV0};
+use snarkvm::prelude::{Network, Program, TestnetV0};
 
 use indexmap::IndexMap;
 use std::{
@@ -34,21 +44,13 @@ mod test;
 mod util;
 use util::*;
 
-mod core_functions;
-pub use core_functions::{CoreFunctionHelper, evaluate_core_function};
-
 mod cursor;
 use cursor::*;
-pub use cursor::{GlobalId, evaluate_binary, evaluate_unary, literal_to_value};
 
 mod interpreter;
 use interpreter::*;
 
 mod cursor_aleo;
-
-mod value;
-use value::*;
-pub use value::{StructContents, Value};
 
 mod ui;
 use ui::Ui;
@@ -142,8 +144,9 @@ pub fn find_and_run_tests(
     signer: SvmAddress,
     block_height: u32,
     match_str: &str,
+    network: NetworkName,
 ) -> Result<(Vec<TestFunction>, IndexMap<GlobalId, Result<()>>)> {
-    let mut interpreter = Interpreter::new(leo_filenames, aleo_filenames, signer, block_height)?;
+    let mut interpreter = Interpreter::new(leo_filenames, aleo_filenames, signer, block_height, network)?;
 
     let mut native_test_functions = Vec::new();
 
@@ -189,7 +192,8 @@ pub fn find_and_run_tests(
         assert!(function.variant.is_script(), "Type checking should ensure test functions are transitions or scripts.");
 
         let call = CallExpression {
-            function: Identifier::new(function.identifier.name, interpreter.node_builder.next_id()).into(),
+            function: Identifier::new(function.identifier.name, interpreter.node_builder.next_id()),
+            const_arguments: vec![], // scripts don't have const parameters for now
             arguments: Vec::new(),
             program: Some(id.program),
             span: Default::default(),
@@ -241,8 +245,9 @@ pub fn interpret(
     signer: SvmAddress,
     block_height: u32,
     tui: bool,
+    network: NetworkName,
 ) -> Result<()> {
-    let mut interpreter = Interpreter::new(leo_filenames, aleo_filenames, signer, block_height)?;
+    let mut interpreter = Interpreter::new(leo_filenames, aleo_filenames, signer, block_height, network)?;
 
     let mut user_interface: Box<dyn Ui> =
         if tui { Box::new(ratatui_ui::RatatuiUi::new()) } else { Box::new(dialoguer_input::DialoguerUi::new()) };

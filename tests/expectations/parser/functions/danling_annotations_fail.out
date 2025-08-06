@@ -55,6 +55,7 @@
               },
               "id": 4
             },
+            "const_parameters": [],
             "input": [],
             "output": [
               {
@@ -88,6 +89,7 @@
           }
         ]
       ],
+      "constructor": null,
       "span": {
         "lo": 1,
         "hi": 142

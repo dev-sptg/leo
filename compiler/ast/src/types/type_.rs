@@ -27,7 +27,7 @@ use snarkvm::prelude::{
 use std::fmt;
 
 /// Explicit type used for defining a variable or expression type
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Type {
     /// The `address` type.
     Address,
@@ -57,6 +57,8 @@ pub enum Type {
     String,
     /// A static tuple of at least one type.
     Tuple(TupleType),
+    /// Numeric type which should be resolved to `Field`, `Group`, `Integer(_)`, or `Scalar`.
+    Numeric,
     /// The `unit` type.
     Unit,
     /// Placeholder for a type that could not be resolved or was not well-formed.
@@ -83,7 +85,12 @@ impl Type {
             | (Type::String, Type::String)
             | (Type::Unit, Type::Unit) => true,
             (Type::Array(left), Type::Array(right)) => {
-                left.element_type().eq_flat_relaxed(right.element_type()) && left.length() == right.length()
+                // Two arrays are equal if their element types are the same and if their lengths
+                // are the same, assuming the lengths can be extracted as `u32`.
+                left.element_type().eq_flat_relaxed(right.element_type())
+                    && left.length.as_u32().is_some()
+                    && right.length.as_u32().is_some()
+                    && left.length.as_u32() == right.length.as_u32()
             }
             (Type::Identifier(left), Type::Identifier(right)) => left.matches(right),
             (Type::Integer(left), Type::Integer(right)) => left.eq(right),
@@ -128,7 +135,9 @@ impl Type {
                 snarkvm::prelude::LiteralType::Signature => Type::Signature,
                 snarkvm::prelude::LiteralType::String => Type::String,
             },
-            Struct(s) => Type::Composite(CompositeType { id: common::Identifier::from(s), program }),
+            Struct(s) => {
+                Type::Composite(CompositeType { id: common::Identifier::from(s), const_arguments: Vec::new(), program })
+            }
             Array(array) => Type::Array(ArrayType::from_snarkvm(array, program)),
         }
     }
@@ -151,6 +160,7 @@ impl fmt::Display for Type {
             Type::String => write!(f, "string"),
             Type::Composite(ref struct_type) => write!(f, "{struct_type}"),
             Type::Tuple(ref tuple) => write!(f, "{tuple}"),
+            Type::Numeric => write!(f, "numeric"),
             Type::Unit => write!(f, "()"),
             Type::Err => write!(f, "error"),
         }

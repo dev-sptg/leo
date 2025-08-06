@@ -239,6 +239,10 @@ symbols! {
     // annotations
     should_fail,
     test,
+    noupgrade,
+    custom,
+    admin,
+    key,
 
     // annotation keys
     private_key,
@@ -251,6 +255,7 @@ symbols! {
     caller,
     Const: "const",
     constant,
+    constructor,
     decrement,
     Else: "else",
     For: "for",
@@ -281,11 +286,15 @@ symbols! {
     owner,
     _nonce,
     program,
+    ProgramCore: "Program",
     stub,
     block,
     height,
     network,
     id,
+    checksum,
+    edition,
+    program_owner,
 }
 
 /// An interned string.

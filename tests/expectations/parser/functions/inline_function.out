@@ -38,6 +38,7 @@
               },
               "id": 2
             },
+            "const_parameters": [],
             "input": [
               {
                 "identifier": {
@@ -135,6 +136,7 @@
           }
         ]
       ],
+      "constructor": null,
       "span": {
         "lo": 1,
         "hi": 89

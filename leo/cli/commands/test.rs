@@ -51,7 +51,7 @@ impl Command for LeoTest {
     fn prelude(&self, context: Context) -> Result<Self::Input> {
         let mut options = self.compiler_options.clone();
         options.build_tests = true;
-        (LeoBuild { options }).execute(context)
+        (LeoBuild { env_override: Default::default(), options }).execute(context)
     }
 
     fn apply(self, context: Context, input: Self::Input) -> Result<Self::Output> {
@@ -64,12 +64,12 @@ fn handle_test(command: LeoTest, context: Context, package: Package) -> Result<(
     let private_key = context.get_private_key::<TestnetV0>(&None)?;
     let address = Address::try_from(&private_key)?;
 
-    // Get the paths of all local dependencies.
+    // Get the paths of all local Leo dependencies.
     let leo_paths: Vec<PathBuf> = package
         .programs
         .iter()
         .flat_map(|program| match &program.data {
-            ProgramData::SourcePath(path) => Some(path.clone()),
+            ProgramData::SourcePath { source, .. } => Some(source.clone()),
             ProgramData::Bytecode(..) => None,
         })
         .collect();
@@ -77,19 +77,19 @@ fn handle_test(command: LeoTest, context: Context, package: Package) -> Result<(
         .programs
         .iter()
         .flat_map(|program| match &program.data {
-            ProgramData::SourcePath(..) => {
-                // It's a local dependency.
+            ProgramData::SourcePath { .. } => {
+                // It's a local Leo dependency.
                 Some(program.name)
             }
             ProgramData::Bytecode(..) => {
-                // It's a network dependency.
+                // It's a network dependency or a local .aleo dependency.
                 None
             }
         })
         .collect();
     let imports_directory = package.imports_directory();
 
-    // Get the paths to .aleo files in `imports` - but filter out the ones corresponding to local dependencies.
+    // Get the paths to .aleo files in `imports` - but filter out the ones corresponding to local Leo dependencies.
     let aleo_paths: Vec<PathBuf> = imports_directory
         .read_dir()
         .ok()
@@ -108,8 +108,14 @@ fn handle_test(command: LeoTest, context: Context, package: Package) -> Result<(
         })
         .collect();
 
-    let (native_test_functions, interpreter_result) =
-        leo_interpreter::find_and_run_tests(&leo_paths, &aleo_paths, address, 0u32, &command.test_name)?;
+    let (native_test_functions, interpreter_result) = leo_interpreter::find_and_run_tests(
+        &leo_paths,
+        &aleo_paths,
+        address,
+        0u32,
+        &command.test_name,
+        package.env.network,
+    )?;
 
     // Now for native tests.
 
@@ -130,7 +136,7 @@ fn handle_test(command: LeoTest, context: Context, package: Package) -> Result<(
             }
             let bytecode = match &program.data {
                 ProgramData::Bytecode(c) => c.clone(),
-                ProgramData::SourcePath(..) => {
+                ProgramData::SourcePath { .. } => {
                     // This was not a network dependency, so get its bytecode from the filesystem.
                     let aleo_path = if program.name == program_name_symbol {
                         build_directory.join("main.aleo")
@@ -159,7 +165,7 @@ fn handle_test(command: LeoTest, context: Context, package: Package) -> Result<(
     let (handler, buf) = Handler::new_with_buf();
 
     let outcomes = run_with_ledger::run_with_ledger(
-        &run_with_ledger::Config { seed: 0, min_height: 1, programs },
+        &run_with_ledger::Config { seed: 0, start_height: None, programs },
         &cases,
         &handler,
         &buf,

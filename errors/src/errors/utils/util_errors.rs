@@ -61,7 +61,7 @@ create_messages!(
         help: None,
     }
 
-    @formatted
+    @backtraced
     network_error {
         args: (url: impl Display, status: impl Display),
         msg: format!("Failed network request to {url}. Status: {status}"),
@@ -75,6 +75,7 @@ create_messages!(
         help: None,
     }
 
+    // TODO: Unused, remove.
     @backtraced
     reqwest_error {
         args: (error: impl Display),
@@ -138,10 +139,10 @@ create_messages!(
         help: None,
     }
 
-    @formatted
+    @backtraced
     failed_to_retrieve_from_endpoint {
-        args: (error: impl ErrorArg),
-        msg: format!("{error}"),
+        args: (url: impl Display, error: impl Display),
+        msg: format!("Failed to retrieve from endpoint `{url}`: {error}"),
         help: None,
     }
 

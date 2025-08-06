@@ -69,7 +69,7 @@ create_messages!(
         msg: format!(
             "Could not determine the type of `{expr}`",
         ),
-        help: None,
+        help: Some("Consider using explicit type annotations.".into()),
     }
 
     /// For when the user tries to return a unknown variable.
@@ -284,6 +284,7 @@ create_messages!(
         help: Some("Consider removing the mode or using the keyword `transition` instead of `function`.".to_string()),
     }
 
+    // Not currently used
     @formatted
     async_function_input_cannot_be_private {
         args: (),
@@ -312,6 +313,7 @@ create_messages!(
         help: Some("Use a `public` modifier to the input variable declaration or remove the visibility modifier entirely.".to_string()),
     }
 
+    // Not currently used
     @formatted
     finalize_output_mode_must_be_public {
         args: (),
@@ -327,10 +329,10 @@ create_messages!(
     }
 
     @formatted
-    loop_body_contains_finalize {
-        args: (),
-        msg: format!("Loop body contains an async function call."),
-        help: Some("Remove the async function call.".to_string()),
+    loop_body_contains_async {
+        args: (kind: impl Display),
+        msg: format!("Loop body contains an async {kind}."),
+        help: Some(format!("Remove the async {kind}.")),
     }
 
     @formatted
@@ -365,7 +367,7 @@ create_messages!(
     @formatted
     invalid_self_access {
         args: (),
-        msg: format!("The allowed accesses to `self` are `self.caller` and `self.signer`."),
+        msg: format!("The allowed accesses to `self` are `self.{{caller, checksum, edition, program_owner, signer}}`."),
         help: None,
     }
 
@@ -378,8 +380,8 @@ create_messages!(
 
     @formatted
     can_only_call_inline_function {
-        args: (),
-        msg: format!("Only `inline` can be called from a `function` or `inline`."),
+        args: (kind: impl Display),
+        msg: format!("Only `inline` can be called from {kind}."),
         help: None,
     }
 
@@ -567,9 +569,9 @@ create_messages!(
     }
 
     @formatted
-    operation_must_be_in_finalize_block {
+    operation_must_be_in_async_block_or_function {
         args: (),
-        msg: "This operation can only be used in an async function or script.".to_string(),
+        msg: "This operation can only be used in an async function, an async block, or script.".to_string(),
         help: None,
     }
 
@@ -716,9 +718,9 @@ create_messages!(
     }
 
     @formatted
-    async_transition_must_call_async_function {
+    missing_async_operation_in_async_transition {
         args: (),
-        msg: "An async transition must call an async function.".to_string(),
+        msg: "An `async` transition must contain at least one async operation — either a call to an `async` function or an `async` block.".to_string(),
         help: Some("Example: `async transition foo() -> Future { let a: Future = bar(); return await_futures(a); }`".to_string()),
     }
 
@@ -821,10 +823,10 @@ create_messages!(
     }
 
     @formatted
-    external_transition_call_must_be_before_finalize {
-        args: (),
-        msg: "External transition calls cannot be made after local async function call".to_string(),
-        help: Some("Move the async function call before the transition call.".to_string()),
+    external_call_after_async {
+        args: (kind: impl Display),
+        msg: format!("External transition calls must appear before the local async {kind}."),
+        help: Some(format!("Reorder your code so the external transition call happens before the local async {kind}.")),
     }
 
     @formatted
@@ -838,14 +840,14 @@ create_messages!(
     not_all_futures_consumed {
         args: (unconsumed: impl Display),
         msg: format!("Not all futures were consumed: {unconsumed}"),
-        help: Some("Make sure all futures are consumed exactly once. Consume by passing to an async function call.".to_string()),
+        help: Some("Make sure all futures are consumed exactly once. Consume by passing to an async function call or async block.".to_string()),
     }
 
     @formatted
     async_transition_missing_future_to_return {
         args: (),
         msg: "An async transition must return a future.".to_string(),
-        help: Some("Call an async function inside of the async transition body so that there is a future to return.".to_string()),
+        help: Some("Call an async function or instantiate an async block inside of the async transition body so that there is a future to return.".to_string()),
     }
 
     @formatted
@@ -870,8 +872,8 @@ create_messages!(
 
     @formatted
     async_cannot_assign_outside_conditional {
-        args: (variable: impl Display),
-        msg: format!("Cannot re-assign to `{variable}` from a conditional scope to an outer scope in an async function."),
+        args: (variable: impl Display, kind: impl Display),
+        msg: format!("Cannot re-assign to `{variable}` from a conditional scope to an outer scope in an async {kind}."),
         help: Some("This is a fundamental restriction that can often be avoided by using a ternary operator `?` or re-declaring the variable in the current scope. In the future, ARC XXXX (https://github.com/ProvableHQ/ARCs) will support more complex assignments in async functions.".to_string()),
     }
 
@@ -1005,9 +1007,9 @@ create_messages!(
     }
 
     @formatted
-    records_not_allowed_inside_finalize {
-        args: (),
-        msg: format!("records cannot be instantiated in an async function context."),
+    records_not_allowed_inside_async {
+        args: (kind: impl Display),
+        msg: format!("records cannot be instantiated in an async {kind} context."),
         help: None,
     }
 
@@ -1039,6 +1041,7 @@ create_messages!(
         help: Some("Ternary conditionals may not contain an external record type.".to_string()),
     }
 
+    // TODO: unused.
     @formatted
     assignment_to_external_record {
         args: (ty: impl Display),
@@ -1057,6 +1060,178 @@ create_messages!(
     record_prefixed_by_other_record {
         args: (r1: impl Display, r2: impl Display),
         msg: format!("Record name `{r1}` is prefixed by the record name `{r2}`. Record names must not be prefixes of other record names."),
+        help: None,
+    }
+
+    @formatted
+    range_bounds_type_mismatch {
+        args: (),
+        msg: format!("mismatched types in loop iterator range bounds"),
+        help: None,
+    }
+
+    @formatted
+    assignment_to_external_record_member {
+        args: (ty: impl Display),
+        msg: format!("Cannot assign to a member of the external record `{ty}`."),
+        help: None,
+    }
+
+    @formatted
+    assignment_to_external_record_cond {
+        args: (ty: impl Display),
+        msg: format!("Cannot assign to the external record type `{ty}` in this location."),
+        help: Some("External record variables may not be assigned to in narrower conditional scopes than they were defined.".into()),
+    }
+
+    @formatted
+    assignment_to_external_record_tuple_cond {
+        args: (ty: impl Display),
+        msg: format!("Cannot assign to the tuple type `{ty}` containing an external record in this location."),
+        help: Some("Tuples containing external records may not be assigned to in narrower conditional scopes than they were defined.".into()),
+    }
+
+    @formatted
+    hexbin_literal_nonintegers {
+        args: (),
+        msg: format!("Hex, octal, and binary literals may only be used for integer types."),
+        help: None,
+    }
+
+    @formatted
+    unexpected_unsuffixed_numeral {
+        args: (expected: impl Display),
+        msg: format!(
+            "Expected {expected} but an unsuffixed numeral was found.",
+        ),
+        help: None,
+    }
+
+    @formatted
+    incorrect_num_const_args {
+        args: (kind: impl Display, expected: impl Display, received: impl Display),
+        msg: format!(
+            "{kind} expected `{expected}` const args, but got `{received}`",
+        ),
+        help: None,
+    }
+
+    @formatted
+    bad_const_generic_type {
+        args: (found: impl Display),
+        msg: format!("A generic const parameter must be a `bool`, an integer, a `scalar`, a `group`, a `field`, or an `address`, but {found} was found"),
+        help: None,
+    }
+
+    /// For when the user tries to assign to a generic const function parameter.
+    @formatted
+    cannot_assign_to_generic_const_function_parameter {
+        args: (param: impl Display),
+        msg: format!(
+            "Cannot assign to const parameter `{param}`",
+        ),
+        help: None,
+    }
+
+    @formatted
+    only_inline_can_have_const_generics {
+        args: (),
+        msg: format!("Only `inline` functions can have generic const parameters."),
+        help: None,
+    }
+
+    @formatted
+    array_too_large_for_u32 {
+        args: (),
+        msg: format!("An array length must be small enough to fit in a `u32`"),
+        help: None,
+    }
+
+    @formatted
+    unexpected_record_const_parameters {
+        args: (),
+        msg: format!("Records cannot be declared with generic const parameters."),
+        help: None,
+    }
+
+    @formatted
+    unexpected_const_args {
+        args: (item: impl Display),
+        msg: format!("unexpected generic const argment for {item}."),
+        help: Some("If this is an external struct, consider using a resolved non-generic version of it instead. External structs can't be instantiated with const arguments".to_string()),
+    }
+
+    @formatted
+    invalid_operation_inside_async_block {
+        args: (operation: impl Display),
+        msg: format!("Invalid expression in an async block. `{operation}` cannot be used directly here"),
+        help: None,
+    }
+
+    @formatted
+    illegal_async_block_location {
+        args: (),
+        msg: "`async` blocks are only allowed inside an `async` transition or a script function.".to_string(),
+        help: Some("Try moving this `async` block into an `async` transition or a script function.".to_string()),
+    }
+
+    @formatted
+    conflicting_async_call_and_block {
+        args: (),
+        msg: "A transition function cannot contain both an `async` function call and an `async` block at the same time.".to_string(),
+        help: Some("Refactor the transition to use either an `async` call or an `async` block, but not both.".to_string()),
+    }
+
+    @formatted
+    multiple_async_blocks_not_allowed {
+        args: (),
+        msg: "A transition function cannot contain more than one `async` block.".to_string(),
+        help: Some("Combine the logic into a single `async` block, or restructure your code to avoid multiple async blocks within the same transition.".to_string()),
+    }
+
+    @formatted
+    async_block_in_conditional {
+        args: (),
+        msg: "`async` blocks are not allowed inside conditional blocks.".to_string(),
+        help: Some("Refactor your code to move the `async` block outside of the conditional block.".to_string()),
+    }
+
+    @formatted
+    cannot_use_private_inpt_in_async_block {
+        args: (),
+        msg: format!("`private` inputs cannot be used inside async blocks."),
+        help: None,
+    }
+
+    @formatted
+    async_block_cannot_return {
+        args: (),
+        msg: "An `async` block cannot contain a `return` statement.".to_string(),
+        help: None,
+    }
+
+    @formatted
+    invalid_async_block_future_access {
+        args: (),
+        msg: format!(
+            "Cannot access argument from future produced by an `async` block."
+        ),
+        help: None,
+    }
+
+    @formatted
+    cannot_assign_to_vars_outside_async_block {
+        args: (input: impl Display),
+        msg: format!(
+            "Cannot assign to `{input}` inside an `async` block because it was declared outside the block."
+        ),
+        help: None,
+    }
+
+    @formatted
+    custom {
+        args: (msg: impl Display),
+        msg: msg.to_string(),
         help: None,
     }
 );

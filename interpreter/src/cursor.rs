@@ -17,42 +17,50 @@
 use super::*;
 
 use leo_ast::{
+    ArrayType,
     AssertVariant,
+    AsyncExpression,
     BinaryOperation,
     Block,
     CoreConstant,
     CoreFunction,
     DefinitionPlace,
     Expression,
-    FromStrRadix as _,
     Function,
-    IntegerType,
-    Literal,
-    LiteralVariant,
+    NodeID,
     Statement,
+    StructVariableInitializer,
     Type,
     UnaryOperation,
     Variant,
+    interpreter_value::{
+        AsyncExecution,
+        CoreFunctionHelper,
+        Future,
+        GlobalId,
+        StructContents,
+        SvmAddress,
+        Value,
+        evaluate_binary,
+        evaluate_core_function,
+        evaluate_unary,
+        literal_to_value,
+    },
 };
 use leo_errors::{InterpreterHalt, Result};
 use leo_span::{Span, Symbol, sym};
 
 use snarkvm::prelude::{
     Closure as SvmClosure,
-    Double as _,
     Finalize as SvmFinalize,
     Function as SvmFunctionParam,
-    Inverse as _,
-    Pow as _,
     ProgramID,
-    Square as _,
-    SquareRoot as _,
     TestnetV0,
 };
 
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexMap;
 use rand_chacha::{ChaCha20Rng, rand_core::SeedableRng};
-use std::{cmp::Ordering, collections::HashMap, fmt, mem, str::FromStr as _};
+use std::{cmp::Ordering, collections::HashMap, mem, str::FromStr as _};
 
 pub type Closure = SvmClosure<TestnetV0>;
 pub type Finalize = SvmFinalize<TestnetV0>;
@@ -61,6 +69,7 @@ pub type SvmFunction = SvmFunctionParam<TestnetV0>;
 /// Names associated to values in a function being executed.
 #[derive(Clone, Debug)]
 pub struct FunctionContext {
+    name: Symbol,
     program: Symbol,
     pub caller: SvmAddress,
     names: HashMap<Symbol, Value>,
@@ -80,9 +89,17 @@ impl ContextStack {
         self.current_len
     }
 
-    fn push(&mut self, program: Symbol, caller: SvmAddress, is_async: bool) {
+    fn push(
+        &mut self,
+        name: Symbol,
+        program: Symbol,
+        caller: SvmAddress,
+        is_async: bool,
+        names: HashMap<Symbol, Value>, // a map of variable names that are already known
+    ) {
         if self.current_len == self.contexts.len() {
             self.contexts.push(FunctionContext {
+                name,
                 program,
                 caller,
                 names: HashMap::new(),
@@ -91,7 +108,7 @@ impl ContextStack {
             });
         }
         self.contexts[self.current_len].accumulated_futures.0.clear();
-        self.contexts[self.current_len].names.clear();
+        self.contexts[self.current_len].names = names;
         self.contexts[self.current_len].caller = caller;
         self.contexts[self.current_len].program = program;
         self.contexts[self.current_len].is_async = is_async;
@@ -158,8 +175,9 @@ pub enum Element {
     /// A Leo statement.
     Statement(Statement),
 
-    /// A Leo expression.
-    Expression(Expression),
+    /// A Leo expression. The optional type is an optional "expected type" for the expression. It helps when trying to
+    /// resolve an unsuffixed literal.
+    Expression(Expression, Option<Type>),
 
     /// A Leo block.
     ///
@@ -181,6 +199,11 @@ pub enum Element {
     },
 
     DelayedCall(GlobalId),
+    DelayedAsyncBlock {
+        program: Symbol,
+        block: NodeID,
+        names: HashMap<Symbol, Value>,
+    },
 }
 
 impl Element {
@@ -188,9 +211,9 @@ impl Element {
         use Element::*;
         match self {
             Statement(statement) => statement.span(),
-            Expression(expression) => expression.span(),
+            Expression(expression, _) => expression.span(),
             Block { block, .. } => block.span(),
-            AleoExecution { .. } | DelayedCall(..) => Default::default(),
+            AleoExecution { .. } | DelayedCall(..) | DelayedAsyncBlock { .. } => Default::default(),
         }
     }
 }
@@ -202,20 +225,6 @@ pub struct Frame {
     pub step: usize,
     pub element: Element,
     pub user_initiated: bool,
-}
-
-/// Global values - such as mappings, functions, etc -
-/// are identified by program and name.
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
-pub struct GlobalId {
-    pub program: Symbol,
-    pub name: Symbol,
-}
-
-impl fmt::Display for GlobalId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.aleo/{}", self.program, self.name)
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -239,6 +248,9 @@ pub struct Cursor {
     /// All functions (or transitions or inlines) in any program being interpreted.
     pub functions: HashMap<GlobalId, FunctionVariant>,
 
+    /// All the async blocks encountered. We identify them by their `NodeID`.
+    pub async_blocks: HashMap<NodeID, Block>,
+
     /// Consts are stored here.
     pub globals: HashMap<GlobalId, Value>,
 
@@ -247,7 +259,7 @@ pub struct Cursor {
     pub mappings: HashMap<GlobalId, HashMap<Value, Value>>,
 
     /// For each struct type, we only need to remember the names of its members, in order.
-    pub structs: HashMap<GlobalId, IndexSet<Symbol>>,
+    pub structs: HashMap<Symbol, IndexMap<Symbol, Type>>,
 
     pub futures: Vec<Future>,
 
@@ -293,6 +305,7 @@ impl Cursor {
             frames: Default::default(),
             values: Default::default(),
             functions: Default::default(),
+            async_blocks: Default::default(),
             globals: Default::default(),
             user_values: Default::default(),
             mappings: Default::default(),
@@ -458,17 +471,22 @@ impl Cursor {
     fn step_statement(&mut self, statement: &Statement, step: usize) -> Result<bool> {
         let len = self.frames.len();
 
-        let mut push = |expression: &Expression| {
-            self.frames.push(Frame { element: Element::Expression(expression.clone()), step: 0, user_initiated: false })
+        // Push a new expression frame with an optional expected type for the expression
+        let mut push = |expression: &Expression, ty: &Option<Type>| {
+            self.frames.push(Frame {
+                element: Element::Expression(expression.clone(), ty.clone()),
+                step: 0,
+                user_initiated: false,
+            })
         };
 
         let done = match statement {
             Statement::Assert(assert) if step == 0 => {
                 match &assert.variant {
-                    AssertVariant::Assert(x) => push(x),
+                    AssertVariant::Assert(x) => push(x, &Some(Type::Boolean)),
                     AssertVariant::AssertEq(x, y) | AssertVariant::AssertNeq(x, y) => {
-                        push(y);
-                        push(x);
+                        push(y, &None);
+                        push(x, &None);
                     }
                 };
                 false
@@ -489,20 +507,27 @@ impl Cursor {
                         let b =
                             if matches!(assert.variant, AssertVariant::AssertEq(..)) { x.eq(&y)? } else { x.neq(&y)? };
                         if !b {
-                            halt!(assert.span(), "assert failure");
+                            halt!(assert.span(), "assert failure: {} != {}", y, x);
                         }
                     }
                 };
                 true
             }
             Statement::Assign(assign) if step == 0 => {
-                push(&assign.value);
+                push(&assign.value, &None);
                 false
             }
             Statement::Assign(assign) if step == 1 => {
                 let value = self.values.pop().unwrap();
                 match &assign.place {
-                    Expression::Identifier(name) => self.set_variable(name.name, value),
+                    Expression::Identifier(name) => self.set_variable(
+                        name.name,
+                        // Resolve the type of the RHS using the same type is the previous value of this variable
+                        value.resolve_if_unsuffixed(
+                            &self.lookup(name.name).expect_tc(name.span())?.get_numeric_type(),
+                            assign.span(),
+                        )?,
+                    ),
                     Expression::TupleAccess(tuple_access) => {
                         let Expression::Identifier(identifier) = tuple_access.tuple else {
                             halt!(assign.span(), "tuple assignments must refer to identifiers.");
@@ -511,7 +536,11 @@ impl Cursor {
                         let Value::Tuple(tuple) = &mut current_tuple else {
                             halt!(tuple_access.span(), "Type error: this must be a tuple.");
                         };
-                        tuple[tuple_access.index.value()] = value;
+                        // Resolve the type of the RHS using the same type is the previous value of this tuple field
+                        tuple[tuple_access.index.value()] = value.resolve_if_unsuffixed(
+                            &tuple[tuple_access.index.value()].get_numeric_type(),
+                            assign.span(),
+                        )?;
                         self.set_variable(identifier.name, current_tuple);
                     }
                     _ => halt!(assign.span(), "Invalid assignment place."),
@@ -520,7 +549,7 @@ impl Cursor {
             }
             Statement::Block(block) => return Ok(self.step_block(block, false, step)),
             Statement::Conditional(conditional) if step == 0 => {
-                push(&conditional.condition);
+                push(&conditional.condition, &Some(Type::Boolean));
                 false
             }
             Statement::Conditional(conditional) if step == 1 => {
@@ -545,7 +574,7 @@ impl Cursor {
             }
             Statement::Conditional(_) if step == 2 => true,
             Statement::Const(const_) if step == 0 => {
-                push(&const_.value);
+                push(&const_.value, &Some(const_.type_.clone()));
                 false
             }
             Statement::Const(const_) if step == 1 => {
@@ -554,7 +583,7 @@ impl Cursor {
                 true
             }
             Statement::Definition(definition) if step == 0 => {
-                push(&definition.value);
+                push(&definition.value, &definition.type_);
                 false
             }
             Statement::Definition(definition) if step == 1 => {
@@ -573,7 +602,7 @@ impl Cursor {
                 true
             }
             Statement::Expression(expression) if step == 0 => {
-                push(&expression.expression);
+                push(&expression.expression, &None);
                 false
             }
             Statement::Expression(_) if step == 1 => {
@@ -582,8 +611,8 @@ impl Cursor {
             }
             Statement::Iteration(iteration) if step == 0 => {
                 assert!(!iteration.inclusive);
-                push(&iteration.stop);
-                push(&iteration.start);
+                push(&iteration.stop, &iteration.type_.clone());
+                push(&iteration.start, &iteration.type_.clone());
                 false
             }
             Statement::Iteration(iteration) => {
@@ -606,13 +635,27 @@ impl Cursor {
                 }
             }
             Statement::Return(return_) if step == 0 => {
-                push(&return_.expression);
+                // We really only need to care about the type of the output for Leo functions. Aleo functions and
+                // closures don't have to worry about unsuffixed literals
+                let output_type = self.contexts.last().and_then(|ctx| {
+                    self.lookup_function(ctx.program, ctx.name).and_then(|variant| match variant {
+                        FunctionVariant::Leo(function) => Some(function.output_type.clone()),
+                        _ => None,
+                    })
+                });
+
+                self.frames.push(Frame {
+                    element: Element::Expression(return_.expression.clone(), output_type),
+                    step: 0,
+                    user_initiated: false,
+                });
+
                 false
             }
             Statement::Return(_) if step == 1 => loop {
                 let last_frame = self.frames.last().expect("a frame should be present");
                 match last_frame.element {
-                    Element::Expression(Expression::Call(_)) | Element::DelayedCall(_) => {
+                    Element::Expression(Expression::Call(_), _) | Element::DelayedCall(_) => {
                         if self.contexts.is_async() {
                             // Get rid of the Unit we previously pushed, and replace it with a Future.
                             self.values.pop();
@@ -639,14 +682,14 @@ impl Cursor {
         Ok(done)
     }
 
-    fn step_expression(&mut self, expression: &Expression, step: usize) -> Result<bool> {
+    fn step_expression(&mut self, expression: &Expression, expected_ty: &Option<Type>, step: usize) -> Result<bool> {
         let len = self.frames.len();
 
         macro_rules! push {
             () => {
-                |expression: &Expression| {
+                |expression: &Expression, expected_ty: &Option<Type>| {
                     self.frames.push(Frame {
-                        element: Element::Expression(expression.clone()),
+                        element: Element::Expression(expression.clone(), expected_ty.clone()),
                         step: 0,
                         user_initiated: false,
                     })
@@ -656,31 +699,76 @@ impl Cursor {
 
         if let Some(value) = match expression {
             Expression::ArrayAccess(array) if step == 0 => {
-                push!()(&array.index);
-                push!()(&array.array);
+                push!()(&array.index, &None);
+                push!()(&array.array, &None);
                 None
             }
-            Expression::ArrayAccess(array) if step == 1 => {
-                let span = array.span();
-                let array = self.pop_value()?;
+            Expression::ArrayAccess(array_expr) if step == 1 => {
+                let span = array_expr.span();
                 let index = self.pop_value()?;
+                let array = self.pop_value()?;
 
-                let index_usize: usize = match index {
-                    Value::U8(x) => x.into(),
-                    Value::U16(x) => x.into(),
-                    Value::U32(x) => x.try_into().expect_tc(span)?,
-                    Value::U64(x) => x.try_into().expect_tc(span)?,
-                    Value::U128(x) => x.try_into().expect_tc(span)?,
-                    Value::I8(x) => x.try_into().expect_tc(span)?,
-                    Value::I16(x) => x.try_into().expect_tc(span)?,
-                    Value::I32(x) => x.try_into().expect_tc(span)?,
-                    Value::I64(x) => x.try_into().expect_tc(span)?,
-                    Value::I128(x) => x.try_into().expect_tc(span)?,
-                    _ => halt!(expression.span(), "invalid array index {index}"),
-                };
-                let Value::Array(vec_array) = array else { tc_fail!() };
-                Some(vec_array.get(index_usize).expect_tc(span)?.clone())
+                // Local helper function to convert a Value into usize
+                fn to_usize(value: &Value, s: &str, span: Span, expr_span: &Span, index: &Value) -> Result<usize> {
+                    match value {
+                        Value::U8(x) => Ok((*x).into()),
+                        Value::U16(x) => Ok((*x).into()),
+                        Value::U32(x) => (*x).try_into().expect_tc(span),
+                        Value::U64(x) => (*x).try_into().expect_tc(span),
+                        Value::U128(x) => (*x).try_into().expect_tc(span),
+                        Value::I8(x) => (*x).try_into().expect_tc(span),
+                        Value::I16(x) => (*x).try_into().expect_tc(span),
+                        Value::I32(x) => (*x).try_into().expect_tc(span),
+                        Value::I64(x) => (*x).try_into().expect_tc(span),
+                        Value::I128(x) => (*x).try_into().expect_tc(span),
+                        Value::Unsuffixed(_) => {
+                            let resolved =
+                                value.resolve_if_unsuffixed(&Some(Type::Integer(leo_ast::IntegerType::U32)), span)?;
+                            to_usize(&resolved, s, span, expr_span, index)
+                        }
+                        _ => halt!(*expr_span, "invalid {s} {index}"),
+                    }
+                }
+
+                let index_usize = to_usize(&index, "array index", span, &expression.span(), &index)?;
+
+                match array {
+                    Value::Repeat(expr, count) => {
+                        let count_usize = to_usize(&count, "repeat count", span, &expression.span(), &index)?;
+                        if index_usize < count_usize {
+                            Some(*expr)
+                        } else {
+                            halt!(span, "array index {index_usize} is out of bounds")
+                        }
+                    }
+                    Value::Array(vec_array) => Some(vec_array.get(index_usize).expect_tc(span)?.clone()),
+                    _ => {
+                        // Shouldn't have anything else here.
+                        tc_fail!()
+                    }
+                }
             }
+
+            Expression::Async(AsyncExpression { block, .. }) if step == 0 => {
+                // Keep track of the async block, but nothing else to do at this point
+                self.async_blocks.insert(block.id, block.clone());
+                None
+            }
+            Expression::Async(AsyncExpression { block, .. }) if step == 1 => {
+                // Keep track of this block as a `Future` containing an `AsyncExecution` but nothing else to do here.
+                // The block actually executes when an `await` is called on its future.
+                if let Some(context) = self.contexts.last() {
+                    let async_ex = AsyncExecution::AsyncBlock {
+                        containing_function: GlobalId { program: context.program, name: context.name },
+                        block: block.id,
+                        names: context.names.clone().into_iter().collect(),
+                    };
+                    self.values.push(Value::Future(Future(vec![async_ex])));
+                }
+                None
+            }
+            Expression::Async(_) if step == 2 => Some(self.pop_value()?),
+
             Expression::MemberAccess(access) => match &access.inner {
                 Expression::Identifier(identifier) if identifier.name == sym::SelfLower => match access.name.name {
                     sym::signer => Some(Value::Address(self.signer)),
@@ -700,7 +788,7 @@ impl Cursor {
 
                 // Otherwise, we just have a normal struct member access.
                 _ if step == 0 => {
-                    push!()(&access.inner);
+                    push!()(&access.inner, &None);
                     None
                 }
                 _ if step == 1 => {
@@ -716,7 +804,7 @@ impl Cursor {
                 _ => unreachable!("we've actually covered all possible patterns above"),
             },
             Expression::TupleAccess(tuple_access) if step == 0 => {
-                push!()(&tuple_access.tuple);
+                push!()(&tuple_access.tuple, &None);
                 None
             }
             Expression::TupleAccess(tuple_access) if step == 1 => {
@@ -731,13 +819,33 @@ impl Cursor {
                 }
             }
             Expression::Array(array) if step == 0 => {
-                array.elements.iter().rev().for_each(push!());
+                let element_type = expected_ty.clone().and_then(|ty| match ty {
+                    Type::Array(ArrayType { element_type, .. }) => Some(*element_type),
+                    _ => None,
+                });
+
+                array.elements.iter().rev().for_each(|array| push!()(array, &element_type));
                 None
             }
             Expression::Array(array) if step == 1 => {
                 let len = self.values.len();
                 let array_values = self.values.drain(len - array.elements.len()..).collect();
                 Some(Value::Array(array_values))
+            }
+            Expression::Repeat(repeat) if step == 0 => {
+                let element_type = expected_ty.clone().and_then(|ty| match ty {
+                    Type::Array(ArrayType { element_type, .. }) => Some(*element_type),
+                    _ => None,
+                });
+
+                push!()(&repeat.count, &None);
+                push!()(&repeat.expr, &element_type);
+                None
+            }
+            Expression::Repeat(_) if step == 1 => {
+                let count = self.pop_value()?;
+                let expr = self.pop_value()?;
+                Some(Value::Repeat(Box::new(expr), Box::new(count)))
             }
             Expression::AssociatedConstant(constant) if step == 0 => {
                 let Type::Identifier(type_ident) = constant.ty else {
@@ -759,16 +867,16 @@ impl Cursor {
                 // because we don't look them up as Values.
                 match core_function {
                     CoreFunction::MappingGet | CoreFunction::MappingRemove | CoreFunction::MappingContains => {
-                        push!()(&function.arguments[1]);
+                        push!()(&function.arguments[1], &None);
                     }
                     CoreFunction::MappingGetOrUse | CoreFunction::MappingSet => {
-                        push!()(&function.arguments[2]);
-                        push!()(&function.arguments[1]);
+                        push!()(&function.arguments[2], &None);
+                        push!()(&function.arguments[1], &None);
                     }
                     CoreFunction::CheatCodePrintMapping => {
                         // Do nothing, as we don't need to evaluate the mapping.
                     }
-                    _ => function.arguments.iter().rev().for_each(push!()),
+                    _ => function.arguments.iter().rev().for_each(|arg| push!()(arg, &None)),
                 }
                 None
             }
@@ -785,17 +893,34 @@ impl Cursor {
                         halt!(span, "Invalid value for await: {value}");
                     };
                     for async_execution in future.0 {
-                        self.values.extend(async_execution.arguments.into_iter());
-                        self.frames.push(Frame {
-                            step: 0,
-                            element: Element::DelayedCall(async_execution.function),
-                            user_initiated: false,
-                        });
+                        match async_execution {
+                            AsyncExecution::AsyncFunctionCall { function, arguments } => {
+                                self.values.extend(arguments.into_iter());
+                                self.frames.push(Frame {
+                                    step: 0,
+                                    element: Element::DelayedCall(function),
+                                    user_initiated: false,
+                                });
+                            }
+                            AsyncExecution::AsyncBlock { containing_function, block, names, .. } => {
+                                self.frames.push(Frame {
+                                    step: 0,
+                                    element: Element::DelayedAsyncBlock {
+                                        program: containing_function.program,
+                                        block,
+                                        // Keep track of all the known variables up to this point.
+                                        // These are available to use inside the block when we actually execute it.
+                                        names: names.clone().into_iter().collect(),
+                                    },
+                                    user_initiated: false,
+                                });
+                            }
+                        }
                     }
                     // For an await, we have one extra step - first we must evaluate the delayed call.
                     None
                 } else {
-                    let value = crate::evaluate_core_function(self, core_function.clone(), &function.arguments, span)?;
+                    let value = evaluate_core_function(self, core_function.clone(), &function.arguments, span)?;
                     assert!(value.is_some());
                     value
                 }
@@ -808,36 +933,110 @@ impl Cursor {
                 Some(Value::Unit)
             }
             Expression::Binary(binary) if step == 0 => {
-                push!()(&binary.right);
-                push!()(&binary.left);
+                use BinaryOperation::*;
+
+                // Determine the expected types for the right and left operands based on the operation
+                let (right_ty, left_ty) = match binary.op {
+                    // Multiplications that return a `Group` can take `Scalar * Group` or `Group * Scalar`.
+                    // No way to know at this stage.
+                    Mul if matches!(expected_ty, Some(Type::Group)) => (None, None),
+
+                    // Boolean operations don't require expected type propagation
+                    And | Or | Nand | Nor | Eq | Neq | Lt | Gt | Lte | Gte => (None, None),
+
+                    // Exponentiation (Pow) may require specific typing if expected to be a Field
+                    Pow => {
+                        let right_ty = if matches!(expected_ty, Some(Type::Field)) {
+                            Some(Type::Field) // Enforce Field type on exponent if expected
+                        } else {
+                            None // Otherwise, don't constrain the exponent
+                        };
+                        (right_ty, expected_ty.clone()) // Pass the expected type to the base
+                    }
+
+                    // Bitwise shifts and wrapped exponentiation:
+                    // Typically only the left operand should conform to the expected type
+                    Shl | ShlWrapped | Shr | ShrWrapped | PowWrapped => (None, expected_ty.clone()),
+
+                    // Default case: propagate expected type to both operands
+                    _ => (expected_ty.clone(), expected_ty.clone()),
+                };
+
+                // Push operands onto the stack for evaluation in right-to-left order
+                push!()(&binary.right, &right_ty);
+                push!()(&binary.left, &left_ty);
+
                 None
             }
             Expression::Binary(binary) if step == 1 => {
                 let rhs = self.pop_value()?;
                 let lhs = self.pop_value()?;
-                Some(evaluate_binary(binary.span, binary.op, &lhs, &rhs)?)
+                Some(evaluate_binary(binary.span, binary.op, &lhs, &rhs, expected_ty)?)
             }
+
             Expression::Call(call) if step == 0 => {
-                call.arguments.iter().rev().for_each(push!());
+                // Resolve the function's program and name
+                let (function_program, function_name) = {
+                    let maybe_program = call.program.or_else(|| self.current_program());
+                    if let Some(program) = maybe_program {
+                        (program, call.function.name)
+                    } else {
+                        halt!(call.span, "No current program");
+                    }
+                };
+
+                // Look up the function variant (Leo, AleoClosure, or AleoFunction)
+                let Some(function_variant) = self.lookup_function(function_program, function_name) else {
+                    halt!(call.span, "unknown function {function_program}.aleo/{function_name}");
+                };
+
+                // Extract const parameter and input types based on the function variant
+                let (const_param_types, input_types) = match function_variant {
+                    FunctionVariant::Leo(function) => (
+                        function.const_parameters.iter().map(|p| p.type_.clone()).collect::<Vec<_>>(),
+                        function.input.iter().map(|p| p.type_.clone()).collect::<Vec<_>>(),
+                    ),
+                    FunctionVariant::AleoClosure(closure) => {
+                        let function = leo_ast::FunctionStub::from_closure(&closure, function_program);
+                        (vec![], function.input.iter().map(|p| p.type_.clone()).collect::<Vec<_>>())
+                    }
+                    FunctionVariant::AleoFunction(svm_function) => {
+                        let function = leo_ast::FunctionStub::from_function_core(&svm_function, function_program);
+                        (vec![], function.input.iter().map(|p| p.type_.clone()).collect::<Vec<_>>())
+                    }
+                };
+
+                // Push arguments (in reverse order) with corresponding input types
+                call.arguments
+                    .iter()
+                    .rev()
+                    .zip(input_types.iter().rev())
+                    .for_each(|(arg, ty)| push!()(arg, &Some(ty.clone())));
+
+                // Push const arguments (in reverse order) with corresponding const param types
+                call.const_arguments
+                    .iter()
+                    .rev()
+                    .zip(const_param_types.iter().rev())
+                    .for_each(|(arg, ty)| push!()(arg, &Some(ty.clone())));
+
                 None
             }
+
             Expression::Call(call) if step == 1 => {
                 let len = self.values.len();
-                let (program, name) = match &call.function {
-                    Expression::Identifier(id) => {
-                        let maybe_program = call.program.or_else(|| self.current_program());
-                        if let Some(program) = maybe_program {
-                            (program, id.name)
-                        } else {
-                            halt!(call.span, "No current program");
-                        }
+                let (program, name) = {
+                    let maybe_program = call.program.or_else(|| self.current_program());
+                    if let Some(program) = maybe_program {
+                        (program, call.function.name)
+                    } else {
+                        halt!(call.span, "No current program");
                     }
-                    Expression::Locator(locator) => (locator.program.name.name, locator.name),
-                    _ => tc_fail!(),
                 };
                 // It's a bit cheesy to collect the arguments into a Vec first, but it's the easiest way
                 // to handle lifetimes here.
-                let arguments: Vec<Value> = self.values.drain(len - call.arguments.len()..).collect();
+                let arguments: Vec<Value> =
+                    self.values.drain(len - call.arguments.len() - call.const_arguments.len()..).collect();
                 self.do_call(
                     program,
                     name,
@@ -849,7 +1048,7 @@ impl Cursor {
             }
             Expression::Call(_call) if step == 2 => Some(self.pop_value()?),
             Expression::Cast(cast) if step == 0 => {
-                push!()(&cast.expression);
+                push!()(&cast.expression, &None);
                 None
             }
             Expression::Cast(cast) if step == 1 => {
@@ -864,10 +1063,16 @@ impl Cursor {
             Expression::Identifier(identifier) if step == 0 => {
                 Some(self.lookup(identifier.name).expect_tc(identifier.span())?)
             }
-            Expression::Literal(literal) if step == 0 => Some(literal_to_value(literal)?),
+            Expression::Literal(literal) if step == 0 => Some(literal_to_value(literal, expected_ty)?),
             Expression::Locator(_locator) => todo!(),
             Expression::Struct(struct_) if step == 0 => {
-                struct_.members.iter().flat_map(|init| init.expression.as_ref()).for_each(push!());
+                let members = self.structs.get(&struct_.name.name).expect_tc(struct_.span())?;
+                for StructVariableInitializer { identifier: field_init_name, expression: init, .. } in &struct_.members
+                {
+                    let Some(type_) = members.get(&field_init_name.name) else { tc_fail!() };
+                    push!()(init.as_ref().unwrap_or(&Expression::Identifier(*field_init_name)), &Some(type_.clone()))
+                }
+
                 None
             }
             Expression::Struct(struct_) if step == 1 => {
@@ -884,32 +1089,32 @@ impl Cursor {
                 }
 
                 // And now put them into an IndexMap in the correct order.
-                let program = self.current_program().expect("there should be a current program");
-                let id = GlobalId { program, name: struct_.name.name };
-                let struct_type = self.structs.get(&id).expect_tc(struct_.span())?;
-                let contents = struct_type
+                let members = self.structs.get(&struct_.name.name).expect_tc(struct_.span())?;
+                let contents = members
                     .iter()
-                    .map(|sym| (*sym, contents_tmp.remove(sym).expect("we just inserted this")))
+                    .map(|(identifier, _)| {
+                        (*identifier, contents_tmp.remove(identifier).expect("we just inserted this"))
+                    })
                     .collect();
 
                 Some(Value::Struct(StructContents { name: struct_.name.name, contents }))
             }
             Expression::Ternary(ternary) if step == 0 => {
-                push!()(&ternary.condition);
+                push!()(&ternary.condition, &None);
                 None
             }
             Expression::Ternary(ternary) if step == 1 => {
                 let condition = self.pop_value()?;
                 match condition {
-                    Value::Bool(true) => push!()(&ternary.if_true),
-                    Value::Bool(false) => push!()(&ternary.if_false),
+                    Value::Bool(true) => push!()(&ternary.if_true, &None),
+                    Value::Bool(false) => push!()(&ternary.if_false, &None),
                     _ => halt!(ternary.span(), "Invalid type for ternary expression {ternary}"),
                 }
                 None
             }
             Expression::Ternary(_) if step == 2 => Some(self.pop_value()?),
             Expression::Tuple(tuple) if step == 0 => {
-                tuple.elements.iter().rev().for_each(push!());
+                tuple.elements.iter().rev().for_each(|t| push!()(t, &None));
                 None
             }
             Expression::Tuple(tuple) if step == 1 => {
@@ -918,12 +1123,23 @@ impl Cursor {
                 Some(Value::Tuple(tuple_values))
             }
             Expression::Unary(unary) if step == 0 => {
-                push!()(&unary.receiver);
+                use UnaryOperation::*;
+
+                // Determine the expected type based on the unary operation
+                let ty = match unary.op {
+                    Inverse | Square | SquareRoot => Some(Type::Field), // These ops require Field operands
+                    ToXCoordinate | ToYCoordinate => Some(Type::Group), // These ops apply to Group elements
+                    _ => expected_ty.clone(),                           // Fallback to the externally expected type
+                };
+
+                // Push the receiver expression with the computed type
+                push!()(&unary.receiver, &ty);
+
                 None
             }
             Expression::Unary(unary) if step == 1 => {
                 let value = self.pop_value()?;
-                Some(evaluate_unary(unary.span, unary.op, &value)?)
+                Some(evaluate_unary(unary.span, unary.op, &value, expected_ty)?)
             }
             Expression::Unit(_) if step == 0 => Some(Value::Unit),
             x => unreachable!("Unexpected expression {x}"),
@@ -960,8 +1176,8 @@ impl Cursor {
                 let finished = self.step_statement(&statement, step)?;
                 Ok(StepResult { finished, value: None })
             }
-            Element::Expression(expression) => {
-                let finished = self.step_expression(&expression, step)?;
+            Element::Expression(expression, expected_ty) => {
+                let finished = self.step_expression(&expression, &expected_ty, step)?;
                 let value = match (finished, user_initiated) {
                     (false, _) => None,
                     (true, false) => self.values.last().cloned(),
@@ -987,9 +1203,11 @@ impl Cursor {
                         let len = self.values.len();
                         let values: Vec<Value> = self.values.drain(len - function.input.len()..).collect();
                         self.contexts.push(
+                            gid.name,
                             gid.program,
                             self.signer,
                             true, // is_async
+                            HashMap::new(),
                         );
                         let param_names = function.input.iter().map(|input| input.identifier.name);
                         for (name, value) in param_names.zip(values) {
@@ -1010,9 +1228,11 @@ impl Cursor {
                         let len = self.values.len();
                         let values_iter = self.values.drain(len - finalize_f.inputs().len()..);
                         self.contexts.push(
+                            gid.name,
                             gid.program,
                             self.signer,
                             true, // is_async
+                            HashMap::new(),
                         );
                         self.frames.last_mut().unwrap().step = 1;
                         self.frames.push(Frame {
@@ -1030,6 +1250,31 @@ impl Cursor {
                 }
             }
             Element::DelayedCall(_gid) => {
+                assert_eq!(step, 1);
+                let value = self.values.pop();
+                self.frames.pop();
+                Ok(StepResult { finished: true, value })
+            }
+            Element::DelayedAsyncBlock { program, block, names } if step == 0 => {
+                self.contexts.push(
+                    Symbol::intern(""),
+                    program,
+                    self.signer,
+                    true,
+                    names.clone().into_iter().collect(), // Set the known names to the previously preserved `names`.
+                );
+                self.frames.last_mut().unwrap().step = 1;
+                self.frames.push(Frame {
+                    step: 0,
+                    element: Element::Block {
+                        block: self.async_blocks.get(&block).unwrap().clone(),
+                        function_body: true,
+                    },
+                    user_initiated: false,
+                });
+                Ok(StepResult { finished: false, value: None })
+            }
+            Element::DelayedAsyncBlock { .. } => {
                 assert_eq!(step, 1);
                 let value = self.values.pop();
                 self.frames.pop();
@@ -1058,15 +1303,20 @@ impl Cursor {
                 };
                 if self.really_async && function.variant == Variant::AsyncFunction {
                     // Don't actually run the call now.
-                    let async_ex = AsyncExecution {
+                    let async_ex = AsyncExecution::AsyncFunctionCall {
                         function: GlobalId { name: function_name, program: function_program },
                         arguments: arguments.collect(),
                     };
                     self.values.push(Value::Future(Future(vec![async_ex])));
                 } else {
                     let is_async = function.variant == Variant::AsyncFunction;
-                    self.contexts.push(function_program, caller, is_async);
-                    let param_names = function.input.iter().map(|input| input.identifier.name);
+                    self.contexts.push(function_name, function_program, caller, is_async, HashMap::new());
+                    // Treat const generic parameters as regular inputs
+                    let param_names = function
+                        .const_parameters
+                        .iter()
+                        .map(|param| param.identifier.name)
+                        .chain(function.input.iter().map(|input| input.identifier.name));
                     for (name, value) in param_names.zip(arguments) {
                         self.set_variable(name, value);
                     }
@@ -1078,7 +1328,7 @@ impl Cursor {
                 }
             }
             FunctionVariant::AleoClosure(closure) => {
-                self.contexts.push(function_program, self.signer, false);
+                self.contexts.push(function_name, function_program, self.signer, false, HashMap::new());
                 let context = AleoContext::Closure(closure);
                 self.frames.push(Frame {
                     step: 0,
@@ -1092,7 +1342,7 @@ impl Cursor {
             }
             FunctionVariant::AleoFunction(function) => {
                 let caller = self.new_caller();
-                self.contexts.push(function_program, caller, false);
+                self.contexts.push(function_name, function_program, caller, false, HashMap::new());
                 let context = if finalize {
                     let Some(finalize_f) = function.finalize_logic() else {
                         panic!("finalize call with no finalize logic");
@@ -1124,625 +1374,4 @@ pub struct StepResult {
 
     /// If the element was an expression, here's its value.
     pub value: Option<Value>,
-}
-
-/// Evaluate a binary operation.
-pub fn evaluate_binary(span: Span, op: BinaryOperation, lhs: &Value, rhs: &Value) -> Result<Value> {
-    let value = match op {
-        BinaryOperation::Add => {
-            let Some(value) = (match (lhs, rhs) {
-                (Value::U8(x), Value::U8(y)) => x.checked_add(*y).map(Value::U8),
-                (Value::U16(x), Value::U16(y)) => x.checked_add(*y).map(Value::U16),
-                (Value::U32(x), Value::U32(y)) => x.checked_add(*y).map(Value::U32),
-                (Value::U64(x), Value::U64(y)) => x.checked_add(*y).map(Value::U64),
-                (Value::U128(x), Value::U128(y)) => x.checked_add(*y).map(Value::U128),
-                (Value::I8(x), Value::I8(y)) => x.checked_add(*y).map(Value::I8),
-                (Value::I16(x), Value::I16(y)) => x.checked_add(*y).map(Value::I16),
-                (Value::I32(x), Value::I32(y)) => x.checked_add(*y).map(Value::I32),
-                (Value::I64(x), Value::I64(y)) => x.checked_add(*y).map(Value::I64),
-                (Value::I128(x), Value::I128(y)) => x.checked_add(*y).map(Value::I128),
-                (Value::Group(x), Value::Group(y)) => Some(Value::Group(*x + *y)),
-                (Value::Field(x), Value::Field(y)) => Some(Value::Field(*x + *y)),
-                (Value::Scalar(x), Value::Scalar(y)) => Some(Value::Scalar(*x + *y)),
-                _ => halt!(span, "Type error"),
-            }) else {
-                halt!(span, "add overflow");
-            };
-            value
-        }
-        BinaryOperation::AddWrapped => match (lhs, rhs) {
-            (Value::U8(x), Value::U8(y)) => Value::U8(x.wrapping_add(*y)),
-            (Value::U16(x), Value::U16(y)) => Value::U16(x.wrapping_add(*y)),
-            (Value::U32(x), Value::U32(y)) => Value::U32(x.wrapping_add(*y)),
-            (Value::U64(x), Value::U64(y)) => Value::U64(x.wrapping_add(*y)),
-            (Value::U128(x), Value::U128(y)) => Value::U128(x.wrapping_add(*y)),
-            (Value::I8(x), Value::I8(y)) => Value::I8(x.wrapping_add(*y)),
-            (Value::I16(x), Value::I16(y)) => Value::I16(x.wrapping_add(*y)),
-            (Value::I32(x), Value::I32(y)) => Value::I32(x.wrapping_add(*y)),
-            (Value::I64(x), Value::I64(y)) => Value::I64(x.wrapping_add(*y)),
-            (Value::I128(x), Value::I128(y)) => Value::I128(x.wrapping_add(*y)),
-            _ => halt!(span, "Type error"),
-        },
-        BinaryOperation::And => match (lhs, rhs) {
-            (Value::Bool(x), Value::Bool(y)) => Value::Bool(*x && *y),
-            _ => halt!(span, "Type error"),
-        },
-        BinaryOperation::BitwiseAnd => match (lhs, rhs) {
-            (Value::Bool(x), Value::Bool(y)) => Value::Bool(x & y),
-            (Value::U8(x), Value::U8(y)) => Value::U8(x & y),
-            (Value::U16(x), Value::U16(y)) => Value::U16(x & y),
-            (Value::U32(x), Value::U32(y)) => Value::U32(x & y),
-            (Value::U64(x), Value::U64(y)) => Value::U64(x & y),
-            (Value::U128(x), Value::U128(y)) => Value::U128(x & y),
-            (Value::I8(x), Value::I8(y)) => Value::I8(x & y),
-            (Value::I16(x), Value::I16(y)) => Value::I16(x & y),
-            (Value::I32(x), Value::I32(y)) => Value::I32(x & y),
-            (Value::I64(x), Value::I64(y)) => Value::I64(x & y),
-            (Value::I128(x), Value::I128(y)) => Value::I128(x & y),
-            _ => halt!(span, "Type error"),
-        },
-        BinaryOperation::Div => {
-            let Some(value) = (match (lhs, rhs) {
-                (Value::U8(x), Value::U8(y)) => x.checked_div(*y).map(Value::U8),
-                (Value::U16(x), Value::U16(y)) => x.checked_div(*y).map(Value::U16),
-                (Value::U32(x), Value::U32(y)) => x.checked_div(*y).map(Value::U32),
-                (Value::U64(x), Value::U64(y)) => x.checked_div(*y).map(Value::U64),
-                (Value::U128(x), Value::U128(y)) => x.checked_div(*y).map(Value::U128),
-                (Value::I8(x), Value::I8(y)) => x.checked_div(*y).map(Value::I8),
-                (Value::I16(x), Value::I16(y)) => x.checked_div(*y).map(Value::I16),
-                (Value::I32(x), Value::I32(y)) => x.checked_div(*y).map(Value::I32),
-                (Value::I64(x), Value::I64(y)) => x.checked_div(*y).map(Value::I64),
-                (Value::I128(x), Value::I128(y)) => x.checked_div(*y).map(Value::I128),
-                (Value::Field(x), Value::Field(y)) => y.inverse().map(|y| Value::Field(*x * y)).ok(),
-                _ => halt!(span, "Type error"),
-            }) else {
-                halt!(span, "div overflow");
-            };
-            value
-        }
-        BinaryOperation::DivWrapped => match (lhs, rhs) {
-            (Value::U8(_), Value::U8(0))
-            | (Value::U16(_), Value::U16(0))
-            | (Value::U32(_), Value::U32(0))
-            | (Value::U64(_), Value::U64(0))
-            | (Value::U128(_), Value::U128(0))
-            | (Value::I8(_), Value::I8(0))
-            | (Value::I16(_), Value::I16(0))
-            | (Value::I32(_), Value::I32(0))
-            | (Value::I64(_), Value::I64(0))
-            | (Value::I128(_), Value::I128(0)) => halt!(span, "divide by 0"),
-            (Value::U8(x), Value::U8(y)) => Value::U8(x.wrapping_div(*y)),
-            (Value::U16(x), Value::U16(y)) => Value::U16(x.wrapping_div(*y)),
-            (Value::U32(x), Value::U32(y)) => Value::U32(x.wrapping_div(*y)),
-            (Value::U64(x), Value::U64(y)) => Value::U64(x.wrapping_div(*y)),
-            (Value::U128(x), Value::U128(y)) => Value::U128(x.wrapping_div(*y)),
-            (Value::I8(x), Value::I8(y)) => Value::I8(x.wrapping_div(*y)),
-            (Value::I16(x), Value::I16(y)) => Value::I16(x.wrapping_div(*y)),
-            (Value::I32(x), Value::I32(y)) => Value::I32(x.wrapping_div(*y)),
-            (Value::I64(x), Value::I64(y)) => Value::I64(x.wrapping_div(*y)),
-            (Value::I128(x), Value::I128(y)) => Value::I128(x.wrapping_div(*y)),
-            _ => halt!(span, "Type error"),
-        },
-        BinaryOperation::Eq => Value::Bool(lhs.eq(rhs)?),
-        BinaryOperation::Gte => Value::Bool(lhs.gte(rhs)?),
-        BinaryOperation::Gt => Value::Bool(lhs.gt(rhs)?),
-        BinaryOperation::Lte => Value::Bool(lhs.lte(rhs)?),
-        BinaryOperation::Lt => Value::Bool(lhs.lt(rhs)?),
-        BinaryOperation::Mod => {
-            let Some(value) = (match (lhs, rhs) {
-                (Value::U8(x), Value::U8(y)) => x.checked_rem(*y).map(Value::U8),
-                (Value::U16(x), Value::U16(y)) => x.checked_rem(*y).map(Value::U16),
-                (Value::U32(x), Value::U32(y)) => x.checked_rem(*y).map(Value::U32),
-                (Value::U64(x), Value::U64(y)) => x.checked_rem(*y).map(Value::U64),
-                (Value::U128(x), Value::U128(y)) => x.checked_rem(*y).map(Value::U128),
-                (Value::I8(x), Value::I8(y)) => x.checked_rem(*y).map(Value::I8),
-                (Value::I16(x), Value::I16(y)) => x.checked_rem(*y).map(Value::I16),
-                (Value::I32(x), Value::I32(y)) => x.checked_rem(*y).map(Value::I32),
-                (Value::I64(x), Value::I64(y)) => x.checked_rem(*y).map(Value::I64),
-                (Value::I128(x), Value::I128(y)) => x.checked_rem(*y).map(Value::I128),
-                _ => halt!(span, "Type error"),
-            }) else {
-                halt!(span, "mod overflow");
-            };
-            value
-        }
-        BinaryOperation::Mul => {
-            let Some(value) = (match (lhs, rhs) {
-                (Value::U8(x), Value::U8(y)) => x.checked_mul(*y).map(Value::U8),
-                (Value::U16(x), Value::U16(y)) => x.checked_mul(*y).map(Value::U16),
-                (Value::U32(x), Value::U32(y)) => x.checked_mul(*y).map(Value::U32),
-                (Value::U64(x), Value::U64(y)) => x.checked_mul(*y).map(Value::U64),
-                (Value::U128(x), Value::U128(y)) => x.checked_mul(*y).map(Value::U128),
-                (Value::I8(x), Value::I8(y)) => x.checked_mul(*y).map(Value::I8),
-                (Value::I16(x), Value::I16(y)) => x.checked_mul(*y).map(Value::I16),
-                (Value::I32(x), Value::I32(y)) => x.checked_mul(*y).map(Value::I32),
-                (Value::I64(x), Value::I64(y)) => x.checked_mul(*y).map(Value::I64),
-                (Value::I128(x), Value::I128(y)) => x.checked_mul(*y).map(Value::I128),
-                (Value::Field(x), Value::Field(y)) => Some(Value::Field(*x * *y)),
-                (Value::Group(x), Value::Scalar(y)) => Some(Value::Group(*x * *y)),
-                (Value::Scalar(x), Value::Group(y)) => Some(Value::Group(*x * *y)),
-                _ => halt!(span, "Type error"),
-            }) else {
-                halt!(span, "mul overflow");
-            };
-            value
-        }
-        BinaryOperation::MulWrapped => match (lhs, rhs) {
-            (Value::U8(x), Value::U8(y)) => Value::U8(x.wrapping_mul(*y)),
-            (Value::U16(x), Value::U16(y)) => Value::U16(x.wrapping_mul(*y)),
-            (Value::U32(x), Value::U32(y)) => Value::U32(x.wrapping_mul(*y)),
-            (Value::U64(x), Value::U64(y)) => Value::U64(x.wrapping_mul(*y)),
-            (Value::U128(x), Value::U128(y)) => Value::U128(x.wrapping_mul(*y)),
-            (Value::I8(x), Value::I8(y)) => Value::I8(x.wrapping_mul(*y)),
-            (Value::I16(x), Value::I16(y)) => Value::I16(x.wrapping_mul(*y)),
-            (Value::I32(x), Value::I32(y)) => Value::I32(x.wrapping_mul(*y)),
-            (Value::I64(x), Value::I64(y)) => Value::I64(x.wrapping_mul(*y)),
-            (Value::I128(x), Value::I128(y)) => Value::I128(x.wrapping_mul(*y)),
-            _ => halt!(span, "Type error"),
-        },
-
-        BinaryOperation::Nand => match (lhs, rhs) {
-            (Value::Bool(x), Value::Bool(y)) => Value::Bool(!(x & y)),
-            _ => halt!(span, "Type error"),
-        },
-        BinaryOperation::Neq => Value::Bool(lhs.neq(rhs)?),
-        BinaryOperation::Nor => match (lhs, rhs) {
-            (Value::Bool(x), Value::Bool(y)) => Value::Bool(!(x | y)),
-            _ => halt!(span, "Type error"),
-        },
-        BinaryOperation::Or => match (lhs, rhs) {
-            (Value::Bool(x), Value::Bool(y)) => Value::Bool(x | y),
-            _ => halt!(span, "Type error"),
-        },
-        BinaryOperation::BitwiseOr => match (lhs, rhs) {
-            (Value::Bool(x), Value::Bool(y)) => Value::Bool(x | y),
-            (Value::U8(x), Value::U8(y)) => Value::U8(x | y),
-            (Value::U16(x), Value::U16(y)) => Value::U16(x | y),
-            (Value::U32(x), Value::U32(y)) => Value::U32(x | y),
-            (Value::U64(x), Value::U64(y)) => Value::U64(x | y),
-            (Value::U128(x), Value::U128(y)) => Value::U128(x | y),
-            (Value::I8(x), Value::I8(y)) => Value::I8(x | y),
-            (Value::I16(x), Value::I16(y)) => Value::I16(x | y),
-            (Value::I32(x), Value::I32(y)) => Value::I32(x | y),
-            (Value::I64(x), Value::I64(y)) => Value::I64(x | y),
-            (Value::I128(x), Value::I128(y)) => Value::I128(x | y),
-            _ => halt!(span, "Type error"),
-        },
-        BinaryOperation::Pow => {
-            if let (Value::Field(x), Value::Field(y)) = (&lhs, &rhs) {
-                Value::Field(x.pow(y))
-            } else {
-                let rhs: u32 = match rhs {
-                    Value::U8(y) => (*y).into(),
-                    Value::U16(y) => (*y).into(),
-                    Value::U32(y) => *y,
-                    _ => tc_fail!(),
-                };
-
-                let Some(value) = (match lhs {
-                    Value::U8(x) => x.checked_pow(rhs).map(Value::U8),
-                    Value::U16(x) => x.checked_pow(rhs).map(Value::U16),
-                    Value::U32(x) => x.checked_pow(rhs).map(Value::U32),
-                    Value::U64(x) => x.checked_pow(rhs).map(Value::U64),
-                    Value::U128(x) => x.checked_pow(rhs).map(Value::U128),
-                    Value::I8(x) => x.checked_pow(rhs).map(Value::I8),
-                    Value::I16(x) => x.checked_pow(rhs).map(Value::I16),
-                    Value::I32(x) => x.checked_pow(rhs).map(Value::I32),
-                    Value::I64(x) => x.checked_pow(rhs).map(Value::I64),
-                    Value::I128(x) => x.checked_pow(rhs).map(Value::I128),
-                    _ => halt!(span, "Type error"),
-                }) else {
-                    halt!(span, "pow overflow");
-                };
-                value
-            }
-        }
-        BinaryOperation::PowWrapped => {
-            let rhs: u32 = match rhs {
-                Value::U8(y) => (*y).into(),
-                Value::U16(y) => (*y).into(),
-                Value::U32(y) => *y,
-                _ => halt!(span, "Type error"),
-            };
-
-            match lhs {
-                Value::U8(x) => Value::U8(x.wrapping_pow(rhs)),
-                Value::U16(x) => Value::U16(x.wrapping_pow(rhs)),
-                Value::U32(x) => Value::U32(x.wrapping_pow(rhs)),
-                Value::U64(x) => Value::U64(x.wrapping_pow(rhs)),
-                Value::U128(x) => Value::U128(x.wrapping_pow(rhs)),
-                Value::I8(x) => Value::I8(x.wrapping_pow(rhs)),
-                Value::I16(x) => Value::I16(x.wrapping_pow(rhs)),
-                Value::I32(x) => Value::I32(x.wrapping_pow(rhs)),
-                Value::I64(x) => Value::I64(x.wrapping_pow(rhs)),
-                Value::I128(x) => Value::I128(x.wrapping_pow(rhs)),
-                _ => halt!(span, "Type error"),
-            }
-        }
-        BinaryOperation::Rem => {
-            let Some(value) = (match (lhs, rhs) {
-                (Value::U8(x), Value::U8(y)) => x.checked_rem(*y).map(Value::U8),
-                (Value::U16(x), Value::U16(y)) => x.checked_rem(*y).map(Value::U16),
-                (Value::U32(x), Value::U32(y)) => x.checked_rem(*y).map(Value::U32),
-                (Value::U64(x), Value::U64(y)) => x.checked_rem(*y).map(Value::U64),
-                (Value::U128(x), Value::U128(y)) => x.checked_rem(*y).map(Value::U128),
-                (Value::I8(x), Value::I8(y)) => x.checked_rem(*y).map(Value::I8),
-                (Value::I16(x), Value::I16(y)) => x.checked_rem(*y).map(Value::I16),
-                (Value::I32(x), Value::I32(y)) => x.checked_rem(*y).map(Value::I32),
-                (Value::I64(x), Value::I64(y)) => x.checked_rem(*y).map(Value::I64),
-                (Value::I128(x), Value::I128(y)) => x.checked_rem(*y).map(Value::I128),
-                _ => halt!(span, "Type error"),
-            }) else {
-                halt!(span, "rem error");
-            };
-            value
-        }
-        BinaryOperation::RemWrapped => match (lhs, rhs) {
-            (Value::U8(_), Value::U8(0))
-            | (Value::U16(_), Value::U16(0))
-            | (Value::U32(_), Value::U32(0))
-            | (Value::U64(_), Value::U64(0))
-            | (Value::U128(_), Value::U128(0))
-            | (Value::I8(_), Value::I8(0))
-            | (Value::I16(_), Value::I16(0))
-            | (Value::I32(_), Value::I32(0))
-            | (Value::I64(_), Value::I64(0))
-            | (Value::I128(_), Value::I128(0)) => halt!(span, "rem by 0"),
-            (Value::U8(x), Value::U8(y)) => Value::U8(x.wrapping_rem(*y)),
-            (Value::U16(x), Value::U16(y)) => Value::U16(x.wrapping_rem(*y)),
-            (Value::U32(x), Value::U32(y)) => Value::U32(x.wrapping_rem(*y)),
-            (Value::U64(x), Value::U64(y)) => Value::U64(x.wrapping_rem(*y)),
-            (Value::U128(x), Value::U128(y)) => Value::U128(x.wrapping_rem(*y)),
-            (Value::I8(x), Value::I8(y)) => Value::I8(x.wrapping_rem(*y)),
-            (Value::I16(x), Value::I16(y)) => Value::I16(x.wrapping_rem(*y)),
-            (Value::I32(x), Value::I32(y)) => Value::I32(x.wrapping_rem(*y)),
-            (Value::I64(x), Value::I64(y)) => Value::I64(x.wrapping_rem(*y)),
-            (Value::I128(x), Value::I128(y)) => Value::I128(x.wrapping_rem(*y)),
-            _ => halt!(span, "Type error"),
-        },
-        BinaryOperation::Shl => {
-            let rhs: u32 = match rhs {
-                Value::U8(y) => (*y).into(),
-                Value::U16(y) => (*y).into(),
-                Value::U32(y) => *y,
-                _ => halt!(span, "Type error"),
-            };
-            match lhs {
-                Value::U8(_) | Value::I8(_) if rhs >= 8 => halt!(span, "shl overflow"),
-                Value::U16(_) | Value::I16(_) if rhs >= 16 => halt!(span, "shl overflow"),
-                Value::U32(_) | Value::I32(_) if rhs >= 32 => halt!(span, "shl overflow"),
-                Value::U64(_) | Value::I64(_) if rhs >= 64 => halt!(span, "shl overflow"),
-                Value::U128(_) | Value::I128(_) if rhs >= 128 => halt!(span, "shl overflow"),
-                _ => {}
-            }
-
-            // Aleo's shl halts if set bits are shifted out.
-            let shifted = lhs.simple_shl(rhs);
-            let reshifted = shifted.simple_shr(rhs);
-            if lhs.eq(&reshifted)? {
-                shifted
-            } else {
-                halt!(span, "shl overflow");
-            }
-        }
-
-        BinaryOperation::ShlWrapped => {
-            let rhs: u32 = match rhs {
-                Value::U8(y) => (*y).into(),
-                Value::U16(y) => (*y).into(),
-                Value::U32(y) => *y,
-                _ => halt!(span, "Type error"),
-            };
-            match lhs {
-                Value::U8(x) => Value::U8(x.wrapping_shl(rhs)),
-                Value::U16(x) => Value::U16(x.wrapping_shl(rhs)),
-                Value::U32(x) => Value::U32(x.wrapping_shl(rhs)),
-                Value::U64(x) => Value::U64(x.wrapping_shl(rhs)),
-                Value::U128(x) => Value::U128(x.wrapping_shl(rhs)),
-                Value::I8(x) => Value::I8(x.wrapping_shl(rhs)),
-                Value::I16(x) => Value::I16(x.wrapping_shl(rhs)),
-                Value::I32(x) => Value::I32(x.wrapping_shl(rhs)),
-                Value::I64(x) => Value::I64(x.wrapping_shl(rhs)),
-                Value::I128(x) => Value::I128(x.wrapping_shl(rhs)),
-                _ => halt!(span, "Type error"),
-            }
-        }
-
-        BinaryOperation::Shr => {
-            let rhs: u32 = match rhs {
-                Value::U8(y) => (*y).into(),
-                Value::U16(y) => (*y).into(),
-                Value::U32(y) => *y,
-                _ => halt!(span, "Type error"),
-            };
-
-            match lhs {
-                Value::U8(_) | Value::I8(_) if rhs >= 8 => halt!(span, "shr overflow"),
-                Value::U16(_) | Value::I16(_) if rhs >= 16 => halt!(span, "shr overflow"),
-                Value::U32(_) | Value::I32(_) if rhs >= 32 => halt!(span, "shr overflow"),
-                Value::U64(_) | Value::I64(_) if rhs >= 64 => halt!(span, "shr overflow"),
-                Value::U128(_) | Value::I128(_) if rhs >= 128 => halt!(span, "shr overflow"),
-                _ => {}
-            }
-
-            lhs.simple_shr(rhs)
-        }
-
-        BinaryOperation::ShrWrapped => {
-            let rhs: u32 = match rhs {
-                Value::U8(y) => (*y).into(),
-                Value::U16(y) => (*y).into(),
-                Value::U32(y) => *y,
-                _ => halt!(span, "Type error"),
-            };
-
-            match lhs {
-                Value::U8(x) => Value::U8(x.wrapping_shr(rhs)),
-                Value::U16(x) => Value::U16(x.wrapping_shr(rhs)),
-                Value::U32(x) => Value::U32(x.wrapping_shr(rhs)),
-                Value::U64(x) => Value::U64(x.wrapping_shr(rhs)),
-                Value::U128(x) => Value::U128(x.wrapping_shr(rhs)),
-                Value::I8(x) => Value::I8(x.wrapping_shr(rhs)),
-                Value::I16(x) => Value::I16(x.wrapping_shr(rhs)),
-                Value::I32(x) => Value::I32(x.wrapping_shr(rhs)),
-                Value::I64(x) => Value::I64(x.wrapping_shr(rhs)),
-                Value::I128(x) => Value::I128(x.wrapping_shr(rhs)),
-                _ => halt!(span, "Type error"),
-            }
-        }
-
-        BinaryOperation::Sub => {
-            let Some(value) = (match (lhs, rhs) {
-                (Value::U8(x), Value::U8(y)) => x.checked_sub(*y).map(Value::U8),
-                (Value::U16(x), Value::U16(y)) => x.checked_sub(*y).map(Value::U16),
-                (Value::U32(x), Value::U32(y)) => x.checked_sub(*y).map(Value::U32),
-                (Value::U64(x), Value::U64(y)) => x.checked_sub(*y).map(Value::U64),
-                (Value::U128(x), Value::U128(y)) => x.checked_sub(*y).map(Value::U128),
-                (Value::I8(x), Value::I8(y)) => x.checked_sub(*y).map(Value::I8),
-                (Value::I16(x), Value::I16(y)) => x.checked_sub(*y).map(Value::I16),
-                (Value::I32(x), Value::I32(y)) => x.checked_sub(*y).map(Value::I32),
-                (Value::I64(x), Value::I64(y)) => x.checked_sub(*y).map(Value::I64),
-                (Value::I128(x), Value::I128(y)) => x.checked_sub(*y).map(Value::I128),
-                (Value::Group(x), Value::Group(y)) => Some(Value::Group(*x - *y)),
-                (Value::Field(x), Value::Field(y)) => Some(Value::Field(*x - *y)),
-                _ => halt!(span, "Type error"),
-            }) else {
-                halt!(span, "sub overflow");
-            };
-            value
-        }
-
-        BinaryOperation::SubWrapped => match (lhs, rhs) {
-            (Value::U8(x), Value::U8(y)) => Value::U8(x.wrapping_sub(*y)),
-            (Value::U16(x), Value::U16(y)) => Value::U16(x.wrapping_sub(*y)),
-            (Value::U32(x), Value::U32(y)) => Value::U32(x.wrapping_sub(*y)),
-            (Value::U64(x), Value::U64(y)) => Value::U64(x.wrapping_sub(*y)),
-            (Value::U128(x), Value::U128(y)) => Value::U128(x.wrapping_sub(*y)),
-            (Value::I8(x), Value::I8(y)) => Value::I8(x.wrapping_sub(*y)),
-            (Value::I16(x), Value::I16(y)) => Value::I16(x.wrapping_sub(*y)),
-            (Value::I32(x), Value::I32(y)) => Value::I32(x.wrapping_sub(*y)),
-            (Value::I64(x), Value::I64(y)) => Value::I64(x.wrapping_sub(*y)),
-            (Value::I128(x), Value::I128(y)) => Value::I128(x.wrapping_sub(*y)),
-            _ => halt!(span, "Type error"),
-        },
-
-        BinaryOperation::Xor => match (lhs, rhs) {
-            (Value::Bool(x), Value::Bool(y)) => Value::Bool(*x ^ *y),
-            (Value::U8(x), Value::U8(y)) => Value::U8(*x ^ *y),
-            (Value::U16(x), Value::U16(y)) => Value::U16(*x ^ *y),
-            (Value::U32(x), Value::U32(y)) => Value::U32(*x ^ *y),
-            (Value::U64(x), Value::U64(y)) => Value::U64(*x ^ *y),
-            (Value::U128(x), Value::U128(y)) => Value::U128(*x ^ *y),
-            (Value::I8(x), Value::I8(y)) => Value::I8(*x ^ *y),
-            (Value::I16(x), Value::I16(y)) => Value::I16(*x ^ *y),
-            (Value::I32(x), Value::I32(y)) => Value::I32(*x ^ *y),
-            (Value::I64(x), Value::I64(y)) => Value::I64(*x ^ *y),
-            (Value::I128(x), Value::I128(y)) => Value::I128(*x ^ *y),
-            _ => halt!(span, "Type error"),
-        },
-    };
-    Ok(value)
-}
-
-/// Evaluate a unary operation.
-pub fn evaluate_unary(span: Span, op: UnaryOperation, value: &Value) -> Result<Value> {
-    let value_result = match op {
-        UnaryOperation::Abs => match value {
-            Value::I8(x) => {
-                if *x == i8::MIN {
-                    halt!(span, "abs overflow");
-                } else {
-                    Value::I8(x.abs())
-                }
-            }
-            Value::I16(x) => {
-                if *x == i16::MIN {
-                    halt!(span, "abs overflow");
-                } else {
-                    Value::I16(x.abs())
-                }
-            }
-            Value::I32(x) => {
-                if *x == i32::MIN {
-                    halt!(span, "abs overflow");
-                } else {
-                    Value::I32(x.abs())
-                }
-            }
-            Value::I64(x) => {
-                if *x == i64::MIN {
-                    halt!(span, "abs overflow");
-                } else {
-                    Value::I64(x.abs())
-                }
-            }
-            Value::I128(x) => {
-                if *x == i128::MIN {
-                    halt!(span, "abs overflow");
-                } else {
-                    Value::I128(x.abs())
-                }
-            }
-            _ => halt!(span, "Type error"),
-        },
-        UnaryOperation::AbsWrapped => match value {
-            Value::I8(x) => Value::I8(x.unsigned_abs() as i8),
-            Value::I16(x) => Value::I16(x.unsigned_abs() as i16),
-            Value::I32(x) => Value::I32(x.unsigned_abs() as i32),
-            Value::I64(x) => Value::I64(x.unsigned_abs() as i64),
-            Value::I128(x) => Value::I128(x.unsigned_abs() as i128),
-            _ => halt!(span, "Type error"),
-        },
-        UnaryOperation::Double => match value {
-            Value::Field(x) => Value::Field(x.double()),
-            Value::Group(x) => Value::Group(x.double()),
-            _ => halt!(span, "Type error"),
-        },
-        UnaryOperation::Inverse => match value {
-            Value::Field(x) => {
-                let Ok(y) = x.inverse() else {
-                    halt!(span, "attempt to invert 0field");
-                };
-                Value::Field(y)
-            }
-            _ => halt!(span, "Can only invert fields"),
-        },
-        UnaryOperation::Negate => match value {
-            Value::I8(x) => match x.checked_neg() {
-                None => halt!(span, "negation overflow"),
-                Some(y) => Value::I8(y),
-            },
-            Value::I16(x) => match x.checked_neg() {
-                None => halt!(span, "negation overflow"),
-                Some(y) => Value::I16(y),
-            },
-            Value::I32(x) => match x.checked_neg() {
-                None => halt!(span, "negation overflow"),
-                Some(y) => Value::I32(y),
-            },
-            Value::I64(x) => match x.checked_neg() {
-                None => halt!(span, "negation overflow"),
-                Some(y) => Value::I64(y),
-            },
-            Value::I128(x) => match x.checked_neg() {
-                None => halt!(span, "negation overflow"),
-                Some(y) => Value::I128(y),
-            },
-            Value::Group(x) => Value::Group(-*x),
-            Value::Field(x) => Value::Field(-*x),
-            _ => halt!(span, "Type error"),
-        },
-        UnaryOperation::Not => match value {
-            Value::Bool(x) => Value::Bool(!x),
-            Value::U8(x) => Value::U8(!x),
-            Value::U16(x) => Value::U16(!x),
-            Value::U32(x) => Value::U32(!x),
-            Value::U64(x) => Value::U64(!x),
-            Value::U128(x) => Value::U128(!x),
-            Value::I8(x) => Value::I8(!x),
-            Value::I16(x) => Value::I16(!x),
-            Value::I32(x) => Value::I32(!x),
-            Value::I64(x) => Value::I64(!x),
-            Value::I128(x) => Value::I128(!x),
-            _ => halt!(span, "Type error"),
-        },
-        UnaryOperation::Square => match value {
-            Value::Field(x) => Value::Field(x.square()),
-            _ => halt!(span, "Can only square fields"),
-        },
-        UnaryOperation::SquareRoot => match value {
-            Value::Field(x) => {
-                let Ok(y) = x.square_root() else {
-                    halt!(span, "square root failure");
-                };
-                Value::Field(y)
-            }
-            _ => halt!(span, "Can only apply square_root to fields"),
-        },
-        UnaryOperation::ToXCoordinate => match value {
-            Value::Group(x) => Value::Field(x.to_x_coordinate()),
-            _ => tc_fail!(),
-        },
-        UnaryOperation::ToYCoordinate => match value {
-            Value::Group(x) => Value::Field(x.to_y_coordinate()),
-            _ => tc_fail!(),
-        },
-    };
-
-    Ok(value_result)
-}
-
-pub fn literal_to_value(literal: &Literal) -> Result<Value> {
-    // SnarkVM will not parse fields, groups, or scalars with
-    // leading zeros, so we strip them out.
-    fn prepare_snarkvm_string(s: &str, suffix: &str) -> String {
-        // If there's a `-`, separate it from the rest of the string.
-        let (neg, rest) = s.strip_prefix("-").map(|rest| ("-", rest)).unwrap_or(("", s));
-        // Remove leading zeros.
-        let mut rest = rest.trim_start_matches('0');
-        if rest.is_empty() {
-            rest = "0";
-        }
-        format!("{neg}{rest}{suffix}")
-    }
-
-    let value = match &literal.variant {
-        LiteralVariant::Boolean(b) => Value::Bool(*b),
-        LiteralVariant::Integer(IntegerType::U8, s, ..) => {
-            let s = s.replace("_", "");
-            Value::U8(u8::from_str_by_radix(&s).expect("Parsing guarantees this works."))
-        }
-        LiteralVariant::Integer(IntegerType::U16, s, ..) => {
-            let s = s.replace("_", "");
-            Value::U16(u16::from_str_by_radix(&s).expect("Parsing guarantees this works."))
-        }
-        LiteralVariant::Integer(IntegerType::U32, s, ..) => {
-            let s = s.replace("_", "");
-            Value::U32(u32::from_str_by_radix(&s).expect("Parsing guarantees this works."))
-        }
-        LiteralVariant::Integer(IntegerType::U64, s, ..) => {
-            let s = s.replace("_", "");
-            Value::U64(u64::from_str_by_radix(&s).expect("Parsing guarantees this works."))
-        }
-        LiteralVariant::Integer(IntegerType::U128, s, ..) => {
-            let s = s.replace("_", "");
-            Value::U128(u128::from_str_by_radix(&s).expect("Parsing guarantees this works."))
-        }
-        LiteralVariant::Integer(IntegerType::I8, s, ..) => {
-            let s = s.replace("_", "");
-            Value::I8(i8::from_str_by_radix(&s).expect("Parsing guarantees this works."))
-        }
-        LiteralVariant::Integer(IntegerType::I16, s, ..) => {
-            let s = s.replace("_", "");
-            Value::I16(i16::from_str_by_radix(&s).expect("Parsing guarantees this works."))
-        }
-        LiteralVariant::Integer(IntegerType::I32, s, ..) => {
-            let s = s.replace("_", "");
-            Value::I32(i32::from_str_by_radix(&s).expect("Parsing guarantees this works."))
-        }
-        LiteralVariant::Integer(IntegerType::I64, s, ..) => {
-            let s = s.replace("_", "");
-            Value::I64(i64::from_str_by_radix(&s).expect("Parsing guarantees this works."))
-        }
-        LiteralVariant::Integer(IntegerType::I128, s, ..) => {
-            let s = s.replace("_", "");
-            Value::I128(i128::from_str_by_radix(&s).expect("Parsing guarantees this works."))
-        }
-        LiteralVariant::Field(s) => Value::Field(prepare_snarkvm_string(s, "field").parse().expect_tc(literal.span())?),
-        LiteralVariant::Group(s) => Value::Group(prepare_snarkvm_string(s, "group").parse().expect_tc(literal.span())?),
-        LiteralVariant::Address(s) => {
-            if s.ends_with(".aleo") {
-                let program_id = ProgramID::from_str(s)?;
-                Value::Address(program_id.to_address()?)
-            } else {
-                Value::Address(s.parse().expect_tc(literal.span())?)
-            }
-        }
-        LiteralVariant::Scalar(s) => {
-            Value::Scalar(prepare_snarkvm_string(s, "scalar").parse().expect_tc(literal.span())?)
-        }
-        LiteralVariant::String(..) => tc_fail!(),
-    };
-
-    Ok(value)
 }

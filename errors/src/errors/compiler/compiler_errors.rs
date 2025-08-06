@@ -112,4 +112,25 @@ create_messages!(
         msg: format!("Failed to write AST to file {filename}: {error}."),
         help: None,
     }
+
+    @formatted
+    const_generic_not_resolved {
+        args: (kind: impl Display, item: impl Display, arg: impl Display),
+        msg: format!("Unable to resolve {kind} `{item}`. A non-const expression `{arg}` was provided where a const generic parameter is required."),
+        help: None,
+    }
+
+    @formatted
+    array_length_not_evaluated {
+        args: (),
+        msg: "This array length could not be determined at compile time.".to_string(),
+        help: None,
+    }
+
+    @formatted
+    repeat_count_not_evaluated {
+        args: (),
+        msg: "This repeat count could not be determined at compile time.".to_string(),
+        help: None,
+    }
 );

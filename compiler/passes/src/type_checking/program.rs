@@ -15,13 +15,14 @@
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
 use super::TypeCheckingVisitor;
-use crate::DiGraphError;
+use crate::{VariableSymbol, VariableType};
 
-use leo_ast::{Type, *};
+use leo_ast::{DiGraphError, Type, *};
 use leo_errors::TypeCheckerError;
 use leo_span::{Symbol, sym};
 
 use itertools::Itertools;
+use snarkvm::prelude::{CanaryV0, MainnetV0, TestnetV0};
 use std::collections::{BTreeMap, HashSet};
 
 impl ProgramVisitor for TypeCheckingVisitor<'_> {
@@ -107,6 +108,13 @@ impl ProgramVisitor for TypeCheckingVisitor<'_> {
             }
         }
 
+        // Typecheck the constructor.
+        // Note: Constructors are required for all **new** programs once they are supported in the AVM.
+        //  However, we do not require them to exist to ensure backwards compatibility with existing programs.
+        if let Some(constructor) = &input.constructor {
+            self.visit_constructor(constructor);
+        }
+
         // Check that the call graph does not have any cycles.
         if let Err(DiGraphError::CycleDetected(path)) = self.state.call_graph.post_order() {
             self.emit_err(TypeCheckerError::cyclic_function_dependency(path));
@@ -128,8 +136,9 @@ impl ProgramVisitor for TypeCheckingVisitor<'_> {
     }
 
     fn visit_stub(&mut self, input: &Stub) {
-        // Set the current program name.
+        // Set the scope state.
         self.scope_state.program_name = Some(input.stub_id.name.name);
+        self.scope_state.is_stub = true;
 
         // Cannot have constant declarations in stubs.
         if !input.consts.is_empty() {
@@ -144,6 +153,52 @@ impl ProgramVisitor for TypeCheckingVisitor<'_> {
     }
 
     fn visit_struct(&mut self, input: &Composite) {
+        self.in_conditional_scope(|slf| {
+            slf.in_scope(input.id, |slf| {
+                if input.is_record && !input.const_parameters.is_empty() {
+                    slf.emit_err(TypeCheckerError::unexpected_record_const_parameters(input.span));
+                } else {
+                    input
+                        .const_parameters
+                        .iter()
+                        .for_each(|const_param| slf.insert_symbol_conditional_scope(const_param.identifier.name));
+
+                    for const_param in &input.const_parameters {
+                        slf.visit_type(const_param.type_());
+
+                        // Restrictions for const parameters
+                        if !matches!(
+                            const_param.type_(),
+                            Type::Boolean | Type::Integer(_) | Type::Address | Type::Scalar | Type::Group | Type::Field
+                        ) {
+                            slf.emit_err(TypeCheckerError::bad_const_generic_type(
+                                const_param.type_(),
+                                const_param.span(),
+                            ));
+                        }
+
+                        // Add the input to the symbol table.
+                        if let Err(err) = slf.state.symbol_table.insert_variable(
+                            slf.scope_state.program_name.unwrap(),
+                            const_param.identifier().name,
+                            VariableSymbol {
+                                type_: const_param.type_().clone(),
+                                span: const_param.identifier.span(),
+                                declaration: VariableType::ConstParameter,
+                            },
+                        ) {
+                            slf.state.handler.emit_err(err);
+                        }
+
+                        // Add the input to the type table.
+                        slf.state.type_table.insert(const_param.identifier().id(), const_param.type_().clone());
+                    }
+                }
+
+                input.members.iter().for_each(|member| slf.visit_type(&member.type_));
+            })
+        });
+
         // Check for conflicting struct/record member names.
         let mut used = HashSet::new();
         // TODO: Better span to target duplicate member.
@@ -229,6 +284,9 @@ impl ProgramVisitor for TypeCheckingVisitor<'_> {
     }
 
     fn visit_mapping(&mut self, input: &Mapping) {
+        self.visit_type(&input.key_type);
+        self.visit_type(&input.value_type);
+
         // Check that a mapping's key type is valid.
         self.assert_type_is_valid(&input.key_type, input.span);
         // Check that a mapping's key type is not a future, tuple, record, or mapping.
@@ -275,11 +333,13 @@ impl ProgramVisitor for TypeCheckingVisitor<'_> {
     }
 
     fn visit_function(&mut self, function: &Function) {
-        // Set type checker variables for function variant details.
-        self.scope_state.initialize_function_state(function.variant);
+        // Reset the scope state.
+        self.scope_state.reset();
+
+        // Set the scope state before traversing the function.
+        self.scope_state.variant = Some(function.variant);
 
         // Check that the function's annotations are valid.
-
         for annotation in function.annotations.iter() {
             if !matches!(annotation.identifier.name, sym::test | sym::should_fail) {
                 self.emit_err(TypeCheckerError::unknown_annotation(annotation, annotation.span))
@@ -355,10 +415,12 @@ impl ProgramVisitor for TypeCheckingVisitor<'_> {
 
         self.in_conditional_scope(|slf| {
             slf.in_scope(function.id, |slf| {
-                function.input.iter().for_each(|input| slf.insert_symbol_conditional_scope(input.identifier.name));
+                function
+                    .const_parameters
+                    .iter()
+                    .for_each(|const_param| slf.insert_symbol_conditional_scope(const_param.identifier.name));
 
-                // The function's body does not have a return statement.
-                slf.scope_state.has_return = false;
+                function.input.iter().for_each(|input| slf.insert_symbol_conditional_scope(input.identifier.name));
 
                 // Store the name of the function.
                 slf.scope_state.function = Some(function.name());
@@ -380,8 +442,107 @@ impl ProgramVisitor for TypeCheckingVisitor<'_> {
         });
 
         // Make sure that async transitions call finalize.
-        if self.scope_state.variant == Some(Variant::AsyncTransition) && !self.scope_state.has_called_finalize {
-            self.emit_err(TypeCheckerError::async_transition_must_call_async_function(function.span));
+        if self.scope_state.variant == Some(Variant::AsyncTransition)
+            && !self.scope_state.has_called_finalize
+            && !self.scope_state.already_contains_an_async_block
+        {
+            self.emit_err(TypeCheckerError::missing_async_operation_in_async_transition(function.span));
+        }
+    }
+
+    fn visit_constructor(&mut self, constructor: &Constructor) {
+        // Reset the scope state.
+        self.scope_state.reset();
+        // Set the scope state before traversing the constructor.
+        self.scope_state.function = Some(sym::constructor);
+        // Note: We set the variant to `AsyncFunction` since constructors have similar semantics.
+        self.scope_state.variant = Some(Variant::AsyncFunction);
+        self.scope_state.is_constructor = true;
+
+        // Get the upgrade variant.
+        // Note, `get_upgrade_variant` will return an error if the constructor is not well-formed.
+        let result = match self.state.network {
+            NetworkName::CanaryV0 => constructor.get_upgrade_variant::<CanaryV0>(),
+            NetworkName::TestnetV0 => constructor.get_upgrade_variant::<TestnetV0>(),
+            NetworkName::MainnetV0 => constructor.get_upgrade_variant::<MainnetV0>(),
+        };
+        let upgrade_variant = match result {
+            Ok(upgrade_variant) => upgrade_variant,
+            Err(e) => {
+                self.emit_err(TypeCheckerError::custom(e, constructor.span));
+                return;
+            }
+        };
+
+        // Validate the number of statements.
+        match (&upgrade_variant, constructor.block.statements.is_empty()) {
+            (UpgradeVariant::Custom, true) => {
+                self.emit_err(TypeCheckerError::custom("A 'custom' constructor cannot be empty", constructor.span));
+            }
+            (UpgradeVariant::NoUpgrade | UpgradeVariant::Admin { .. } | UpgradeVariant::Checksum { .. }, false) => {
+                self.emit_err(TypeCheckerError::custom("A 'noupgrade', 'admin', or 'checksum' constructor must be empty. The Leo compiler will insert the appropriate code.", constructor.span));
+            }
+            _ => {}
+        }
+
+        // For the checksum variant, check that the mapping exists and that the type matches.
+        if let UpgradeVariant::Checksum { mapping, key, key_type } = &upgrade_variant {
+            // Look up the mapping type.
+            let Some(VariableSymbol { type_: Type::Mapping(mapping_type), .. }) =
+                self.state.symbol_table.lookup_global(*mapping)
+            else {
+                self.emit_err(TypeCheckerError::custom(
+                    format!("The mapping '{mapping}' does not exist. Please ensure that it is imported or defined in your program."),
+                    constructor.annotations[0].span,
+                ));
+                return;
+            };
+            // Check that the mapping key type matches the expected key type.
+            if *mapping_type.key != *key_type {
+                self.emit_err(TypeCheckerError::custom(
+                    format!(
+                        "The mapping '{}' key type '{}' does not match the key '{}' in the `@checksum` annotation",
+                        mapping, mapping_type.key, key
+                    ),
+                    constructor.annotations[0].span,
+                ));
+            }
+            // Check that the value type is a `[u8; 32]`.
+            let check_value_type = |type_: &Type| -> bool {
+                if let Type::Array(array_type) = type_ {
+                    if !matches!(array_type.element_type.as_ref(), &Type::Integer(_)) {
+                        return false;
+                    }
+                    if let Some(length) = array_type.length.as_u32() {
+                        return length == 32;
+                    }
+                    return false;
+                }
+                false
+            };
+            if !check_value_type(&mapping_type.value) {
+                self.emit_err(TypeCheckerError::custom(
+                    format!("The mapping '{}' value type '{}' must be a '[u8; 32]'", mapping, mapping_type.value),
+                    constructor.annotations[0].span,
+                ));
+            }
+        }
+
+        // Traverse the constructor.
+        self.in_conditional_scope(|slf| {
+            slf.in_scope(constructor.id, |slf| {
+                slf.visit_block(&constructor.block);
+            })
+        });
+
+        // Check that the constructor does not call `finalize`.
+        if self.scope_state.has_called_finalize {
+            self.emit_err(TypeCheckerError::custom("The constructor cannot call `finalize`.", constructor.span));
+        }
+
+        // Check that the constructor does not have an `async` block.
+        if self.scope_state.already_contains_an_async_block {
+            self.emit_err(TypeCheckerError::custom("The constructor cannot have an `async` block.", constructor.span));
         }
     }
 
