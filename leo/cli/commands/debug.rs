@@ -55,25 +55,25 @@ impl Command for LeoDebug {
         }
     }
 
-    fn apply(self, context: Context, input: Self::Input) -> Result<Self::Output> {
-        handle_debug(&self, context, input)
+    fn apply(self, _: Context, input: Self::Input) -> Result<Self::Output> {
+        handle_debug(&self, input)
     }
 }
 
-fn handle_debug(command: &LeoDebug, context: Context, package: Option<Package>) -> Result<()> {
+fn handle_debug(command: &LeoDebug, package: Option<Package>) -> Result<()> {
+    // Get the network.
+    let network_name = get_network(&command.env_override.network)?;
+
     if command.paths.is_empty() {
         let package = package.unwrap();
 
         // Get the private key.
-        let private_key = context.get_private_key(&None)?;
-        let address = Address::try_from(&private_key)?;
+        let private_key = get_private_key(&None)?;
+        let address = Address::<TestnetV0>::try_from(&private_key)?;
 
         // Get the paths of all local Leo dependencies.
         let local_dependency_paths = collect_leo_paths(&package);
         let aleo_paths = collect_aleo_paths(&package);
-
-        // Get the network from the package environment.
-        let network = package.env.network;
 
         // No need to keep this around while the interpreter runs.
         std::mem::drop(package);
@@ -81,15 +81,15 @@ fn handle_debug(command: &LeoDebug, context: Context, package: Option<Package>) 
         leo_interpreter::interpret(
             &local_dependency_paths,
             &aleo_paths,
-            address,
+            address.into(),
             command.block_height,
             command.tui,
-            network,
+            network_name,
         )
     } else {
         // Program that have submodules aren't supported in this mode.
         let private_key: PrivateKey<TestnetV0> = PrivateKey::from_str(leo_package::TEST_PRIVATE_KEY)?;
-        let address = Address::try_from(&private_key)?;
+        let address = Address::<TestnetV0>::try_from(&private_key)?;
 
         let leo_paths: Vec<(PathBuf, Vec<PathBuf>)> = command
             .paths
@@ -107,10 +107,10 @@ fn handle_debug(command: &LeoDebug, context: Context, package: Option<Package>) 
         leo_interpreter::interpret(
             &leo_paths,
             &aleo_paths,
-            address,
+            address.into(),
             command.block_height,
             command.tui,
-            package.map(|p| p.env.network).unwrap_or_default(),
+            network_name,
         )
     }
 }
