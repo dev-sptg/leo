@@ -176,9 +176,9 @@ create_messages!(
     /// Attempted to define more that one struct member with the same name.
     @formatted
     duplicate_struct_member {
-        args: (struct_: impl Display),
+        args: (member_name: impl Display),
         msg: format!(
-            "Struct {struct_} defined with more than one member with the same name."
+            "Struct field `{member_name}` is already declared."
         ),
         help: None,
     }
@@ -186,9 +186,9 @@ create_messages!(
     /// Attempted to define more that one record variable with the same name.
     @formatted
     duplicate_record_variable {
-        args: (record: impl Display),
+        args: (variable_name: impl Display),
         msg: format!(
-            "Record {record} defined with more than one variable with the same name."
+            "Record variable `{variable_name}` is already declared."
         ),
         help: None,
     }
