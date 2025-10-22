@@ -26,9 +26,10 @@ use anyhow::bail;
 use indexmap::{IndexMap, IndexSet};
 use snarkvm::{
     console::algorithms::ECDSASignature,
+    prelude::PrivateKey,
     synthesizer::program::{CommitVariant, DeserializeVariant, ECDSAVerifyVariant, HashVariant, SerializeVariant},
 };
-use std::ops::Deref;
+use std::{ops::Deref, str::FromStr};
 
 pub struct TypeCheckingVisitor<'a> {
     pub state: &'a mut CompilerState,
@@ -1052,6 +1053,26 @@ impl TypeCheckingVisitor<'_> {
                 self.assert_type(&arguments[0].0, &Type::Integer(IntegerType::U32), arguments[0].1.span());
                 Type::Unit
             }
+            CoreFunction::CheatCodeSetSigner => {
+                // Assert that the argument is a string.
+                self.assert_type(&arguments[0].0, &Type::String, arguments[0].1.span());
+                // Validate that the argument is a valid private key.
+                if let Expression::Literal(Literal { variant: LiteralVariant::String(s), .. }) = arguments[0].1 {
+                    let s = s.replace("\"", "");
+                    let is_err = match self.state.network {
+                        NetworkName::TestnetV0 => PrivateKey::<TestnetV0>::from_str(&s).is_err(),
+                        NetworkName::MainnetV0 => PrivateKey::<MainnetV0>::from_str(&s).is_err(),
+                        NetworkName::CanaryV0 => PrivateKey::<CanaryV0>::from_str(&s).is_err(),
+                    };
+                    if is_err {
+                        self.emit_err(TypeCheckerError::custom(
+                            "`CheatCode::set_signer` must be called with a valid private key",
+                            arguments[0].1.span(),
+                        ));
+                    }
+                };
+                Type::Unit
+            }
         }
     }
 
@@ -1410,6 +1431,17 @@ impl TypeCheckingVisitor<'_> {
             self.state.type_table.insert(const_param.identifier().id(), const_param.type_().clone());
         }
 
+        // Ensure there aren't too many inputs
+        if function.input.len() > self.limits.max_inputs && function.variant != Variant::Inline {
+            self.state.handler.emit_err(TypeCheckerError::function_has_too_many_inputs(
+                function.variant,
+                function.identifier,
+                self.limits.max_inputs,
+                function.input.len(),
+                function.identifier.span,
+            ));
+        }
+
         // The inputs should have access to the const parameters, so handle them after.
         for (i, input) in function.input.iter().enumerate() {
             self.visit_type(input.type_());
@@ -1493,6 +1525,17 @@ impl TypeCheckingVisitor<'_> {
                 // Add the input to the type table.
                 self.state.type_table.insert(input.identifier().id(), table_type.clone());
             }
+        }
+
+        // Ensure there aren't too many outputs
+        if function.output.len() > self.limits.max_outputs && function.variant != Variant::Inline {
+            self.state.handler.emit_err(TypeCheckerError::function_has_too_many_outputs(
+                function.variant,
+                function.identifier,
+                self.limits.max_outputs,
+                function.output.len(),
+                function.identifier.span,
+            ));
         }
 
         // Type check the function's return type.
