@@ -42,4 +42,4 @@ workspace = true
 workspace = true
 
 [dependencies.thiserror]
-version = "1.0.65"
+version = "2.0.17"
