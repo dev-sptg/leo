@@ -1,0 +1,96 @@
+name: "Sync -> build -> release "
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * *"
+
+env:
+  REPO_BRANCH: master
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target repo
+        uses: actions/checkout@v3
+        with:
+          # optional: set the branch to checkout,
+          # sync action checks out your 'target_sync_branch' anyway
+          ref:  ${{ env.REPO_BRANCH }}
+          # REQUIRED if your upstream repo is private (see wiki)
+          persist-credentials: false
+          
+      # REQUIRED step
+      # Step 2: run the sync action
+      - name: Sync upstream changes
+        id: sync
+        uses: aormsby/Fork-Sync-With-Upstream-action@v3.3
+        with:
+          target_sync_branch: ${{ env.REPO_BRANCH }}
+          # REQUIRED 'target_repo_token' exactly like this!
+          target_repo_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          upstream_sync_branch: ${{ env.REPO_BRANCH }}
+          upstream_sync_repo: ProvableHQ/leo
+          upstream_repo_access_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
+          # Set test_mode true to run tests instead of the true action!!
+          test_mode: false
+
+      # Step 3: Display a sample message based on the sync output var 'has_new_commits'
+      - name: New commits found
+        if: steps.sync.outputs.has_new_commits == 'true'
+        run: echo "New commits were found to sync."
+
+      - name: No new commits
+        if: steps.sync.outputs.has_new_commits == 'false'
+        run: echo "There were no new commits."
+
+      - name: Show value of 'has_new_commits'
+        run: echo ${{ steps.sync.outputs.has_new_commits }}         
+          
+          
+  build:
+    runs-on: windows-latest
+    needs: sync
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: rustfmt
+
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          version: "14"
+          directory: ${{ runner.temp }}/llvm
+
+      - name: Set LIBCLANG_PATH
+        run: echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
+
+      - name: Build Leo
+        run: |
+          cargo build --package leo-lang --release --features noconfig
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: true
+
+      - name: Zip
+        run: |
+          Compress-Archive target/release/leo.exe leo-${{ env.REPO_BRANCH }}-x86_64-pc-windows-msvc.zip
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: true
+          files: |
+            leo-${{ env.REPO_BRANCH }}-x86_64-pc-windows-msvc.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
