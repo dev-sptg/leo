@@ -42,7 +42,7 @@ version = "0.28.1"
 workspace = true
 
 [dependencies.dialoguer]
-version = "0.11.0"
+version = "0.12.0"
 features = [ "history" ]
 
 [dependencies.rand]
