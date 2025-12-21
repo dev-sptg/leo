@@ -1821,7 +1821,7 @@ version = "3.4.0"
 dependencies = [
  "anyhow",
  "indexmap",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "leo-errors",
  "leo-span",
  "rand",
@@ -1839,7 +1839,7 @@ dependencies = [
  "aleo-std-storage",
  "anyhow",
  "indexmap",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "leo-ast",
  "leo-disassembler",
  "leo-errors",
@@ -1876,7 +1876,7 @@ dependencies = [
  "color-backtrace",
  "colored 2.2.0",
  "derivative",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "leo-span",
  "serde",
  "thiserror 1.0.69",
@@ -1891,7 +1891,7 @@ dependencies = [
  "crossterm 0.28.1",
  "dialoguer",
  "indexmap",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "leo-ast",
  "leo-compiler",
  "leo-disassembler",
@@ -1927,7 +1927,7 @@ dependencies = [
  "dotenvy",
  "dunce",
  "indexmap",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "leo-ast",
  "leo-compiler",
  "leo-disassembler",
@@ -1983,7 +1983,7 @@ name = "leo-parser"
 version = "3.4.0"
 dependencies = [
  "indexmap",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "leo-ast",
  "leo-errors",
  "leo-parser-lossless",
@@ -1999,7 +1999,7 @@ dependencies = [
 name = "leo-parser-lossless"
 version = "3.4.0"
 dependencies = [
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "lalrpop",
  "lalrpop-util 0.21.0",
  "leo-errors",
@@ -2015,7 +2015,7 @@ dependencies = [
  "anyhow",
  "base62",
  "indexmap",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "leo-ast",
  "leo-errors",
  "leo-package",
