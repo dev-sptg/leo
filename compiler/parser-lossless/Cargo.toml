@@ -27,7 +27,7 @@ workspace = true
 workspace = true
 
 [dependencies.lalrpop-util]
-version = "0.21.0"
+version = "0.22.2"
 features = [ "unicode" ]
 
 [dependencies.logos]
