@@ -106,7 +106,7 @@ version = "2.6"
 features = [ "serde" ]
 
 [workspace.dependencies.itertools]
-version = "0.13.0"
+version = "0.14.0"
 
 [workspace.dependencies.paste]
 version = "1.0"
