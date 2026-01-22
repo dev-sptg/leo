@@ -43,6 +43,7 @@ use snarkvm::prelude::{
 pub(crate) use snarkvm::prelude::{
     Identifier as SvmIdentifierParam,
     Literal as SvmLiteralParam,
+    Locator as SvmLocatorParam,
     Plaintext,
     Signature as SvmSignature,
     TestnetV0,
@@ -61,6 +62,7 @@ pub(crate) type ProgramID = ProgramIDParam<CurrentNetwork>;
 pub(crate) type SvmPlaintext = Plaintext<CurrentNetwork>;
 pub(crate) type SvmLiteral = SvmLiteralParam<CurrentNetwork>;
 pub(crate) type SvmIdentifier = SvmIdentifierParam<CurrentNetwork>;
+pub(crate) type SvmLocator = SvmLocatorParam<CurrentNetwork>;
 pub(crate) type Group = SvmGroup<CurrentNetwork>;
 pub(crate) type Field = SvmField<CurrentNetwork>;
 pub(crate) type Scalar = SvmScalar<CurrentNetwork>;
@@ -828,7 +830,7 @@ impl Value {
         span: Span,
         node_builder: &NodeBuilder,
         ty: &Type,
-        struct_lookup: &dyn Fn(&[Symbol]) -> Vec<(Symbol, Type)>,
+        struct_lookup: &dyn Fn(&Location) -> Vec<(Symbol, Type)>,
     ) -> Option<Expression> {
         use crate::{Literal, TupleExpression, UnitExpression};
 
@@ -877,7 +879,7 @@ fn plaintext_to_expression(
     span: Span,
     node_builder: &NodeBuilder,
     ty: &Type,
-    struct_lookup: &dyn Fn(&[Symbol]) -> Vec<(Symbol, Type)>,
+    struct_lookup: &dyn Fn(&Location) -> Vec<(Symbol, Type)>,
 ) -> Option<Expression> {
     use crate::{ArrayExpression, CompositeExpression, CompositeFieldInitializer, Identifier, IntegerType, Literal};
 
@@ -924,8 +926,8 @@ fn plaintext_to_expression(
             let Type::Composite(composite_type) = ty else {
                 return None;
             };
-            let symbols = &composite_type.path.expect_global_location().path;
-            let iter_members = struct_lookup(symbols);
+            let composite_location = &composite_type.path.expect_global_location();
+            let iter_members = struct_lookup(composite_location);
             CompositeExpression {
                 span,
                 id,
