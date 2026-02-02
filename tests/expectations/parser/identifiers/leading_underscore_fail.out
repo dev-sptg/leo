@@ -1,0 +1,5 @@
+Error [EPAR0370005]: expected an identifier, '(' -- found '_c'
+    --> test:4:13
+     |
+   4 |         let _c: u32 = a + b;
+     |             ^^

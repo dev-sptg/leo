@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::create_messages;
 use std::fmt::{Debug, Display};
 
 // TODO: Consolidate errors.
@@ -69,7 +68,7 @@ create_messages!(
         msg: format!(
             "Could not determine the type of `{expr}`",
         ),
-        help: None,
+        help: Some("Consider using explicit type annotations.".into()),
     }
 
     /// For when the user tries to return a unknown variable.
@@ -143,22 +142,22 @@ create_messages!(
         help: None,
     }
 
-    /// For when the user tries initialize a struct with the incorrect number of args.
+    /// For when the user tries initialize a composite with the incorrect number of args.
     @formatted
-    incorrect_num_struct_members {
+    incorrect_num_composite_members {
         args: (expected: impl Display, received: impl Display),
         msg: format!(
-            "Struct expected `{expected}` members, but got `{received}`",
+            "Composite expected `{expected}` members, but got `{received}`",
         ),
         help: None,
     }
 
-    /// For when the user is missing a struct member during initialization.
+    /// For when the user is missing a composite member during initialization.
     @formatted
-    missing_struct_member {
-        args: (struct_: impl Display, member: impl Display),
+    missing_composite_member {
+        args: (composite: impl Display, member: impl Display),
         msg: format!(
-            "Struct initialization expression for `{struct_}` is missing member `{member}`.",
+            "Composite initialization expression for `{composite}` is missing member `{member}`.",
         ),
         help: None,
     }
@@ -176,9 +175,9 @@ create_messages!(
     /// Attempted to define more that one struct member with the same name.
     @formatted
     duplicate_struct_member {
-        args: (struct_: impl Display),
+        args: (member_name: impl Display),
         msg: format!(
-            "Struct {struct_} defined with more than one member with the same name."
+            "Struct field `{member_name}` is already declared."
         ),
         help: None,
     }
@@ -186,9 +185,9 @@ create_messages!(
     /// Attempted to define more that one record variable with the same name.
     @formatted
     duplicate_record_variable {
-        args: (record: impl Display),
+        args: (variable_name: impl Display),
         msg: format!(
-            "Record {record} defined with more than one variable with the same name."
+            "Record variable `{variable_name}` is already declared."
         ),
         help: None,
     }
@@ -203,12 +202,12 @@ create_messages!(
         help: Some("If you are using an external type, make sure to preface with the program name. Ex: `credits.aleo/credits` instead of `credits`".to_string()),
     }
 
-    /// Attempted to access an invalid struct variable.
+    /// Attempted to access an invalid composite variable.
     @formatted
-    invalid_struct_variable {
-        args: (variable: impl Display, struct_: impl Display),
+    invalid_composite_variable {
+        args: (variable: impl Display, composite: impl Display),
         msg: format!(
-            "Variable {variable} is not a member of {struct_}."
+            "Variable {variable} is not a member of {composite}."
         ),
         help: None,
     }
@@ -284,6 +283,7 @@ create_messages!(
         help: Some("Consider removing the mode or using the keyword `transition` instead of `function`.".to_string()),
     }
 
+    // Not currently used
     @formatted
     async_function_input_cannot_be_private {
         args: (),
@@ -312,6 +312,7 @@ create_messages!(
         help: Some("Use a `public` modifier to the input variable declaration or remove the visibility modifier entirely.".to_string()),
     }
 
+    // Not currently used
     @formatted
     finalize_output_mode_must_be_public {
         args: (),
@@ -322,15 +323,15 @@ create_messages!(
     @formatted
     invalid_operation_outside_finalize {
         args: (operation: impl Display),
-        msg: format!("`{operation}` must be inside an async function block."),
+        msg: format!("`{operation}` must be inside an async function or an async block."),
         help: None,
     }
 
     @formatted
-    loop_body_contains_finalize {
-        args: (),
-        msg: format!("Loop body contains an async function call."),
-        help: Some("Remove the async function call.".to_string()),
+    loop_body_contains_async {
+        args: (kind: impl Display),
+        msg: format!("Loop body contains an async {kind}."),
+        help: Some(format!("Remove the async {kind}.")),
     }
 
     @formatted
@@ -365,7 +366,7 @@ create_messages!(
     @formatted
     invalid_self_access {
         args: (),
-        msg: format!("The allowed accesses to `self` are `self.caller` and `self.signer`."),
+        msg: format!("The allowed accesses to `self` are `self.{{caller, checksum, edition, program_owner, signer}}`."),
         help: None,
     }
 
@@ -378,8 +379,8 @@ create_messages!(
 
     @formatted
     can_only_call_inline_function {
-        args: (),
-        msg: format!("Only `inline` can be called from a `function` or `inline`."),
+        args: (kind: impl Display),
+        msg: format!("Only `inline` can be called from {kind}."),
         help: None,
     }
 
@@ -491,11 +492,11 @@ create_messages!(
     }
 
     @backtraced
-    cyclic_struct_dependency {
+    cyclic_composite_dependency {
         args: (path: Vec<impl Display>),
         msg: {
             let path_string = path.into_iter().map(|name| format!("`{name}`")).collect::<Vec<String>>().join(" --> ");
-            format!("Cyclic dependency between structs: {path_string}")
+            format!("Cyclic dependency between composites: {path_string}")
         },
         help: None,
     }
@@ -555,7 +556,7 @@ create_messages!(
     @formatted
     invalid_block_access {
         args: (),
-        msg: format!("The allowed accesses to `block` are `block.height`."),
+        msg: format!("The allowed accesses to `block` are `block.height` and `block.timestamp`."),
         help: None,
     }
 
@@ -567,9 +568,9 @@ create_messages!(
     }
 
     @formatted
-    operation_must_be_in_finalize_block {
+    operation_must_be_in_async_block_or_function {
         args: (),
-        msg: "This operation can only be used in an async function or script.".to_string(),
+        msg: "This operation can only be used in an async function, an async block, or script.".to_string(),
         help: None,
     }
 
@@ -716,9 +717,9 @@ create_messages!(
     }
 
     @formatted
-    async_transition_must_call_async_function {
+    missing_async_operation_in_async_transition {
         args: (),
-        msg: "An async transition must call an async function.".to_string(),
+        msg: "An `async` transition must contain at least one async operation — either a call to an `async` function or an `async` block.".to_string(),
         help: Some("Example: `async transition foo() -> Future { let a: Future = bar(); return await_futures(a); }`".to_string()),
     }
 
@@ -821,10 +822,10 @@ create_messages!(
     }
 
     @formatted
-    external_transition_call_must_be_before_finalize {
-        args: (),
-        msg: "External transition calls cannot be made after local async function call".to_string(),
-        help: Some("Move the async function call before the transition call.".to_string()),
+    external_call_after_async {
+        args: (kind: impl Display),
+        msg: format!("External transition calls must appear before the local async {kind}."),
+        help: Some(format!("Reorder your code so the external transition call happens before the local async {kind}.")),
     }
 
     @formatted
@@ -838,14 +839,14 @@ create_messages!(
     not_all_futures_consumed {
         args: (unconsumed: impl Display),
         msg: format!("Not all futures were consumed: {unconsumed}"),
-        help: Some("Make sure all futures are consumed exactly once. Consume by passing to an async function call.".to_string()),
+        help: Some("Make sure all futures are consumed exactly once. Consume by passing to an async function call or async block.".to_string()),
     }
 
     @formatted
     async_transition_missing_future_to_return {
         args: (),
         msg: "An async transition must return a future.".to_string(),
-        help: Some("Call an async function inside of the async transition body so that there is a future to return.".to_string()),
+        help: Some("Call an async function or instantiate an async block inside of the async transition body so that there is a future to return.".to_string()),
     }
 
     @formatted
@@ -870,8 +871,8 @@ create_messages!(
 
     @formatted
     async_cannot_assign_outside_conditional {
-        args: (variable: impl Display),
-        msg: format!("Cannot re-assign to `{variable}` from a conditional scope to an outer scope in an async function."),
+        args: (variable: impl Display, kind: impl Display),
+        msg: format!("Cannot re-assign to `{variable}` from a conditional scope to an outer scope in an async {kind}."),
         help: Some("This is a fundamental restriction that can often be avoided by using a ternary operator `?` or re-declaring the variable in the current scope. In the future, ARC XXXX (https://github.com/ProvableHQ/ARCs) will support more complex assignments in async functions.".to_string()),
     }
 
@@ -1005,9 +1006,9 @@ create_messages!(
     }
 
     @formatted
-    records_not_allowed_inside_finalize {
-        args: (),
-        msg: format!("records cannot be instantiated in an async function context."),
+    records_not_allowed_inside_async {
+        args: (kind: impl Display),
+        msg: format!("records cannot be instantiated in an async {kind} context."),
         help: None,
     }
 
@@ -1039,6 +1040,7 @@ create_messages!(
         help: Some("Ternary conditionals may not contain an external record type.".to_string()),
     }
 
+    // TODO: unused.
     @formatted
     assignment_to_external_record {
         args: (ty: impl Display),
@@ -1046,6 +1048,7 @@ create_messages!(
         help: Some("External record types and tuples containing them may not be assigned to.".to_string()),
     }
 
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     illegal_name {
         args: (item_name: impl Display, item_type: impl Display, keyword: impl Display),
@@ -1057,6 +1060,336 @@ create_messages!(
     record_prefixed_by_other_record {
         args: (r1: impl Display, r2: impl Display),
         msg: format!("Record name `{r1}` is prefixed by the record name `{r2}`. Record names must not be prefixes of other record names."),
+        help: None,
+    }
+
+    @formatted
+    range_bounds_type_mismatch {
+        args: (),
+        msg: format!("mismatched types in loop iterator range bounds"),
+        help: None,
+    }
+
+    @formatted
+    assignment_to_external_record_member {
+        args: (ty: impl Display),
+        msg: format!("Cannot assign to a member of the external record `{ty}`."),
+        help: None,
+    }
+
+    @formatted
+    assignment_to_external_record_cond {
+        args: (ty: impl Display),
+        msg: format!("Cannot assign to the external record type `{ty}` in this location."),
+        help: Some("External record variables may not be assigned to in narrower conditional scopes than they were defined.".into()),
+    }
+
+    @formatted
+    assignment_to_external_record_tuple_cond {
+        args: (ty: impl Display),
+        msg: format!("Cannot assign to the tuple type `{ty}` containing an external record in this location."),
+        help: Some("Tuples containing external records may not be assigned to in narrower conditional scopes than they were defined.".into()),
+    }
+
+    @formatted
+    hexbin_literal_nonintegers {
+        args: (),
+        msg: format!("Hex, octal, and binary literals may only be used for integer types."),
+        help: None,
+    }
+
+    @formatted
+    unexpected_unsuffixed_numeral {
+        args: (expected: impl Display),
+        msg: format!(
+            "Expected {expected} but an unsuffixed numeral was found.",
+        ),
+        help: None,
+    }
+
+    @formatted
+    incorrect_num_const_args {
+        args: (kind: impl Display, expected: impl Display, received: impl Display),
+        msg: format!(
+            "{kind} expected `{expected}` const args, but got `{received}`",
+        ),
+        help: None,
+    }
+
+    @formatted
+    bad_const_generic_type {
+        args: (found: impl Display),
+        msg: format!("A generic const parameter must be a `bool`, an integer, a `scalar`, a `group`, a `field`, or an `address`, but {found} was found"),
+        help: None,
+    }
+
+    /// For when the user tries to assign to a generic const function parameter.
+    @formatted
+    cannot_assign_to_generic_const_function_parameter {
+        args: (param: impl Display),
+        msg: format!(
+            "Cannot assign to const parameter `{param}`",
+        ),
+        help: None,
+    }
+
+    @formatted
+    only_inline_can_have_const_generics {
+        args: (),
+        msg: format!("Only `inline` functions can have generic const parameters."),
+        help: None,
+    }
+
+    @formatted
+    array_too_large_for_u32 {
+        args: (),
+        msg: format!("An array length must be small enough to fit in a `u32`"),
+        help: None,
+    }
+
+    @formatted
+    unexpected_record_const_parameters {
+        args: (),
+        msg: format!("Records cannot be declared with generic const parameters."),
+        help: None,
+    }
+
+    @formatted
+    unexpected_const_args {
+        args: (item: impl Display),
+        msg: format!("unexpected generic const argment for {item}."),
+        help: Some("If this is an external struct, consider using a resolved non-generic version of it instead. External structs can't be instantiated with const arguments".to_string()),
+    }
+
+    @formatted
+    invalid_operation_inside_async_block {
+        args: (operation: impl Display),
+        msg: format!("Invalid expression in an async block. `{operation}` cannot be used directly here"),
+        help: None,
+    }
+
+    @formatted
+    illegal_async_block_location {
+        args: (),
+        msg: "`async` blocks are only allowed inside an `async` transition or a script function.".to_string(),
+        help: Some("Try moving this `async` block into an `async` transition or a script function.".to_string()),
+    }
+
+    @formatted
+    conflicting_async_call_and_block {
+        args: (),
+        msg: "A transition function cannot contain both an `async` function call and an `async` block at the same time.".to_string(),
+        help: Some("Refactor the transition to use either an `async` call or an `async` block, but not both.".to_string()),
+    }
+
+    @formatted
+    multiple_async_blocks_not_allowed {
+        args: (),
+        msg: "A transition function cannot contain more than one `async` block.".to_string(),
+        help: Some("Combine the logic into a single `async` block, or restructure your code to avoid multiple async blocks within the same transition.".to_string()),
+    }
+
+    @formatted
+    async_block_in_conditional {
+        args: (),
+        msg: "`async` blocks are not allowed inside conditional blocks.".to_string(),
+        help: Some("Refactor your code to move the `async` block outside of the conditional block.".to_string()),
+    }
+
+    @formatted
+    cannot_use_private_inpt_in_async_block {
+        args: (),
+        msg: format!("`private` inputs cannot be used inside async blocks."),
+        help: None,
+    }
+
+    @formatted
+    async_block_cannot_return {
+        args: (),
+        msg: "An `async` block cannot contain a `return` statement.".to_string(),
+        help: None,
+    }
+
+    @formatted
+    invalid_async_block_future_access {
+        args: (),
+        msg: format!(
+            "Cannot access argument from future produced by an `async` block."
+        ),
+        help: None,
+    }
+
+    @formatted
+    cannot_assign_to_vars_outside_async_block {
+        args: (input: impl Display),
+        msg: format!(
+            "Cannot assign to `{input}` inside an `async` block because it was declared outside the block."
+        ),
+        help: None,
+    }
+
+    @formatted
+    custom {
+        args: (msg: impl Display),
+        msg: msg.to_string(),
+        help: None,
+    }
+
+    @formatted
+    constructor_can_only_return_unit {
+        args: (expression: impl Display),
+        msg: format!("Constructors can only return unit, but found `{expression}`."),
+        help: None,
+    }
+
+    @formatted
+    none_found_non_optional {
+        args: (expected: impl Display),
+        msg: format!(
+            "Found `none`, but the expected type `{expected}` is not an optional type.",
+        ),
+        help: None,
+    }
+
+    // TODO This error is unused. Remove it in a future version.
+    @formatted
+    optional_wrapping_of_records_unsupported {
+        args: (ty: impl Display),
+        msg: format!(
+            "The type `{ty}` cannot be wrapped in an optional because it is a record.",
+        ),
+        help: None,
+    }
+
+    @formatted
+    optional_wrapping_unsupported {
+        args: (ty: impl Display),
+        msg: format!(
+            "The type `{ty}` cannot be wrapped in an optional.",
+        ),
+        help: Some("Optionals cannot wrap signatures, futures, mappings, tuples, vectors, records, arrays whose \
+                    elements are optional-unsafe, or structures containing any such types.".to_string()),
+    }
+
+    @formatted
+    optional_type_not_allowed_in_mapping {
+        args: (ty: impl Display, kind: impl Display),
+        msg: format!(
+            "The type `{ty}` is or contains an optional type which cannot be used as the {kind} in a mapping",
+        ),
+        help: None,
+    }
+
+    @formatted
+    record_field_cannot_be_optional {
+        args: (name: impl Display, ty: impl Display),
+        msg: format!(
+            "The field `{name}` in this record has type `{ty}`, which is or contains an optional type.",
+        ),
+        help: Some(
+            "Records cannot have fields that are optional or contain optionals. Consider moving the optionality outside the record.".to_string()
+        ),
+    }
+
+    @formatted
+    const_cannot_be_optional {
+        args: (),
+        msg: format!(
+            "Constants cannot have an optional type or a type that contains an optional",
+        ),
+        help: None,
+    }
+
+    @formatted
+    function_cannot_take_option_as_input {
+        args: (name: impl Display, ty: impl Display),
+        msg: format!(
+            "The input `{name}` has type `{ty}`, which is or contains an optional type and is not allowed as an input to a `transition`, `async transition`, or `function`.",
+        ),
+        help: Some(
+            "Inputs to `transition`, `async transition`, and `function` definitions cannot be optional or contain optionals. Consider moving the optionality outside the call site.".to_string()
+        ),
+    }
+
+    @formatted
+    function_cannot_return_option_as_output {
+        args: (ty: impl Display),
+        msg: format!(
+            "This function has an output of type `{ty}`, which is or contains an optional type and is not allowed as an output of a `transition`, `async transition`, or `function`.",
+        ),
+        help: Some(
+            "Outputs of `transition`, `async transition`, and `function` definitions cannot be optional or contain optionals. Consider moving the optionality outside the function call.".to_string()
+        ),
+    }
+
+    @formatted
+    invalid_storage_type {
+        args: (type_: impl Display),
+        msg: format!("{type_} is an invalid storage type"),
+        help: None,
+    }
+
+    @formatted
+    storage_vectors_cannot_be_moved_or_assigned {
+        args: (),
+        msg: format!(
+            "Storage vectors cannot be moved or assigned. You can only access or modify them using methods like `get`, `push`, or `pop`."
+        ),
+        help: None,
+    }
+
+    @formatted
+    function_has_too_many_inputs {
+        args: (variant: impl Display, name: impl Display, limit: usize, actual: usize),
+        msg: format!(
+            "The {variant} `{name}` has {actual} input parameters, which exceeds the allowed limit of {limit}.",
+        ),
+        help: Some(
+            "Consider reducing the number of input parameters. You might combine some parameters into a struct or refactor the {variant} to simplify its signature.".to_string()
+        ),
+    }
+
+    @formatted
+    function_has_too_many_outputs {
+        args: (variant: impl Display, name: impl Display, limit: usize, actual: usize),
+        msg: format!(
+            "The {variant} `{name}` has {actual} output parameters, which exceeds the allowed limit of {limit}.",
+        ),
+        help: Some(
+            "Consider reducing the number of output parameters. You might combine some parameters into a struct or refactor the {variant} to simplify its signature.".to_string()
+        ),
+    }
+
+    @formatted
+    empty_function_args {
+        args: (),
+        msg: format!("Cannot define a function with only empty parameters."),
+        help: None,
+    }
+
+    @formatted
+    zero_size_struct {
+        args: (),
+        msg: "A struct must have at least one member of non-zero size.".to_string(),
+        help: None,
+    }
+
+    /// For when an invalid intrinsic is used.
+    @formatted
+    invalid_intrinsic {
+        args: (intr: impl Display),
+        msg: format!(
+            "{intr} is not a valid intrinsic.",
+        ),
+        help: None,
+    }
+
+    @formatted
+    cannot_instantiate_external_record  {
+        args: (loc: impl Display),
+        msg: format!(
+            "Cannot create external record `{loc}`. Records can only be created in the program that they are defined in",
+        ),
         help: None,
     }
 );

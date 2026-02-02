@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -19,33 +19,39 @@ use super::SsaFormingVisitor;
 use leo_ast::{
     Block,
     Composite,
+    CompositeConsumer,
+    Constructor,
+    ConstructorConsumer,
     Function,
     FunctionConsumer,
     Identifier,
     Member,
+    Module,
+    ModuleConsumer,
     Node as _,
     Program,
     ProgramConsumer,
     ProgramScope,
     ProgramScopeConsumer,
     StatementConsumer,
-    StructConsumer,
+    Stub,
+    StubConsumer,
 };
 use leo_span::{Symbol, sym};
 
 use indexmap::IndexMap;
 
-impl StructConsumer for SsaFormingVisitor<'_> {
+impl CompositeConsumer for SsaFormingVisitor<'_> {
     type Output = Composite;
 
     /// Reconstructs records in the program, ordering its fields such that `owner` and is the first field.
-    fn consume_struct(&mut self, struct_: Composite) -> Self::Output {
-        match struct_.is_record {
-            false => struct_,
+    fn consume_composite(&mut self, composite: Composite) -> Self::Output {
+        match composite.is_record {
+            false => composite,
             true => {
-                let mut members = Vec::with_capacity(struct_.members.len());
+                let mut members = Vec::with_capacity(composite.members.len());
                 let mut member_map: IndexMap<Symbol, Member> =
-                    struct_.members.into_iter().map(|member| (member.identifier.name, member)).collect();
+                    composite.members.into_iter().map(|member| (member.identifier.name, member)).collect();
 
                 // Add the owner field to the beginning of the members list.
                 // Note that type checking ensures that the owner field exists.
@@ -54,7 +60,7 @@ impl StructConsumer for SsaFormingVisitor<'_> {
                 // Add the remaining fields to the members list.
                 members.extend(member_map.into_iter().map(|(_, member)| member));
 
-                Composite { members, ..struct_ }
+                Composite { members, ..composite }
             }
         }
     }
@@ -97,6 +103,26 @@ impl FunctionConsumer for SsaFormingVisitor<'_> {
     }
 }
 
+impl ConstructorConsumer for SsaFormingVisitor<'_> {
+    type Output = Constructor;
+
+    /// Reconstructs the `Constructor` in the `Program`, while allocating the appropriate `RenameTable`s.
+    fn consume_constructor(&mut self, mut constructor: Constructor) -> Self::Output {
+        // Allocate a `RenameTable` for the constructor.
+        self.push();
+        // Rename the constructor's block.
+        constructor.block = Block {
+            span: constructor.block.span,
+            id: constructor.block.id,
+            statements: self.consume_block(constructor.block),
+        };
+        // Remove the `RenameTable` for the constructor.
+        self.pop();
+
+        constructor
+    }
+}
+
 impl ProgramScopeConsumer for SsaFormingVisitor<'_> {
     type Output = ProgramScope;
 
@@ -104,10 +130,12 @@ impl ProgramScopeConsumer for SsaFormingVisitor<'_> {
         self.program = input.program_id.name.name;
         ProgramScope {
             program_id: input.program_id,
-            structs: input.structs.into_iter().map(|(i, s)| (i, self.consume_struct(s))).collect(),
-            mappings: input.mappings,
-            functions: input.functions.into_iter().map(|(i, f)| (i, self.consume_function(f))).collect(),
             consts: input.consts,
+            composites: input.composites.into_iter().map(|(i, s)| (i, self.consume_composite(s))).collect(),
+            mappings: input.mappings,
+            storage_variables: input.storage_variables,
+            functions: input.functions.into_iter().map(|(i, f)| (i, self.consume_function(f))).collect(),
+            constructor: input.constructor.map(|c| self.consume_constructor(c)),
             span: input.span,
         }
     }
@@ -118,17 +146,40 @@ impl ProgramConsumer for SsaFormingVisitor<'_> {
 
     fn consume_program(&mut self, input: Program) -> Self::Output {
         Program {
-            imports: input
-                .imports
-                .into_iter()
-                .map(|(name, (import, span))| (name, (self.consume_program(import), span)))
-                .collect(),
-            stubs: input.stubs,
+            modules: input.modules.into_iter().map(|(path, module)| (path, self.consume_module(module))).collect(),
+            imports: input.imports,
+            stubs: input.stubs.into_iter().map(|(name, stub)| (name, self.consume_stub(stub))).collect(),
             program_scopes: input
                 .program_scopes
                 .into_iter()
                 .map(|(name, scope)| (name, self.consume_program_scope(scope)))
                 .collect(),
+        }
+    }
+}
+
+impl StubConsumer for SsaFormingVisitor<'_> {
+    type Output = Stub;
+
+    fn consume_stub(&mut self, input: Stub) -> Self::Output {
+        match input {
+            Stub::FromLeo { program, .. } => self.consume_program(program).into(),
+            Stub::FromAleo { .. } => input,
+        }
+    }
+}
+
+impl ModuleConsumer for SsaFormingVisitor<'_> {
+    type Output = Module;
+
+    fn consume_module(&mut self, input: Module) -> Self::Output {
+        self.program = input.program_name;
+        Module {
+            path: input.path,
+            program_name: self.program,
+            composites: input.composites.into_iter().map(|(i, s)| (i, self.consume_composite(s))).collect(),
+            functions: input.functions.into_iter().map(|(i, f)| (i, self.consume_function(f))).collect(),
+            consts: input.consts,
         }
     }
 }

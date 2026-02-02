@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -16,7 +16,6 @@
 
 use crate::ConditionalTreeNode;
 use indexmap::IndexSet;
-use leo_ast::Identifier;
 use leo_errors::StaticAnalyzerWarning;
 use leo_span::{Span, Symbol};
 
@@ -36,13 +35,13 @@ impl AwaitChecker {
 
     /// Remove from list.
     /// Returns `true` if there was a path where the future was not awaited in the order of the input list.
-    pub fn remove(&mut self, id: &Identifier) -> bool {
+    pub fn remove(&mut self, name: &Symbol) -> bool {
         // Can assume in finalize block.
         // Remove from dynamic list.
-        let is_not_first = self.to_await.iter_mut().any(|node| node.remove_element(&id.name));
+        let is_not_first = self.to_await.iter_mut().any(|node| node.remove_element(name));
 
         // Remove from static list.
-        self.static_to_await.shift_remove(&id.name);
+        self.static_to_await.shift_remove(name);
 
         is_not_first
     }
@@ -68,7 +67,7 @@ impl AwaitChecker {
             // Extend all paths by one node to represent the upcoming `then` branch.
             for node in self.to_await.iter() {
                 // Extend current path.
-                current_nodes.push(node.clone().create_child());
+                current_nodes.push(node.create_child());
             }
             // Update the set of nodes to be current set.
             self.to_await = current_nodes.clone();

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -14,12 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::create_messages;
-
 use std::fmt::Display;
 
 create_messages!(
     /// ParserWarning enum that represents all the warnings for static analysis
+    #[derive(Hash, Eq, PartialEq)]
     StaticAnalyzerWarning,
     code_mask: 4000i32,
     code_prefix: "SAZ",

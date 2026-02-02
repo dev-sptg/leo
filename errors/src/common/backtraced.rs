@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -30,7 +30,7 @@ pub(crate) const INDENT: &str = "    ";
 ///     --> file.leo: 2:8
 ///      = help: Initialize a variable `x` first.
 #[derive(Derivative)]
-#[derivative(Clone, Debug, Default, Hash, PartialEq)]
+#[derivative(Clone, Debug, Default, Hash, PartialEq, Eq)]
 pub struct Backtraced {
     /// The error message.
     pub message: String,

@@ -7,27 +7,37 @@
           "lo": 4,
           "hi": 5
         },
-        "id": 0
+        "id": 1
       }
     },
     "type_": {
       "Integer": "U8"
     },
     "value": {
-      "Identifier": {
-        "name": "expr",
+      "Path": {
+        "user_program": null,
+        "qualifier": [],
+        "identifier": {
+          "name": "expr",
+          "span": {
+            "lo": 12,
+            "hi": 16
+          },
+          "id": 3
+        },
+        "target": "Unresolved",
         "span": {
           "lo": 12,
           "hi": 16
         },
-        "id": 1
+        "id": 2
       }
     },
     "span": {
       "lo": 0,
-      "hi": 16
+      "hi": 17
     },
-    "id": 2
+    "id": 0
   }
 }
 
@@ -40,7 +50,7 @@
           "lo": 22,
           "hi": 23
         },
-        "id": 0
+        "id": 1
       }
     },
     "type_": {
@@ -49,23 +59,43 @@
     "value": {
       "Binary": {
         "left": {
-          "Identifier": {
-            "name": "x",
+          "Path": {
+            "user_program": null,
+            "qualifier": [],
+            "identifier": {
+              "name": "x",
+              "span": {
+                "lo": 31,
+                "hi": 32
+              },
+              "id": 4
+            },
+            "target": "Unresolved",
             "span": {
               "lo": 31,
               "hi": 32
             },
-            "id": 1
+            "id": 3
           }
         },
         "right": {
-          "Identifier": {
-            "name": "y",
+          "Path": {
+            "user_program": null,
+            "qualifier": [],
+            "identifier": {
+              "name": "y",
+              "span": {
+                "lo": 33,
+                "hi": 34
+              },
+              "id": 6
+            },
+            "target": "Unresolved",
             "span": {
               "lo": 33,
               "hi": 34
             },
-            "id": 2
+            "id": 5
           }
         },
         "op": "Add",
@@ -73,14 +103,14 @@
           "lo": 31,
           "hi": 34
         },
-        "id": 3
+        "id": 2
       }
     },
     "span": {
       "lo": 18,
-      "hi": 34
+      "hi": 35
     },
-    "id": 4
+    "id": 0
   }
 }
 
@@ -93,7 +123,7 @@
           "lo": 40,
           "hi": 41
         },
-        "id": 0
+        "id": 1
       }
     },
     "type_": {
@@ -102,17 +132,25 @@
     "value": {
       "Call": {
         "function": {
-          "Identifier": {
+          "user_program": null,
+          "qualifier": [],
+          "identifier": {
             "name": "x",
             "span": {
               "lo": 48,
               "hi": 49
             },
-            "id": 1
-          }
+            "id": 3
+          },
+          "target": "Unresolved",
+          "span": {
+            "lo": 48,
+            "hi": 49
+          },
+          "id": 4
         },
+        "const_arguments": [],
         "arguments": [],
-        "program": null,
         "span": {
           "lo": 48,
           "hi": 51
@@ -122,9 +160,9 @@
     },
     "span": {
       "lo": 36,
-      "hi": 51
+      "hi": 52
     },
-    "id": 3
+    "id": 0
   }
 }
 
@@ -137,25 +175,35 @@
           "lo": 57,
           "hi": 58
         },
-        "id": 0
+        "id": 1
       }
     },
     "type_": "String",
     "value": {
-      "Identifier": {
-        "name": "expr",
+      "Path": {
+        "user_program": null,
+        "qualifier": [],
+        "identifier": {
+          "name": "expr",
+          "span": {
+            "lo": 69,
+            "hi": 73
+          },
+          "id": 3
+        },
+        "target": "Unresolved",
         "span": {
           "lo": 69,
           "hi": 73
         },
-        "id": 1
+        "id": 2
       }
     },
     "span": {
       "lo": 53,
-      "hi": 73
+      "hi": 74
     },
-    "id": 2
+    "id": 0
   }
 }
 
@@ -168,27 +216,37 @@
           "lo": 79,
           "hi": 80
         },
-        "id": 0
+        "id": 1
       }
     },
     "type_": {
       "Integer": "I8"
     },
     "value": {
-      "Identifier": {
-        "name": "expr",
+      "Path": {
+        "user_program": null,
+        "qualifier": [],
+        "identifier": {
+          "name": "expr",
+          "span": {
+            "lo": 87,
+            "hi": 91
+          },
+          "id": 3
+        },
+        "target": "Unresolved",
         "span": {
           "lo": 87,
           "hi": 91
         },
-        "id": 1
+        "id": 2
       }
     },
     "span": {
       "lo": 75,
-      "hi": 91
+      "hi": 92
     },
-    "id": 2
+    "id": 0
   }
 }
 
@@ -201,7 +259,7 @@
           "lo": 97,
           "hi": 98
         },
-        "id": 0
+        "id": 1
       }
     },
     "type_": {
@@ -210,23 +268,43 @@
     "value": {
       "Binary": {
         "left": {
-          "Identifier": {
-            "name": "x",
+          "Path": {
+            "user_program": null,
+            "qualifier": [],
+            "identifier": {
+              "name": "x",
+              "span": {
+                "lo": 106,
+                "hi": 107
+              },
+              "id": 4
+            },
+            "target": "Unresolved",
             "span": {
               "lo": 106,
               "hi": 107
             },
-            "id": 1
+            "id": 3
           }
         },
         "right": {
-          "Identifier": {
-            "name": "y",
+          "Path": {
+            "user_program": null,
+            "qualifier": [],
+            "identifier": {
+              "name": "y",
+              "span": {
+                "lo": 108,
+                "hi": 109
+              },
+              "id": 6
+            },
+            "target": "Unresolved",
             "span": {
               "lo": 108,
               "hi": 109
             },
-            "id": 2
+            "id": 5
           }
         },
         "op": "Add",
@@ -234,14 +312,14 @@
           "lo": 106,
           "hi": 109
         },
-        "id": 3
+        "id": 2
       }
     },
     "span": {
       "lo": 93,
-      "hi": 109
+      "hi": 110
     },
-    "id": 4
+    "id": 0
   }
 }
 
@@ -254,7 +332,7 @@
           "lo": 115,
           "hi": 116
         },
-        "id": 0
+        "id": 1
       }
     },
     "type_": {
@@ -263,17 +341,25 @@
     "value": {
       "Call": {
         "function": {
-          "Identifier": {
+          "user_program": null,
+          "qualifier": [],
+          "identifier": {
             "name": "x",
             "span": {
               "lo": 123,
               "hi": 124
             },
-            "id": 1
-          }
+            "id": 3
+          },
+          "target": "Unresolved",
+          "span": {
+            "lo": 123,
+            "hi": 124
+          },
+          "id": 4
         },
+        "const_arguments": [],
         "arguments": [],
-        "program": null,
         "span": {
           "lo": 123,
           "hi": 126
@@ -283,9 +369,9 @@
     },
     "span": {
       "lo": 111,
-      "hi": 126
+      "hi": 127
     },
-    "id": 3
+    "id": 0
   }
 }
 
@@ -298,25 +384,35 @@
           "lo": 132,
           "hi": 133
         },
-        "id": 0
+        "id": 1
       }
     },
     "type_": "String",
     "value": {
-      "Identifier": {
-        "name": "expr",
+      "Path": {
+        "user_program": null,
+        "qualifier": [],
+        "identifier": {
+          "name": "expr",
+          "span": {
+            "lo": 144,
+            "hi": 148
+          },
+          "id": 3
+        },
+        "target": "Unresolved",
         "span": {
           "lo": 144,
           "hi": 148
         },
-        "id": 1
+        "id": 2
       }
     },
     "span": {
       "lo": 128,
-      "hi": 148
+      "hi": 149
     },
-    "id": 2
+    "id": 0
   }
 }
 
@@ -329,34 +425,60 @@
           "lo": 154,
           "hi": 155
         },
-        "id": 0
+        "id": 1
       }
     },
     "type_": {
       "Composite": {
-        "id": {
-          "name": "credits",
+        "path": {
+          "user_program": null,
+          "qualifier": [],
+          "identifier": {
+            "name": "credits",
+            "span": {
+              "lo": 157,
+              "hi": 164
+            },
+            "id": 7
+          },
+          "target": "Unresolved",
           "span": {
             "lo": 157,
             "hi": 164
           },
-          "id": 1
+          "id": 8
         },
-        "program": null
+        "const_arguments": []
       }
     },
     "value": {
       "Call": {
         "function": {
-          "Identifier": {
+          "user_program": {
+            "name": "credits",
+            "span": {
+              "lo": 167,
+              "hi": 174
+            },
+            "id": 4
+          },
+          "qualifier": [],
+          "identifier": {
             "name": "mint_private",
             "span": {
               "lo": 180,
               "hi": 192
             },
-            "id": 3
-          }
+            "id": 5
+          },
+          "target": "Unresolved",
+          "span": {
+            "lo": 167,
+            "hi": 200
+          },
+          "id": 6
         },
+        "const_arguments": [],
         "arguments": [
           {
             "Literal": {
@@ -364,7 +486,7 @@
                 "lo": 193,
                 "hi": 199
               },
-              "id": 4,
+              "id": 3,
               "variant": {
                 "Integer": [
                   "U64",
@@ -374,19 +496,18 @@
             }
           }
         ],
-        "program": "credits",
         "span": {
           "lo": 167,
           "hi": 200
         },
-        "id": 5
+        "id": 2
       }
     },
     "span": {
       "lo": 150,
-      "hi": 200
+      "hi": 201
     },
-    "id": 6
+    "id": 0
   }
 }
 
@@ -399,34 +520,67 @@
           "lo": 206,
           "hi": 207
         },
-        "id": 0
+        "id": 1
       }
     },
     "type_": {
       "Composite": {
-        "id": {
-          "name": "credits",
+        "path": {
+          "user_program": {
+            "name": "credits",
+            "span": {
+              "lo": 209,
+              "hi": 216
+            },
+            "id": 7
+          },
+          "qualifier": [],
+          "identifier": {
+            "name": "credits",
+            "span": {
+              "lo": 221,
+              "hi": 229
+            },
+            "id": 8
+          },
+          "target": "Unresolved",
           "span": {
-            "lo": 222,
+            "lo": 221,
             "hi": 229
           },
-          "id": 2
+          "id": 9
         },
-        "program": "credits"
+        "const_arguments": []
       }
     },
     "value": {
       "Call": {
         "function": {
-          "Identifier": {
+          "user_program": {
+            "name": "credits",
+            "span": {
+              "lo": 232,
+              "hi": 239
+            },
+            "id": 4
+          },
+          "qualifier": [],
+          "identifier": {
             "name": "mint_private",
             "span": {
               "lo": 245,
               "hi": 257
             },
-            "id": 4
-          }
+            "id": 5
+          },
+          "target": "Unresolved",
+          "span": {
+            "lo": 232,
+            "hi": 265
+          },
+          "id": 6
         },
+        "const_arguments": [],
         "arguments": [
           {
             "Literal": {
@@ -434,7 +588,7 @@
                 "lo": 258,
                 "hi": 264
               },
-              "id": 5,
+              "id": 3,
               "variant": {
                 "Integer": [
                   "U64",
@@ -444,19 +598,18 @@
             }
           }
         ],
-        "program": "credits",
         "span": {
           "lo": 232,
           "hi": 265
         },
-        "id": 6
+        "id": 2
       }
     },
     "span": {
       "lo": 202,
-      "hi": 265
+      "hi": 266
     },
-    "id": 7
+    "id": 0
   }
 }
 
@@ -469,27 +622,37 @@
           "lo": 271,
           "hi": 272
         },
-        "id": 0
+        "id": 1
       }
     },
     "type_": {
       "Integer": "U32"
     },
     "value": {
-      "Identifier": {
-        "name": "expr",
+      "Path": {
+        "user_program": null,
+        "qualifier": [],
+        "identifier": {
+          "name": "expr",
+          "span": {
+            "lo": 280,
+            "hi": 284
+          },
+          "id": 3
+        },
+        "target": "Unresolved",
         "span": {
           "lo": 280,
           "hi": 284
         },
-        "id": 1
+        "id": 2
       }
     },
     "span": {
       "lo": 267,
-      "hi": 284
+      "hi": 285
     },
-    "id": 2
+    "id": 0
   }
 }
 
@@ -502,7 +665,7 @@
           "lo": 290,
           "hi": 291
         },
-        "id": 0
+        "id": 1
       }
     },
     "type_": {
@@ -511,23 +674,43 @@
     "value": {
       "Binary": {
         "left": {
-          "Identifier": {
-            "name": "x",
+          "Path": {
+            "user_program": null,
+            "qualifier": [],
+            "identifier": {
+              "name": "x",
+              "span": {
+                "lo": 299,
+                "hi": 300
+              },
+              "id": 4
+            },
+            "target": "Unresolved",
             "span": {
               "lo": 299,
               "hi": 300
             },
-            "id": 1
+            "id": 3
           }
         },
         "right": {
-          "Identifier": {
-            "name": "y",
+          "Path": {
+            "user_program": null,
+            "qualifier": [],
+            "identifier": {
+              "name": "y",
+              "span": {
+                "lo": 301,
+                "hi": 302
+              },
+              "id": 6
+            },
+            "target": "Unresolved",
             "span": {
               "lo": 301,
               "hi": 302
             },
-            "id": 2
+            "id": 5
           }
         },
         "op": "Add",
@@ -535,14 +718,14 @@
           "lo": 299,
           "hi": 302
         },
-        "id": 3
+        "id": 2
       }
     },
     "span": {
       "lo": 286,
-      "hi": 302
+      "hi": 303
     },
-    "id": 4
+    "id": 0
   }
 }
 
@@ -555,7 +738,7 @@
           "lo": 308,
           "hi": 309
         },
-        "id": 0
+        "id": 1
       }
     },
     "type_": {
@@ -564,17 +747,25 @@
     "value": {
       "Call": {
         "function": {
-          "Identifier": {
+          "user_program": null,
+          "qualifier": [],
+          "identifier": {
             "name": "x",
             "span": {
               "lo": 317,
               "hi": 318
             },
-            "id": 1
-          }
+            "id": 3
+          },
+          "target": "Unresolved",
+          "span": {
+            "lo": 317,
+            "hi": 318
+          },
+          "id": 4
         },
+        "const_arguments": [],
         "arguments": [],
-        "program": null,
         "span": {
           "lo": 317,
           "hi": 320
@@ -584,9 +775,9 @@
     },
     "span": {
       "lo": 304,
-      "hi": 320
+      "hi": 321
     },
-    "id": 3
+    "id": 0
   }
 }
 
@@ -599,27 +790,37 @@
           "lo": 326,
           "hi": 327
         },
-        "id": 0
+        "id": 1
       }
     },
     "type_": {
       "Integer": "U32"
     },
     "value": {
-      "Identifier": {
-        "name": "expr",
+      "Path": {
+        "user_program": null,
+        "qualifier": [],
+        "identifier": {
+          "name": "expr",
+          "span": {
+            "lo": 335,
+            "hi": 339
+          },
+          "id": 3
+        },
+        "target": "Unresolved",
         "span": {
           "lo": 335,
           "hi": 339
         },
-        "id": 1
+        "id": 2
       }
     },
     "span": {
       "lo": 322,
-      "hi": 339
+      "hi": 340
     },
-    "id": 2
+    "id": 0
   }
 }
 
@@ -632,7 +833,7 @@
           "lo": 345,
           "hi": 346
         },
-        "id": 0
+        "id": 1
       }
     },
     "type_": {
@@ -641,23 +842,43 @@
     "value": {
       "Binary": {
         "left": {
-          "Identifier": {
-            "name": "x",
+          "Path": {
+            "user_program": null,
+            "qualifier": [],
+            "identifier": {
+              "name": "x",
+              "span": {
+                "lo": 354,
+                "hi": 355
+              },
+              "id": 4
+            },
+            "target": "Unresolved",
             "span": {
               "lo": 354,
               "hi": 355
             },
-            "id": 1
+            "id": 3
           }
         },
         "right": {
-          "Identifier": {
-            "name": "y",
+          "Path": {
+            "user_program": null,
+            "qualifier": [],
+            "identifier": {
+              "name": "y",
+              "span": {
+                "lo": 356,
+                "hi": 357
+              },
+              "id": 6
+            },
+            "target": "Unresolved",
             "span": {
               "lo": 356,
               "hi": 357
             },
-            "id": 2
+            "id": 5
           }
         },
         "op": "Add",
@@ -665,14 +886,14 @@
           "lo": 354,
           "hi": 357
         },
-        "id": 3
+        "id": 2
       }
     },
     "span": {
       "lo": 341,
-      "hi": 357
+      "hi": 358
     },
-    "id": 4
+    "id": 0
   }
 }
 
@@ -685,7 +906,7 @@
           "lo": 363,
           "hi": 364
         },
-        "id": 0
+        "id": 1
       }
     },
     "type_": {
@@ -694,17 +915,25 @@
     "value": {
       "Call": {
         "function": {
-          "Identifier": {
+          "user_program": null,
+          "qualifier": [],
+          "identifier": {
             "name": "x",
             "span": {
               "lo": 372,
               "hi": 373
             },
-            "id": 1
-          }
+            "id": 3
+          },
+          "target": "Unresolved",
+          "span": {
+            "lo": 372,
+            "hi": 373
+          },
+          "id": 4
         },
+        "const_arguments": [],
         "arguments": [],
-        "program": null,
         "span": {
           "lo": 372,
           "hi": 375
@@ -714,9 +943,9 @@
     },
     "span": {
       "lo": 359,
-      "hi": 375
+      "hi": 376
     },
-    "id": 3
+    "id": 0
   }
 }
 
@@ -729,7 +958,7 @@
           "lo": 381,
           "hi": 382
         },
-        "id": 0
+        "id": 1
       }
     },
     "type_": "Address",
@@ -739,7 +968,7 @@
           "lo": 394,
           "hi": 457
         },
-        "id": 1,
+        "id": 2,
         "variant": {
           "Address": "aleo1fj982yqchhy973kz7e9jk6er7t6qd6jm9anplnlprem507w6lv9spwvfxx"
         }
@@ -747,9 +976,153 @@
     },
     "span": {
       "lo": 377,
-      "hi": 457
+      "hi": 458
     },
-    "id": 2
+    "id": 0
+  }
+}
+
+{
+  "Definition": {
+    "place": {
+      "Single": {
+        "name": "x",
+        "span": {
+          "lo": 463,
+          "hi": 464
+        },
+        "id": 1
+      }
+    },
+    "type_": {
+      "Array": {
+        "element_type": {
+          "Integer": "U32"
+        },
+        "length": {
+          "Binary": {
+            "left": {
+              "Call": {
+                "function": {
+                  "user_program": null,
+                  "qualifier": [],
+                  "identifier": {
+                    "name": "foo",
+                    "span": {
+                      "lo": 472,
+                      "hi": 475
+                    },
+                    "id": 9
+                  },
+                  "target": "Unresolved",
+                  "span": {
+                    "lo": 472,
+                    "hi": 475
+                  },
+                  "id": 10
+                },
+                "const_arguments": [],
+                "arguments": [
+                  {
+                    "Binary": {
+                      "left": {
+                        "Literal": {
+                          "span": {
+                            "lo": 476,
+                            "hi": 477
+                          },
+                          "id": 7,
+                          "variant": {
+                            "Unsuffixed": "1"
+                          }
+                        }
+                      },
+                      "right": {
+                        "Literal": {
+                          "span": {
+                            "lo": 480,
+                            "hi": 481
+                          },
+                          "id": 8,
+                          "variant": {
+                            "Unsuffixed": "2"
+                          }
+                        }
+                      },
+                      "op": "Add",
+                      "span": {
+                        "lo": 476,
+                        "hi": 481
+                      },
+                      "id": 6
+                    }
+                  }
+                ],
+                "span": {
+                  "lo": 472,
+                  "hi": 482
+                },
+                "id": 5
+              }
+            },
+            "right": {
+              "Path": {
+                "user_program": null,
+                "qualifier": [],
+                "identifier": {
+                  "name": "N",
+                  "span": {
+                    "lo": 485,
+                    "hi": 486
+                  },
+                  "id": 12
+                },
+                "target": "Unresolved",
+                "span": {
+                  "lo": 485,
+                  "hi": 486
+                },
+                "id": 11
+              }
+            },
+            "op": "Mul",
+            "span": {
+              "lo": 472,
+              "hi": 486
+            },
+            "id": 4
+          }
+        }
+      }
+    },
+    "value": {
+      "Array": {
+        "elements": [
+          {
+            "Literal": {
+              "span": {
+                "lo": 491,
+                "hi": 492
+              },
+              "id": 3,
+              "variant": {
+                "Unsuffixed": "1"
+              }
+            }
+          }
+        ],
+        "span": {
+          "lo": 490,
+          "hi": 493
+        },
+        "id": 2
+      }
+    },
+    "span": {
+      "lo": 459,
+      "hi": 494
+    },
+    "id": 0
   }
 }
 

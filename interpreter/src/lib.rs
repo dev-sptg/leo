@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -14,41 +14,48 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-use leo_ast::{Ast, CallExpression, ExpressionStatement, Identifier, Node as _, NodeBuilder, Statement};
+use leo_ast::{
+    Ast,
+    CallExpression,
+    ExpressionStatement,
+    Location,
+    NetworkName,
+    Node as _,
+    NodeBuilder,
+    Path,
+    Statement,
+    interpreter_value::Value,
+};
 use leo_errors::{InterpreterHalt, LeoError, Result};
 use leo_span::{Span, Symbol, source_map::FileName, sym, with_session_globals};
 
 use snarkvm::prelude::{Program, TestnetV0};
 
 use indexmap::IndexMap;
+use itertools::Itertools;
 use std::{
     collections::HashMap,
     fmt::{Display, Write as _},
     fs,
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 #[cfg(test)]
 mod test;
 
+#[cfg(test)]
+mod test_interpreter;
+
 mod util;
 use util::*;
 
-mod core_functions;
-pub use core_functions::{CoreFunctionHelper, evaluate_core_function};
-
 mod cursor;
 use cursor::*;
-pub use cursor::{GlobalId, evaluate_binary, evaluate_unary, literal_to_value};
 
 mod interpreter;
 use interpreter::*;
 
 mod cursor_aleo;
-
-mod value;
-use value::*;
-pub use value::{StructContents, Value};
 
 mod ui;
 use ui::Ui;
@@ -115,11 +122,11 @@ Input history is available - use the up and down arrow keys.
 
 fn parse_breakpoint(s: &str) -> Option<Breakpoint> {
     let strings: Vec<&str> = s.split_whitespace().collect();
-    if strings.len() == 2 {
-        if let Ok(line) = strings[1].parse::<usize>() {
-            let program = strings[0].strip_suffix(".aleo").unwrap_or(strings[0]).to_string();
-            return Some(Breakpoint { program, line });
-        }
+    if strings.len() == 2
+        && let Ok(line) = strings[1].parse::<usize>()
+    {
+        let program = strings[0].strip_suffix(".aleo").unwrap_or(strings[0]).to_string();
+        return Some(Breakpoint { program, line });
     }
     None
 }
@@ -137,13 +144,16 @@ pub struct TestFunction {
 // all the functions with annotations.
 #[allow(clippy::type_complexity)]
 pub fn find_and_run_tests(
-    leo_filenames: &[PathBuf],
+    leo_filenames: &[(PathBuf, Vec<PathBuf>)], // Leo source files and their modules
     aleo_filenames: &[PathBuf],
-    signer: SvmAddress,
+    private_key: String,
     block_height: u32,
+    block_timestamp: i64,
     match_str: &str,
-) -> Result<(Vec<TestFunction>, IndexMap<GlobalId, Result<()>>)> {
-    let mut interpreter = Interpreter::new(leo_filenames, aleo_filenames, signer, block_height)?;
+    network: NetworkName,
+) -> Result<(Vec<TestFunction>, IndexMap<Location, Result<()>>)> {
+    let mut interpreter =
+        Interpreter::new(leo_filenames, aleo_filenames, private_key, block_height, block_timestamp, network)?;
 
     let mut native_test_functions = Vec::new();
 
@@ -179,7 +189,7 @@ pub fn find_and_run_tests(
             let private_key = annotation.map.get(&private_key_symbol).cloned();
             native_test_functions.push(TestFunction {
                 program: id.program.to_string(),
-                function: id.name.to_string(),
+                function: id.path.iter().format("::").to_string(),
                 should_fail,
                 private_key,
             });
@@ -189,9 +199,10 @@ pub fn find_and_run_tests(
         assert!(function.variant.is_script(), "Type checking should ensure test functions are transitions or scripts.");
 
         let call = CallExpression {
-            function: Identifier::new(function.identifier.name, interpreter.node_builder.next_id()).into(),
+            function: Path::from(function.identifier)
+                .to_global(Location::new(id.program, vec![function.identifier.name])),
+            const_arguments: vec![], // scripts don't have const parameters for now
             arguments: Vec::new(),
-            program: Some(id.program),
             span: Default::default(),
             id: interpreter.node_builder.next_id(),
         };
@@ -228,6 +239,9 @@ pub fn find_and_run_tests(
                 result.insert(id, Err(err));
             }
         }
+
+        // Clear the state for the next test.
+        interpreter.cursor.clear();
     }
 
     Ok((native_test_functions, result))
@@ -236,25 +250,26 @@ pub fn find_and_run_tests(
 /// Load all the Leo source files indicated and open the interpreter
 /// to commands from the user.
 pub fn interpret(
-    leo_filenames: &[PathBuf],
+    leo_filenames: &[(PathBuf, Vec<PathBuf>)], // Leo source files and their modules
     aleo_filenames: &[PathBuf],
-    signer: SvmAddress,
+    private_key: String,
     block_height: u32,
+    block_timestamp: i64,
     tui: bool,
+    network: NetworkName,
 ) -> Result<()> {
-    let mut interpreter = Interpreter::new(leo_filenames, aleo_filenames, signer, block_height)?;
+    let mut interpreter =
+        Interpreter::new(leo_filenames, aleo_filenames, private_key, block_height, block_timestamp, network)?;
 
     let mut user_interface: Box<dyn Ui> =
         if tui { Box::new(ratatui_ui::RatatuiUi::new()) } else { Box::new(dialoguer_input::DialoguerUi::new()) };
 
-    let mut code = String::new();
     let mut futures = Vec::new();
     let mut watchpoints = Vec::new();
     let mut message = INTRO.to_string();
     let mut result = String::new();
 
     loop {
-        code.clear();
         futures.clear();
         watchpoints.clear();
 

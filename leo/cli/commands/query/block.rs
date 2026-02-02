@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -83,10 +83,10 @@ impl Command for LeoBlock {
         } else if self.to_height {
             let id = self.id.unwrap();
             is_valid_hash(&id)?;
-            format!("height/{}", id).to_string()
+            format!("height/{id}").to_string()
         } else if let Some(id) = self.id {
             is_valid_height_or_hash(&id)?;
-            format!("block/{}", id)
+            format!("block/{id}")
         } else {
             unreachable!("All cases are covered")
         };

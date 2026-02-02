@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -13,8 +13,6 @@
 
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
-
-use crate::create_messages;
 
 use std::{
     error::Error as ErrorArg,
@@ -60,10 +58,11 @@ create_messages!(
     @formatted
     program_name_should_match_file_name {
         args: (program_name: impl Display, file_name: impl Display),
-        msg: format!("Program name `{program_name}` should match file name `{file_name}`"),
+        msg: format!("The program name `{program_name}` must match {file_name}"),
         help: None,
     }
 
+    // Unused error.
     @formatted
     program_scope_name_does_not_match {
         args: (program_scope_name: impl Display, file_name: impl Display),
@@ -110,6 +109,27 @@ create_messages!(
     failed_ast_file {
         args: (filename: impl Display, error: impl Display),
         msg: format!("Failed to write AST to file {filename}: {error}."),
+        help: None,
+    }
+
+    @formatted
+    const_generic_not_resolved {
+        args: (kind: impl Display, item: impl Display),
+        msg: format!("Unable to resolve {kind} `{item}`. A non-const expression was provided where a const generic parameter is required."),
+        help: None,
+    }
+
+    @formatted
+    array_length_not_evaluated {
+        args: (),
+        msg: "This array length could not be determined at compile time.".to_string(),
+        help: None,
+    }
+
+    @formatted
+    repeat_count_not_evaluated {
+        args: (),
+        msg: "This repeat count could not be determined at compile time.".to_string(),
         help: None,
     }
 );

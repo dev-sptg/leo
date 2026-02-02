@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -27,22 +27,23 @@ pub trait ExpressionConsumer {
         match input {
             Expression::Array(array) => self.consume_array(array),
             Expression::ArrayAccess(access) => self.consume_array_access(*access),
-            Expression::AssociatedConstant(constant) => self.consume_associated_constant(constant),
-            Expression::AssociatedFunction(function) => self.consume_associated_function(function),
+            Expression::Async(async_) => self.consume_async(async_),
             Expression::Binary(binary) => self.consume_binary(*binary),
             Expression::Call(call) => self.consume_call(*call),
             Expression::Cast(cast) => self.consume_cast(*cast),
-            Expression::Struct(struct_) => self.consume_struct_init(struct_),
+            Expression::Composite(composite_) => self.consume_composite_init(composite_),
             Expression::Err(err) => self.consume_err(err),
-            Expression::Identifier(identifier) => self.consume_identifier(identifier),
+            Expression::Path(path) => self.consume_path(path),
             Expression::Literal(value) => self.consume_literal(value),
             Expression::Locator(locator) => self.consume_locator(locator),
             Expression::MemberAccess(access) => self.consume_member_access(*access),
+            Expression::Repeat(repeat) => self.consume_repeat(*repeat),
             Expression::Ternary(ternary) => self.consume_ternary(*ternary),
             Expression::Tuple(tuple) => self.consume_tuple(tuple),
             Expression::TupleAccess(access) => self.consume_tuple_access(*access),
             Expression::Unary(unary) => self.consume_unary(*unary),
             Expression::Unit(unit) => self.consume_unit(unit),
+            Expression::Intrinsic(intrinsic) => self.consume_intrinsic(*intrinsic),
         }
     }
 
@@ -52,9 +53,7 @@ pub trait ExpressionConsumer {
 
     fn consume_tuple_access(&mut self, _input: TupleAccess) -> Self::Output;
 
-    fn consume_associated_constant(&mut self, _input: AssociatedConstantExpression) -> Self::Output;
-
-    fn consume_associated_function(&mut self, _input: AssociatedFunctionExpression) -> Self::Output;
+    fn consume_async(&mut self, _input: AsyncExpression) -> Self::Output;
 
     fn consume_array(&mut self, _input: ArrayExpression) -> Self::Output;
 
@@ -64,17 +63,21 @@ pub trait ExpressionConsumer {
 
     fn consume_cast(&mut self, _input: CastExpression) -> Self::Output;
 
-    fn consume_struct_init(&mut self, _input: StructExpression) -> Self::Output;
+    fn consume_composite_init(&mut self, _input: CompositeExpression) -> Self::Output;
 
     fn consume_err(&mut self, _input: ErrExpression) -> Self::Output {
         panic!("`ErrExpression`s should not be in the AST at this phase of compilation.")
     }
 
-    fn consume_identifier(&mut self, _input: Identifier) -> Self::Output;
+    fn consume_path(&mut self, _input: Path) -> Self::Output;
 
     fn consume_literal(&mut self, _input: Literal) -> Self::Output;
 
     fn consume_locator(&mut self, _input: LocatorExpression) -> Self::Output;
+
+    fn consume_repeat(&mut self, _input: RepeatExpression) -> Self::Output;
+
+    fn consume_intrinsic(&mut self, _input: IntrinsicExpression) -> Self::Output;
 
     fn consume_ternary(&mut self, _input: TernaryExpression) -> Self::Output;
 
@@ -129,11 +132,18 @@ pub trait FunctionConsumer {
     fn consume_function(&mut self, input: Function) -> Self::Output;
 }
 
-/// A Consumer trait for structs in the AST.
-pub trait StructConsumer {
+/// A Consumer trait for constructors in the AST.
+pub trait ConstructorConsumer {
     type Output;
 
-    fn consume_struct(&mut self, input: Composite) -> Self::Output;
+    fn consume_constructor(&mut self, input: Constructor) -> Self::Output;
+}
+
+/// A Consumer trait for composites in the AST.
+pub trait CompositeConsumer {
+    type Output;
+
+    fn consume_composite(&mut self, input: Composite) -> Self::Output;
 }
 
 /// A Consumer trait for imported programs in the AST.
@@ -161,4 +171,16 @@ pub trait ProgramScopeConsumer {
 pub trait ProgramConsumer {
     type Output;
     fn consume_program(&mut self, input: Program) -> Self::Output;
+}
+
+/// A Consumer trait for a stub in the AST.
+pub trait StubConsumer {
+    type Output;
+    fn consume_stub(&mut self, input: Stub) -> Self::Output;
+}
+
+/// A Consumer trait for modules in the AST.
+pub trait ModuleConsumer {
+    type Output;
+    fn consume_module(&mut self, input: Module) -> Self::Output;
 }

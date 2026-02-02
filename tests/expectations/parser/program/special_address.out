@@ -1,4 +1,5 @@
 {
+  "modules": {},
   "imports": {},
   "stubs": {},
   "program_scopes": {
@@ -10,7 +11,7 @@
             "lo": 9,
             "hi": 13
           },
-          "id": 0
+          "id": 21
         },
         "network": {
           "name": "aleo",
@@ -18,11 +19,11 @@
             "lo": 14,
             "hi": 18
           },
-          "id": 1
+          "id": 22
         }
       },
       "consts": [],
-      "structs": [],
+      "composites": [],
       "mappings": [
         [
           "Yo",
@@ -33,7 +34,7 @@
                 "lo": 33,
                 "hi": 35
               },
-              "id": 2
+              "id": 19
             },
             "key_type": "Address",
             "value_type": {
@@ -43,10 +44,11 @@
               "lo": 25,
               "hi": 52
             },
-            "id": 3
+            "id": 20
           }
         ]
       ],
+      "storage_variables": [],
       "functions": [
         [
           "main",
@@ -59,8 +61,9 @@
                 "lo": 69,
                 "hi": 73
               },
-              "id": 4
+              "id": 0
             },
+            "const_parameters": [],
             "input": [
               {
                 "identifier": {
@@ -69,7 +72,7 @@
                     "lo": 74,
                     "hi": 75
                   },
-                  "id": 5
+                  "id": 1
                 },
                 "mode": "None",
                 "type_": "Address",
@@ -77,7 +80,7 @@
                   "lo": 74,
                   "hi": 84
                 },
-                "id": 6
+                "id": 2
               }
             ],
             "output": [],
@@ -89,38 +92,78 @@
                     "variant": {
                       "AssertEq": [
                         {
-                          "Identifier": {
-                            "name": "a",
+                          "Path": {
+                            "user_program": null,
+                            "qualifier": [],
+                            "identifier": {
+                              "name": "a",
+                              "span": {
+                                "lo": 106,
+                                "hi": 107
+                              },
+                              "id": 5
+                            },
+                            "target": "Unresolved",
                             "span": {
                               "lo": 106,
                               "hi": 107
                             },
-                            "id": 7
+                            "id": 4
                           }
                         },
                         {
-                          "MemberAccess": {
-                            "inner": {
-                              "Identifier": {
-                                "name": "self",
-                                "span": {
-                                  "lo": 109,
-                                  "hi": 113
-                                },
-                                "id": 8
-                              }
-                            },
-                            "name": {
-                              "name": "caller",
-                              "span": {
-                                "lo": 114,
-                                "hi": 120
-                              },
-                              "id": 9
-                            },
+                          "Intrinsic": {
+                            "name": "_self_caller",
+                            "type_parameters": [],
+                            "arguments": [],
                             "span": {
                               "lo": 109,
                               "hi": 120
+                            },
+                            "id": 6
+                          }
+                        }
+                      ]
+                    },
+                    "span": {
+                      "lo": 96,
+                      "hi": 122
+                    },
+                    "id": 3
+                  }
+                },
+                {
+                  "Assert": {
+                    "variant": {
+                      "AssertEq": [
+                        {
+                          "Path": {
+                            "user_program": null,
+                            "qualifier": [],
+                            "identifier": {
+                              "name": "a",
+                              "span": {
+                                "lo": 141,
+                                "hi": 142
+                              },
+                              "id": 9
+                            },
+                            "target": "Unresolved",
+                            "span": {
+                              "lo": 141,
+                              "hi": 142
+                            },
+                            "id": 8
+                          }
+                        },
+                        {
+                          "Intrinsic": {
+                            "name": "_self_address",
+                            "type_parameters": [],
+                            "arguments": [],
+                            "span": {
+                              "lo": 144,
+                              "hi": 156
                             },
                             "id": 10
                           }
@@ -128,10 +171,10 @@
                       ]
                     },
                     "span": {
-                      "lo": 96,
-                      "hi": 105
+                      "lo": 131,
+                      "hi": 158
                     },
-                    "id": 11
+                    "id": 7
                   }
                 },
                 {
@@ -139,11 +182,21 @@
                     "variant": {
                       "AssertEq": [
                         {
-                          "Identifier": {
-                            "name": "a",
+                          "Path": {
+                            "user_program": null,
+                            "qualifier": [],
+                            "identifier": {
+                              "name": "a",
+                              "span": {
+                                "lo": 177,
+                                "hi": 178
+                              },
+                              "id": 13
+                            },
+                            "target": "Unresolved",
                             "span": {
-                              "lo": 141,
-                              "hi": 142
+                              "lo": 177,
+                              "hi": 178
                             },
                             "id": 12
                           }
@@ -151,45 +204,10 @@
                         {
                           "Literal": {
                             "span": {
-                              "lo": 144,
-                              "hi": 156
+                              "lo": 180,
+                              "hi": 190
                             },
                             "id": 14,
-                            "variant": {
-                              "Address": "test.aleo"
-                            }
-                          }
-                        }
-                      ]
-                    },
-                    "span": {
-                      "lo": 131,
-                      "hi": 140
-                    },
-                    "id": 15
-                  }
-                },
-                {
-                  "Assert": {
-                    "variant": {
-                      "AssertEq": [
-                        {
-                          "Identifier": {
-                            "name": "a",
-                            "span": {
-                              "lo": 177,
-                              "hi": 178
-                            },
-                            "id": 16
-                          }
-                        },
-                        {
-                          "Literal": {
-                            "span": {
-                              "lo": 180,
-                              "hi": 185
-                            },
-                            "id": 18,
                             "variant": {
                               "Address": "hello.aleo"
                             }
@@ -199,9 +217,9 @@
                     },
                     "span": {
                       "lo": 167,
-                      "hi": 176
+                      "hi": 192
                     },
-                    "id": 19
+                    "id": 11
                   }
                 },
                 {
@@ -210,9 +228,9 @@
                       "Literal": {
                         "span": {
                           "lo": 208,
-                          "hi": 211
+                          "hi": 216
                         },
-                        "id": 21,
+                        "id": 16,
                         "variant": {
                           "Address": "foo.aleo"
                         }
@@ -222,7 +240,7 @@
                       "lo": 201,
                       "hi": 217
                     },
-                    "id": 22
+                    "id": 15
                   }
                 }
               ],
@@ -230,18 +248,19 @@
                 "lo": 86,
                 "hi": 223
               },
-              "id": 23
+              "id": 17
             },
             "span": {
               "lo": 58,
               "hi": 223
             },
-            "id": 24
+            "id": 18
           }
         ]
       ],
+      "constructor": null,
       "span": {
-        "lo": 1,
+        "lo": 0,
         "hi": 225
       }
     }

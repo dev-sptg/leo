@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -17,12 +17,15 @@
 use crate::CompilerState;
 
 use leo_ast::{
+    AstReconstructor,
+    BinaryExpression,
+    BinaryOperation,
     DefinitionPlace,
     DefinitionStatement,
     Expression,
-    ExpressionReconstructor as _,
     Identifier,
     Node as _,
+    Path,
     Statement,
     TupleExpression,
     Type,
@@ -47,17 +50,17 @@ impl DestructuringVisitor<'_> {
             self.state.type_table.get(&expression.id()).expect("Expressions should have types.")
         else {
             // It's not a tuple, so there's no more to do.
-            return self.reconstruct_expression(expression);
+            return self.reconstruct_expression(expression, &());
         };
 
-        let (new_expression, mut statements) = self.reconstruct_expression(expression);
+        let (new_expression, mut statements) = self.reconstruct_expression(expression, &());
 
         match new_expression {
-            Expression::Identifier(identifier) => {
+            Expression::Path(path) => {
                 // It's a variable name, so just get the member identifiers we've already made.
-                let identifiers = self.tuples.get(&identifier.name).expect("Tuples should have been found");
+                let identifiers = self.tuples.get(&path.identifier().name).expect("Tuples should have been found");
                 let elements: Vec<Expression> =
-                    identifiers.iter().map(|identifier| Expression::Identifier(*identifier)).collect();
+                    identifiers.iter().map(|identifier| Path::from(*identifier).to_local().into()).collect();
 
                 let tuple: Expression =
                     TupleExpression { elements, span: Default::default(), id: self.state.node_builder.next_id() }
@@ -83,7 +86,7 @@ impl DestructuringVisitor<'_> {
                     panic!("`assign_tuple` always creates a definition with `Multiple`");
                 };
 
-                let elements = identifiers.iter().map(|identifier| Expression::Identifier(*identifier)).collect();
+                let elements = identifiers.iter().map(|identifier| Path::from(*identifier).to_local().into()).collect();
 
                 let expr = Expression::Tuple(TupleExpression {
                     elements,
@@ -100,6 +103,34 @@ impl DestructuringVisitor<'_> {
 
             _ => panic!("Tuples may only be identifiers, tuple literals, or calls."),
         }
+    }
+
+    /// Folds an iterator of expressions into a left-associated chain using `op`.
+    ///
+    /// Given expressions `[e1, e2, e3]`, this produces `((e1 op e2) op e3)`.
+    /// Each intermediate node is assigned a fresh ID and recorded as `Boolean`
+    /// in the type table.
+    ///
+    /// Panics if the iterator is empty.
+    pub fn fold_with_op<I>(&mut self, op: BinaryOperation, pieces: I) -> Expression
+    where
+        I: Iterator<Item = Expression>,
+    {
+        pieces
+            .reduce(|left, right| {
+                let expr: Expression = BinaryExpression {
+                    op,
+                    left,
+                    right,
+                    span: Default::default(),
+                    id: self.state.node_builder.next_id(),
+                }
+                .into();
+
+                self.state.type_table.insert(expr.id(), Type::Boolean);
+                expr
+            })
+            .expect("fold_with_op called with empty iterator")
     }
 
     // Given the `expression` of tuple type, make a definition assigning variable to its members.

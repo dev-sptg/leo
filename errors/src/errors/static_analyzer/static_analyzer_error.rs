@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::create_messages;
 use std::fmt::{Debug, Display};
 
 // TODO: Consolidate errors.
@@ -89,9 +88,9 @@ create_messages!(
     }
 
     @formatted
-    compile_core_function {
+    compile_intrinsic {
         args: (err: impl Display),
-        msg: format!("Error during compile time evaluation of this core function: {err}."),
+        msg: format!("Error during compile time evaluation of this intrinsic: {err}."),
         help: None,
     }
 
@@ -100,5 +99,19 @@ create_messages!(
         args: (index: impl Display, len: impl Display),
         msg: format!("Array index {index} out of bounds (array length is {len})."),
         help: None,
+    }
+
+    @formatted
+    async_block_capturing_too_many_vars {
+        args: (size: impl Display, max: impl Display),
+        msg: format!("An `async` block cannot capture more than {max} variables, found one attempting to capture {size} variables."),
+        help: None,
+    }
+
+    @formatted
+    custom_error {
+        args: (msg: impl Display, help: Option<impl Display>),
+        msg: format!("{msg}"),
+        help: help.map(|h| h.to_string()),
     }
 );

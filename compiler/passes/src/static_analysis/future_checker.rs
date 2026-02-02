@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 use crate::TypeTable;
 
-use leo_ast::{CoreFunction, Expression, ExpressionVisitor, Function, Node, StatementVisitor, Type};
+use leo_ast::{AstVisitor, Expression, Function, Intrinsic, Node, Type};
 use leo_errors::{Handler, StaticAnalyzerError};
 
 /// Error if futures are used improperly.
@@ -50,15 +50,17 @@ impl FutureChecker<'_> {
     }
 }
 
-impl ExpressionVisitor for FutureChecker<'_> {
+impl AstVisitor for FutureChecker<'_> {
+    /* Expressions */
     type AdditionalInput = Position;
     type Output = ();
 
     fn visit_expression(&mut self, input: &Expression, additional: &Self::AdditionalInput) -> Self::Output {
         use Position::*;
         let is_call = matches!(input, Expression::Call(..));
+        let is_async_block = matches!(input, Expression::Async(..));
         match self.type_table.get(&input.id()) {
-            Some(Type::Future(..)) if is_call => {
+            Some(Type::Future(..)) if is_call | is_async_block => {
                 // A call producing a Future may appear in any of these positions.
                 if !matches!(additional, Await | Return | FunctionArgument | LastTupleLiteral | Definition) {
                     self.emit_err(StaticAnalyzerError::misplaced_future(input.span()));
@@ -89,17 +91,18 @@ impl ExpressionVisitor for FutureChecker<'_> {
         match input {
             Expression::Array(array) => self.visit_array(array, &Position::Misc),
             Expression::ArrayAccess(access) => self.visit_array_access(access, &Position::Misc),
-            Expression::AssociatedConstant(constant) => self.visit_associated_constant(constant, &Position::Misc),
-            Expression::AssociatedFunction(function) => self.visit_associated_function(function, &Position::Misc),
+            Expression::Intrinsic(intr) => self.visit_intrinsic(intr, &Position::Misc),
+            Expression::Async(async_) => self.visit_async(async_, &Position::Misc),
             Expression::Binary(binary) => self.visit_binary(binary, &Position::Misc),
             Expression::Call(call) => self.visit_call(call, &Position::Misc),
             Expression::Cast(cast) => self.visit_cast(cast, &Position::Misc),
-            Expression::Struct(struct_) => self.visit_struct_init(struct_, &Position::Misc),
+            Expression::Composite(composite) => self.visit_composite_init(composite, &Position::Misc),
             Expression::Err(err) => self.visit_err(err, &Position::Misc),
-            Expression::Identifier(identifier) => self.visit_identifier(identifier, &Position::Misc),
+            Expression::Path(path) => self.visit_path(path, &Position::Misc),
             Expression::Literal(literal) => self.visit_literal(literal, &Position::Misc),
             Expression::Locator(locator) => self.visit_locator(locator, &Position::Misc),
             Expression::MemberAccess(access) => self.visit_member_access(access, &Position::Misc),
+            Expression::Repeat(repeat) => self.visit_repeat(repeat, &Position::Misc),
             Expression::Ternary(ternary) => self.visit_ternary(ternary, &Position::Misc),
             Expression::Tuple(tuple) => self.visit_tuple(tuple, additional),
             Expression::TupleAccess(access) => self.visit_tuple_access(access, &Position::Misc),
@@ -133,14 +136,18 @@ impl ExpressionVisitor for FutureChecker<'_> {
         self.visit_expression(&input.tuple, &Position::TupleAccess);
     }
 
-    fn visit_associated_function(
+    fn visit_intrinsic(
         &mut self,
-        input: &leo_ast::AssociatedFunctionExpression,
+        input: &leo_ast::IntrinsicExpression,
         _additional: &Self::AdditionalInput,
     ) -> Self::Output {
-        let core_function = CoreFunction::from_symbols(input.variant.name, input.name.name)
-            .expect("Typechecking guarantees that this function exists.");
-        let position = if core_function == CoreFunction::FutureAwait { Position::Await } else { Position::Misc };
+        let position = if let Some(Intrinsic::FutureAwait) = Intrinsic::from_symbol(input.name, &input.type_parameters)
+        {
+            Position::Await
+        } else {
+            Position::Misc
+        };
+
         input.arguments.iter().for_each(|arg| {
             self.visit_expression(arg, &position);
         });
@@ -165,10 +172,12 @@ impl ExpressionVisitor for FutureChecker<'_> {
         }
         Default::default()
     }
-}
 
-impl StatementVisitor for FutureChecker<'_> {
+    /* Statments */
     fn visit_definition(&mut self, input: &leo_ast::DefinitionStatement) {
+        if let Some(ty) = input.type_.as_ref() {
+            self.visit_type(ty)
+        }
         self.visit_expression(&input.value, &Position::Definition);
     }
 

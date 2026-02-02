@@ -1,4 +1,5 @@
 {
+  "modules": {},
   "imports": {},
   "stubs": {},
   "program_scopes": {
@@ -10,7 +11,7 @@
             "lo": 9,
             "hi": 13
           },
-          "id": 0
+          "id": 25
         },
         "network": {
           "name": "aleo",
@@ -18,12 +19,13 @@
             "lo": 14,
             "hi": 18
           },
-          "id": 1
+          "id": 26
         }
       },
       "consts": [],
-      "structs": [],
+      "composites": [],
       "mappings": [],
+      "storage_variables": [],
       "functions": [
         [
           "main",
@@ -36,8 +38,9 @@
                 "lo": 42,
                 "hi": 46
               },
-              "id": 2
+              "id": 0
             },
+            "const_parameters": [],
             "input": [],
             "output": [
               {
@@ -47,7 +50,7 @@
                   "lo": 52,
                   "hi": 56
                 },
-                "id": 3
+                "id": 2
               }
             ],
             "output_type": "Boolean",
@@ -57,13 +60,13 @@
                 "lo": 57,
                 "hi": 65
               },
-              "id": 4
+              "id": 1
             },
             "span": {
               "lo": 25,
               "hi": 65
             },
-            "id": 5
+            "id": 3
           }
         ],
         [
@@ -77,8 +80,9 @@
                 "lo": 86,
                 "hi": 99
               },
-              "id": 6
+              "id": 4
             },
+            "const_parameters": [],
             "input": [],
             "output": [],
             "output_type": "Unit",
@@ -88,13 +92,13 @@
                 "lo": 102,
                 "hi": 110
               },
-              "id": 7
+              "id": 5
             },
             "span": {
               "lo": 71,
               "hi": 110
             },
-            "id": 8
+            "id": 6
           }
         ],
         [
@@ -108,8 +112,9 @@
                 "lo": 125,
                 "hi": 129
               },
-              "id": 9
+              "id": 7
             },
+            "const_parameters": [],
             "input": [],
             "output": [
               {
@@ -119,7 +124,7 @@
                   "lo": 135,
                   "hi": 139
                 },
-                "id": 10
+                "id": 9
               }
             ],
             "output_type": "Boolean",
@@ -129,13 +134,13 @@
                 "lo": 140,
                 "hi": 148
               },
-              "id": 11
+              "id": 8
             },
             "span": {
               "lo": 116,
               "hi": 148
             },
-            "id": 12
+            "id": 10
           }
         ],
         [
@@ -149,8 +154,9 @@
                 "lo": 168,
                 "hi": 172
               },
-              "id": 13
+              "id": 11
             },
+            "const_parameters": [],
             "input": [
               {
                 "identifier": {
@@ -159,27 +165,37 @@
                     "lo": 173,
                     "hi": 174
                   },
-                  "id": 14
+                  "id": 12
                 },
                 "mode": "None",
                 "type_": {
                   "Composite": {
-                    "id": {
-                      "name": "foo",
+                    "path": {
+                      "user_program": null,
+                      "qualifier": [],
+                      "identifier": {
+                        "name": "foo",
+                        "span": {
+                          "lo": 176,
+                          "hi": 179
+                        },
+                        "id": 13
+                      },
+                      "target": "Unresolved",
                       "span": {
                         "lo": 176,
                         "hi": 179
                       },
-                      "id": 15
+                      "id": 14
                     },
-                    "program": null
+                    "const_arguments": []
                   }
                 },
                 "span": {
                   "lo": 173,
                   "hi": 179
                 },
-                "id": 16
+                "id": 15
               },
               {
                 "identifier": {
@@ -188,20 +204,30 @@
                     "lo": 181,
                     "hi": 182
                   },
-                  "id": 17
+                  "id": 16
                 },
                 "mode": "None",
                 "type_": {
                   "Composite": {
-                    "id": {
-                      "name": "bar",
+                    "path": {
+                      "user_program": null,
+                      "qualifier": [],
+                      "identifier": {
+                        "name": "bar",
+                        "span": {
+                          "lo": 184,
+                          "hi": 187
+                        },
+                        "id": 17
+                      },
+                      "target": "Unresolved",
                       "span": {
                         "lo": 184,
                         "hi": 187
                       },
                       "id": 18
                     },
-                    "program": null
+                    "const_arguments": []
                   }
                 },
                 "span": {
@@ -216,35 +242,55 @@
                 "mode": "None",
                 "type_": {
                   "Composite": {
-                    "id": {
-                      "name": "baz",
+                    "path": {
+                      "user_program": null,
+                      "qualifier": [],
+                      "identifier": {
+                        "name": "baz",
+                        "span": {
+                          "lo": 192,
+                          "hi": 195
+                        },
+                        "id": 21
+                      },
+                      "target": "Unresolved",
                       "span": {
                         "lo": 192,
                         "hi": 195
                       },
-                      "id": 20
+                      "id": 22
                     },
-                    "program": null
+                    "const_arguments": []
                   }
                 },
                 "span": {
                   "lo": 192,
                   "hi": 195
                 },
-                "id": 21
+                "id": 23
               }
             ],
             "output_type": {
               "Composite": {
-                "id": {
-                  "name": "baz",
+                "path": {
+                  "user_program": null,
+                  "qualifier": [],
+                  "identifier": {
+                    "name": "baz",
+                    "span": {
+                      "lo": 192,
+                      "hi": 195
+                    },
+                    "id": 21
+                  },
+                  "target": "Unresolved",
                   "span": {
                     "lo": 192,
                     "hi": 195
                   },
-                  "id": 20
+                  "id": 22
                 },
-                "program": null
+                "const_arguments": []
               }
             },
             "block": {
@@ -253,18 +299,19 @@
                 "lo": 196,
                 "hi": 204
               },
-              "id": 22
+              "id": 20
             },
             "span": {
               "lo": 153,
               "hi": 204
             },
-            "id": 23
+            "id": 24
           }
         ]
       ],
+      "constructor": null,
       "span": {
-        "lo": 1,
+        "lo": 0,
         "hi": 208
       }
     }

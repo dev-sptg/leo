@@ -7,187 +7,97 @@ struct S:
 function some_assignments:
     input r0 as boolean.public;
     input r1 as boolean.public;
-    cast 0u32 1u32 2u32 into r2 as [u32; 3u32];
-    ternary r0 10u32 r2[0u32] into r3;
-    cast 3u32 r2 into r4 as S;
-    cast 50u32 60u32 70u32 into r5 as [u32; 3u32];
-    ternary r0 r5[0u32] r4.y[0u32] into r6;
-    ternary r0 r5[1u32] r4.y[1u32] into r7;
-    ternary r0 r5[2u32] r4.y[2u32] into r8;
-    cast r6 r7 r8 into r9 as [u32; 3u32];
-    cast 20u32 r4.y[1u32] r4.y[2u32] into r10 as [u32; 3u32];
-    cast r4.x r10 into r11 as S;
-    ternary r0 r4.y[0u32] r11.y[0u32] into r12;
-    ternary r0 r4.y[1u32] r11.y[1u32] into r13;
-    ternary r0 r4.y[2u32] r11.y[2u32] into r14;
-    cast r12 r13 r14 into r15 as [u32; 3u32];
-    ternary r0 r4.x r11.x into r16;
-    cast r16 r15 into r17 as S;
-    ternary r1 20u32 r4.y[0u32] into r18;
-    ternary r1 30u32 r4.x into r19;
-    ternary r1 r9[0u32] r4.y[0u32] into r20;
-    ternary r1 r9[1u32] r4.y[1u32] into r21;
-    ternary r1 r9[2u32] r4.y[2u32] into r22;
-    cast r20 r21 r22 into r23 as [u32; 3u32];
-    cast r18 r4.y[1u32] r4.y[2u32] into r24 as [u32; 3u32];
-    cast r4.x r24 into r25 as S;
-    ternary r1 r17.y[0u32] r25.y[0u32] into r26;
-    ternary r1 r17.y[1u32] r25.y[1u32] into r27;
-    ternary r1 r17.y[2u32] r25.y[2u32] into r28;
-    cast r26 r27 r28 into r29 as [u32; 3u32];
-    ternary r1 r17.x r25.x into r30;
-    cast r30 r29 into r31 as S;
-    cast r19 r23 into r32 as S;
-    cast r19 r23 into r33 as S;
-    cast r19 r23 into r34 as S;
-    cast r19 r23 into r35 as S;
-    cast r3 r2[1u32] r2[2u32] r31.x r31.y[0u32] r31.y[1u32] r31.y[2u32] r32.x r33.y[0u32] r34.y[1u32] r35.y[2u32] into r36 as [u32; 11u32];
-    output r36 as [u32; 11u32].public;
-verified: true
-status: accepted
-errors:
-warnings:
-{
-  "transitions": [
-    {
-      "id": "au18el3zcehf35pdfz8k3pkj29rpdjvpq2ywfzjxcj7espu9s9vjg8sw2vd24",
-      "program": "test.aleo",
-      "function": "some_assignments",
-      "inputs": [
-        {
-          "type": "public",
-          "id": "2943752635528130168476438191443163967421363484938086626664906731614671672772field",
-          "value": "false"
-        },
-        {
-          "type": "public",
-          "id": "1628799772189185313052172605081974637565097414983394755577160618052420210276field",
-          "value": "false"
-        }
-      ],
-      "outputs": [
-        {
-          "type": "public",
-          "id": "2991129876183763931196317826632911476310393044430038215591198263503361951342field",
-          "value": "[\n  0u32,\n  1u32,\n  2u32,\n  3u32,\n  0u32,\n  1u32,\n  2u32,\n  3u32,\n  0u32,\n  1u32,\n  2u32\n]"
-        }
-      ],
-      "tpk": "1818415225321357052547518536039285973147258173104848826025032418746149020896group",
-      "tcm": "1811973101150994445784340959619077093632693173683413522394362697079868789678field",
-      "scm": "135477838562920510372572054784243227751425282172841452704191452590553734058field"
-    }
-  ],
-  "global_state_root": "sr1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6gk0xu"
-}
+    ternary r0 10u32 0u32 into r2;
+    cast r2 1u32 2u32 into r3 as [u32; 3u32];
+    cast 3u32 r3 into r4 as S;
+    ternary r0 50u32 r4.y[0u32] into r5;
+    ternary r0 60u32 r4.y[1u32] into r6;
+    ternary r0 70u32 r4.y[2u32] into r7;
+    cast r5 r6 r7 into r8 as [u32; 3u32];
+    cast 20u32 r4.y[1u32] r4.y[2u32] into r9 as [u32; 3u32];
+    cast r4.x r9 into r10 as S;
+    ternary r0 r4.y[0u32] r10.y[0u32] into r11;
+    ternary r0 r4.y[1u32] r10.y[1u32] into r12;
+    ternary r0 r4.y[2u32] r10.y[2u32] into r13;
+    cast r11 r12 r13 into r14 as [u32; 3u32];
+    ternary r0 r4.x r10.x into r15;
+    cast r15 r14 into r16 as S;
+    ternary r1 20u32 r4.y[0u32] into r17;
+    ternary r1 30u32 r4.x into r18;
+    ternary r1 r8[0u32] r4.y[0u32] into r19;
+    ternary r1 r8[1u32] r4.y[1u32] into r20;
+    ternary r1 r8[2u32] r4.y[2u32] into r21;
+    cast r19 r20 r21 into r22 as [u32; 3u32];
+    cast r17 r4.y[1u32] r4.y[2u32] into r23 as [u32; 3u32];
+    cast r4.x r23 into r24 as S;
+    ternary r1 r16.y[0u32] r24.y[0u32] into r25;
+    ternary r1 r16.y[1u32] r24.y[1u32] into r26;
+    ternary r1 r16.y[2u32] r24.y[2u32] into r27;
+    cast r25 r26 r27 into r28 as [u32; 3u32];
+    ternary r1 r16.x r24.x into r29;
+    cast r29 r28 into r30 as S;
+    cast r18 r22 into r31 as S;
+    cast r18 r22 into r32 as S;
+    cast r18 r22 into r33 as S;
+    cast r18 r22 into r34 as S;
+    cast r2 1u32 2u32 r30.x r30.y[0u32] r30.y[1u32] r30.y[2u32] r31.x r32.y[0u32] r33.y[1u32] r34.y[2u32] into r35 as [u32; 11u32];
+    output r35 as [u32; 11u32].public;
 
-verified: true
-status: accepted
-errors:
-warnings:
-{
-  "transitions": [
-    {
-      "id": "au16jdz3268m3lmy7c4n09d3crvd3mm7wuparrtceffqfwwn3zlucyswv7nqd",
-      "program": "test.aleo",
-      "function": "some_assignments",
-      "inputs": [
-        {
-          "type": "public",
-          "id": "7094783020214117364134820757617627974462804875541580023434616629533886533992field",
-          "value": "false"
-        },
-        {
-          "type": "public",
-          "id": "1687355074815400661133071831406435560882997995490153932112740557783874283676field",
-          "value": "true"
-        }
-      ],
-      "outputs": [
-        {
-          "type": "public",
-          "id": "7875746641568287350666340008059159656908901352872628684433192004405101265563field",
-          "value": "[\n  0u32,\n  1u32,\n  2u32,\n  3u32,\n  20u32,\n  1u32,\n  2u32,\n  30u32,\n  0u32,\n  1u32,\n  2u32\n]"
-        }
-      ],
-      "tpk": "5603083946876246288936482079053638941673083076100156060014163518916639832872group",
-      "tcm": "6764116781084156648024418490833954514929053336968994812561717389913748811779field",
-      "scm": "5381751923570108226343717980823948407012610097957286158345252109933743007819field"
-    }
-  ],
-  "global_state_root": "sr1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6gk0xu"
-}
-
-verified: true
-status: accepted
-errors:
-warnings:
-{
-  "transitions": [
-    {
-      "id": "au1fj43mv56zdykdrhg4qs8yg9xl03733gnsudhdjhpq9ue6tvrev9q0f5f3u",
-      "program": "test.aleo",
-      "function": "some_assignments",
-      "inputs": [
-        {
-          "type": "public",
-          "id": "8195061659850325269523622637344778900126488804771136828102122513643223760992field",
-          "value": "true"
-        },
-        {
-          "type": "public",
-          "id": "923272375316269368096687657865782102912114503268272781501899453555657145499field",
-          "value": "false"
-        }
-      ],
-      "outputs": [
-        {
-          "type": "public",
-          "id": "2332924504565981776577986070707282354867541699115161568792615663061533544440field",
-          "value": "[\n  10u32,\n  1u32,\n  2u32,\n  3u32,\n  0u32,\n  1u32,\n  2u32,\n  3u32,\n  0u32,\n  1u32,\n  2u32\n]"
-        }
-      ],
-      "tpk": "6352206753535255980025733601802299791496101780602229502595072900766285760035group",
-      "tcm": "3371172225575597335610367772200250352541308747964340220055494160873702119113field",
-      "scm": "1878235450524800760120300763914161576584105410543288475384126199722136820625field"
-    }
-  ],
-  "global_state_root": "sr1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6gk0xu"
-}
-
-verified: true
-status: accepted
-errors:
-warnings:
-{
-  "transitions": [
-    {
-      "id": "au1xp3ychp5qfavferyuh0kmc7r0p8eu2deaw2tad6yrr0tvv5f0s8qe5pncu",
-      "program": "test.aleo",
-      "function": "some_assignments",
-      "inputs": [
-        {
-          "type": "public",
-          "id": "5526342934282136944726782223427855756532301214527543609759941515957636386551field",
-          "value": "true"
-        },
-        {
-          "type": "public",
-          "id": "2853318716840423967853640272294335181262701531785271046262219012373524485305field",
-          "value": "true"
-        }
-      ],
-      "outputs": [
-        {
-          "type": "public",
-          "id": "6913258902064110531868510158443683370492345345095549895684449394904780609175field",
-          "value": "[\n  10u32,\n  1u32,\n  2u32,\n  3u32,\n  0u32,\n  1u32,\n  2u32,\n  30u32,\n  50u32,\n  60u32,\n  70u32\n]"
-        }
-      ],
-      "tpk": "3891428700902399899813841857083595455633605712004026119237839274729024705205group",
-      "tcm": "6596269386550703209645164442815796815374890744753774162702118025977938597735field",
-      "scm": "7887079650007464132517377008664389976036547158215870251841379470282897220884field"
-    }
-  ],
-  "global_state_root": "sr1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6gk0xu"
-}
-
+constructor:
+    assert.eq edition 0u16;
+status: success
+output: [
+  0u32,
+  1u32,
+  2u32,
+  3u32,
+  0u32,
+  1u32,
+  2u32,
+  3u32,
+  0u32,
+  1u32,
+  2u32
+]
+status: success
+output: [
+  0u32,
+  1u32,
+  2u32,
+  3u32,
+  20u32,
+  1u32,
+  2u32,
+  30u32,
+  0u32,
+  1u32,
+  2u32
+]
+status: success
+output: [
+  10u32,
+  1u32,
+  2u32,
+  3u32,
+  10u32,
+  1u32,
+  2u32,
+  3u32,
+  10u32,
+  1u32,
+  2u32
+]
+status: success
+output: [
+  10u32,
+  1u32,
+  2u32,
+  3u32,
+  10u32,
+  1u32,
+  2u32,
+  30u32,
+  50u32,
+  60u32,
+  70u32
+]

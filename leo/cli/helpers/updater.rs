@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@ use leo_errors::{CliError, Result};
 use aleo_std;
 
 use colored::Colorize;
-use self_update::{Status, backends::github, version::bump_is_greater};
+use self_update::{Status, backends::github, get_target, version::bump_is_greater};
 use std::{
     fmt::Write as _,
     fs,
@@ -44,33 +44,42 @@ impl Updater {
         let releases = github::ReleaseList::configure()
             .repo_owner(Self::LEO_REPO_OWNER)
             .repo_name(Self::LEO_REPO_NAME)
+            .with_target(get_target())
             .build()
             .map_err(CliError::self_update_error)?
             .fetch()
             .map_err(CliError::could_not_fetch_versions)?;
 
-        let mut output = "\nList of available versions\n".to_string();
+        let mut output = format!(
+            "\nList of available versions for: {}.\nUse the quoted name to select specific releases.\n\n",
+            get_target()
+        );
         for release in releases {
-            let _ = writeln!(output, "  * {}", release.version);
+            let _ = writeln!(output, "  * {} | '{}'", release.version, release.name);
         }
 
         Ok(output)
     }
 
-    /// Update `leo` to the latest release.
-    pub fn update_to_latest_release(show_output: bool) -> Result<Status> {
-        let status = github::Update::configure()
+    /// Update `leo`. If a version is provided, then `leo` is updated to the specific version
+    /// otherwise the update defaults to the latest version.
+    pub fn update(show_output: bool, version: Option<String>) -> Result<Status> {
+        let mut update = github::Update::configure();
+        // Set the defaults.
+        update
             .repo_owner(Self::LEO_REPO_OWNER)
             .repo_name(Self::LEO_REPO_NAME)
             .bin_name(Self::LEO_BIN_NAME)
             .current_version(env!("CARGO_PKG_VERSION"))
             .show_download_progress(show_output)
             .no_confirm(true)
-            .show_output(show_output)
-            .build()
-            .map_err(CliError::self_update_build_error)?
-            .update()
-            .map_err(CliError::self_update_error)?;
+            .show_output(show_output);
+        // Add the version if provided.
+        if let Some(version) = version {
+            update.target_version_tag(&version);
+        }
+        let status =
+            update.build().map_err(CliError::self_update_build_error)?.update().map_err(CliError::self_update_error)?;
 
         Ok(status)
     }
@@ -111,7 +120,7 @@ impl Updater {
                 "\n🟢 {} {} {}",
                 "A new version is available! Run".bold().green(),
                 "`leo update`".bold().white(),
-                format!("to update to v{}.", latest_version).bold().green()
+                format!("to update to v{latest_version}.").bold().green()
             );
             Ok(Some(colorized_message))
         } else {
@@ -122,7 +131,7 @@ impl Updater {
     /// Display the CLI message if a new version is available.
     pub fn print_cli() -> Result<(), CliError> {
         if let Some(message) = Self::get_cli_string()? {
-            println!("{}", message);
+            println!("{message}");
         }
         Ok(())
     }
@@ -200,7 +209,7 @@ impl Updater {
                 // Parse the last check timestamp from the file.
                 let last_check = contents
                     .parse::<u64>()
-                    .map_err(|e| CliError::cli_runtime_error(format!("Failed to parse last check time: {}", e)))?;
+                    .map_err(|e| CliError::cli_runtime_error(format!("Failed to parse last check time: {e}")))?;
 
                 // Get the current time.
                 let current_time = Self::get_current_time()?;
@@ -217,7 +226,7 @@ impl Updater {
     fn get_current_time() -> Result<u64, CliError> {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|e| CliError::cli_runtime_error(format!("System time error: {}", e)))
+            .map_err(|e| CliError::cli_runtime_error(format!("System time error: {e}")))
             .map(|duration| duration.as_secs())
     }
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -25,7 +25,13 @@ pub use compiler::*;
 mod options;
 pub use options::*;
 
-pub mod run_with_ledger;
+// Re-export types from leo_passes for convenience
+pub use leo_passes::{Bytecode, CompiledPrograms};
+
+pub mod run;
+
+#[cfg(test)]
+mod test_utils;
 
 #[cfg(test)]
 mod test_compiler;

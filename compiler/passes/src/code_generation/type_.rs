@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -14,29 +14,55 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-use super::CodeGeneratingVisitor;
+use super::*;
 
-use leo_ast::{Location, Mode, Type};
+use leo_ast::{IntegerType, Type};
 
 impl CodeGeneratingVisitor<'_> {
-    pub fn visit_type(input: &Type) -> String {
+    pub fn visit_type(&self, input: &Type) -> AleoType {
         match input {
-            Type::Address
-            | Type::Field
-            | Type::Group
-            | Type::Scalar
-            | Type::Signature
-            | Type::String
-            | Type::Future(..)
-            | Type::Composite(..)
-            | Type::Identifier(..)
-            | Type::Integer(..) => format!("{input}"),
-            Type::Boolean => {
-                // Leo calls this just `bool`, which isn't what we need.
-                "boolean".into()
+            Type::Address => AleoType::Address,
+            Type::Field => AleoType::Field,
+            Type::Group => AleoType::Group,
+            Type::Scalar => AleoType::Scalar,
+            Type::Signature => AleoType::Signature,
+            Type::String => AleoType::String,
+
+            Type::Integer(int) => match int {
+                IntegerType::U8 => AleoType::U8,
+                IntegerType::U16 => AleoType::U16,
+                IntegerType::U32 => AleoType::U32,
+                IntegerType::U64 => AleoType::U64,
+                IntegerType::U128 => AleoType::U128,
+                IntegerType::I8 => AleoType::I8,
+                IntegerType::I16 => AleoType::I16,
+                IntegerType::I32 => AleoType::I32,
+                IntegerType::I64 => AleoType::I64,
+                IntegerType::I128 => AleoType::I128,
+            },
+            Type::Identifier(id) => AleoType::Ident { name: id.to_string() },
+            Type::Composite(composite) => {
+                let composite_location = composite.path.expect_global_location();
+                let this_program_name = self.program_id.unwrap().name.name;
+                let program_name = composite_location.program;
+                let composite_name = Self::legalize_path(&composite_location.path)
+                    .expect("path format cannot be legalized at this point");
+                if program_name == this_program_name {
+                    AleoType::Ident { name: composite_name.to_string() }
+                } else {
+                    AleoType::Location { program: program_name.to_string(), name: composite_name.to_string() }
+                }
             }
-            Type::Array(array_type) => {
-                format!("[{}; {}u32]", Self::visit_type(array_type.element_type()), array_type.length())
+            Type::Boolean => AleoType::Boolean,
+            Type::Array(array_type) => AleoType::Array {
+                inner: Box::new(self.visit_type(array_type.element_type())),
+                len: array_type.length.as_u32().expect("length should be known at this point"),
+            },
+            Type::Future(..) => {
+                panic!("Future types should not be visited at this phase of compilation")
+            }
+            Type::Optional(_) => {
+                panic!("Optional types are not supported at this phase of compilation")
             }
             Type::Mapping(_) => {
                 panic!("Mapping types are not supported at this phase of compilation")
@@ -44,29 +70,40 @@ impl CodeGeneratingVisitor<'_> {
             Type::Tuple(_) => {
                 panic!("Tuple types should not be visited at this phase of compilation")
             }
+            Type::Vector(_) => {
+                panic!("Vector types should not be visited at this phase of compilation")
+            }
+            Type::Numeric => panic!("`Numeric` types should not exist at this phase of compilation"),
             Type::Err => panic!("Error types should not exist at this phase of compilation"),
             Type::Unit => panic!("Unit types are not supported at this phase of compilation"),
         }
     }
 
-    pub fn visit_type_with_visibility(&self, type_: &Type, visibility: Mode) -> String {
+    pub fn visit_type_with_visibility(
+        &self,
+        type_: &Type,
+        visibility: Option<AleoVisibility>,
+    ) -> (AleoType, Option<AleoVisibility>) {
         // If the type is a record, handle it separately.
         if let Type::Composite(composite) = type_ {
+            let composite_location = composite.path.expect_global_location();
             let this_program_name = self.program_id.unwrap().name.name;
-            let program_name = composite.program.unwrap_or(this_program_name);
-            if self.state.symbol_table.lookup_record(Location::new(program_name, composite.id.name)).is_some() {
+            let program_name = composite_location.program;
+            if self.state.symbol_table.lookup_record(this_program_name, composite_location).is_some() {
+                let [record_name] = &composite_location.path[..] else {
+                    panic!("Absolute paths to records can only have a single segment at this stage.")
+                };
                 if program_name == this_program_name {
-                    return format!("{}.record", composite.id.name);
+                    return (AleoType::Record { name: record_name.to_string(), program: None }, None);
                 } else {
-                    return format!("{}.aleo/{}.record", program_name, composite.id.name);
+                    return (
+                        AleoType::Record { name: record_name.to_string(), program: Some(program_name.to_string()) },
+                        None,
+                    );
                 }
             }
         }
 
-        if let Mode::None = visibility {
-            Self::visit_type(type_)
-        } else {
-            format!("{}.{visibility}", Self::visit_type(type_))
-        }
+        (self.visit_type(type_), visibility)
     }
 }

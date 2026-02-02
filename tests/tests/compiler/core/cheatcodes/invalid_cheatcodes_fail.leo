@@ -25,15 +25,21 @@ import test_dep.aleo;
 
 program test.aleo {
     mapping account: address => u64;
+    mapping Yo: u32 => u32;
 
     async transition main(public a: u64) -> Future {
         return finish(a);
     }
 
-    async function finish(public a: u64) {
+    async function finish(public a: u64, b: address) {
         CheatCode::print_mapping(Yo);
         CheatCode::print_mapping(test_dep.aleo/account);
         CheatCode::set_block_height(1u64);
         CheatCode::set_block_height(a);
+        CheatCode::set_block_timestamp(1u32);
+        CheatCode::set_block_timestamp(b);
+        CheatCode::set_signer(b);
+        // Invalid private key.
+        CheatCode::set_signer("APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPW");
     }
 }

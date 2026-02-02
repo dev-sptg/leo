@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{Expression, Node, NodeID, simple_node_impl};
+use crate::{Expression, Node, NodeID, Path, simple_node_impl};
 
 use leo_span::{Span, Symbol};
 
@@ -87,8 +87,18 @@ impl<N: Network> From<&IdentifierCore<N>> for Identifier {
     }
 }
 
+// Converts an `Identifier` to an unresolved `Path` expression
+// It's up to the caller of this method to figure out how to resolve the resulting `Path`.
 impl From<Identifier> for Expression {
     fn from(value: Identifier) -> Self {
-        Expression::Identifier(value)
+        Expression::Path(crate::Path::from(value))
+    }
+}
+
+// Converts an `Identifier` to a `Path`.
+// It's up to the caller of this method to figure out how to resolve the resulting `Path`.
+impl From<Identifier> for Path {
+    fn from(value: Identifier) -> Self {
+        Path::new(None, vec![], value, value.span, value.id)
     }
 }

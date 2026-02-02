@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -25,12 +25,23 @@ pub struct LeoProgram {
     pub(crate) name: String,
     #[arg(
         long,
-        help = "Get all mappings defined in the program",
+        help = "An optional edition to use when fetching the program source. If not specified, the latest edition will be used."
+    )]
+    pub(crate) edition: Option<u16>,
+    #[arg(
+        long,
+        help = "Get all mappings defined in the latest edition of the program",
         default_value = "false",
         conflicts_with = "mapping_value"
     )]
     pub(crate) mappings: bool,
-    #[arg(long, help = "Get the value corresponding to the specified mapping and key.", number_of_values = 2, value_names = &["MAPPING", "KEY"], conflicts_with = "mappings")]
+    #[arg(
+        long,
+        help = "Get the value corresponding to the specified mapping and key.",
+        number_of_values = 2,
+        value_names = &["MAPPING", "KEY"],
+        conflicts_with = "mappings"
+    )]
     pub(crate) mapping_value: Option<Vec<String>>,
 }
 
@@ -54,11 +65,15 @@ impl Command for LeoProgram {
         }
         // Build custom url to fetch from based on the flags and user's input.
         let url = if let Some(mapping_info) = self.mapping_value {
-            format!("program/{}/mapping/{}/{}", program, mapping_info[0], mapping_info[1])
+            format!("program/{program}/mapping/{}/{}", mapping_info[0], mapping_info[1])
         } else if self.mappings {
-            format!("program/{}/mappings", program)
+            format!("program/{program}/mappings")
         } else {
-            format!("program/{}", program)
+            // When no edition is specified, omit the edition from the URL to get the latest one.
+            match self.edition {
+                Some(edition) => format!("program/{program}/{edition}"),
+                None => format!("program/{program}"),
+            }
         };
 
         Ok(url)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -56,6 +56,10 @@ pub use self::static_analyzer::*;
 mod type_checker;
 pub use self::type_checker::*;
 
+/// Contains the Name Validation error definitions.
+mod name_validation;
+pub use self::name_validation::*;
+
 /// Contains the Utils error definitions.
 mod utils;
 pub use self::utils::*;
@@ -87,6 +91,9 @@ pub enum LeoError {
     /// Represents a Type Checker Error in a Leo Error.
     #[error(transparent)]
     TypeCheckerError(#[from] TypeCheckerError),
+    /// Represents a Name Validation Error in a Leo Error.
+    #[error(transparent)]
+    NameValidationError(#[from] NameValidationError),
     /// Represents a Loop Unroller Error in a Leo Error.
     #[error(transparent)]
     LoopUnrollerError(#[from] LoopUnrollerError),
@@ -118,6 +125,7 @@ impl LeoError {
             PackageError(error) => error.error_code(),
             StaticAnalyzerError(error) => error.error_code(),
             TypeCheckerError(error) => error.error_code(),
+            NameValidationError(error) => error.error_code(),
             LoopUnrollerError(error) => error.error_code(),
             FlattenError(error) => error.error_code(),
             UtilError(error) => error.error_code(),
@@ -139,6 +147,7 @@ impl LeoError {
             PackageError(error) => error.exit_code(),
             StaticAnalyzerError(error) => error.exit_code(),
             TypeCheckerError(error) => error.exit_code(),
+            NameValidationError(error) => error.exit_code(),
             LoopUnrollerError(error) => error.exit_code(),
             FlattenError(error) => error.exit_code(),
             UtilError(error) => error.exit_code(),
@@ -151,7 +160,7 @@ impl LeoError {
 
 /// The LeoWarning type that contains all sub warning types.
 /// This allows a unified warning type throughout the Leo crates.
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Hash, PartialEq, Eq)]
 pub enum LeoWarning {
     /// Represents an Parser Warning in a Leo Warning.
     #[error(transparent)]

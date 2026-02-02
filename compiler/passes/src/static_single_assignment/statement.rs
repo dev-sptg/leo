@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -82,10 +82,11 @@ impl StatementConsumer for SsaFormingVisitor<'_> {
     /// Consume all `AssignStatement`s, renaming as necessary.
     fn consume_assign(&mut self, mut assign: AssignStatement) -> Self::Output {
         let (value, mut statements) = self.consume_expression(assign.value);
-        if let Expression::Identifier(name) = assign.place {
+        if let Expression::Path(path) = assign.place {
             // Then assign a new unique name to the left-hand-side of the assignment.
             // Note that this order is necessary to ensure that the right-hand-side uses the correct name when consuming a complex assignment.
-            let new_place = self.rename_identifier(name);
+            // We really expect `path` to refer to a local variable so we only care about the result of `identifier().name`.
+            let new_place = self.rename_identifier(*path.identifier());
 
             statements.push(self.simple_definition(new_place, value));
             statements
@@ -100,7 +101,7 @@ impl StatementConsumer for SsaFormingVisitor<'_> {
                     Expression::ArrayAccess(array_access) => place = &mut array_access.array,
                     Expression::MemberAccess(member_access) => place = &mut member_access.inner,
                     Expression::TupleAccess(tuple_access) => place = &mut tuple_access.tuple,
-                    expr @ Expression::Identifier(..) => {
+                    expr @ Expression::Path(..) => {
                         let (new_expr, statements2) = self.consume_expression(std::mem::take(expr));
                         *expr = new_expr;
                         statements.extend(statements2);
@@ -214,7 +215,7 @@ impl StatementConsumer for SsaFormingVisitor<'_> {
 
                 // Get the ID for the new name of the variable.
                 let id = *self.rename_table.lookup_id(symbol).unwrap_or_else(|| {
-                    panic!("The ID for the symbol `{}` should already exist in the rename table.", symbol)
+                    panic!("The ID for the symbol `{symbol}` should already exist in the rename table.")
                 });
 
                 // Update the `RenameTable` with the new name of the variable.
@@ -239,25 +240,22 @@ impl StatementConsumer for SsaFormingVisitor<'_> {
 
     /// Consumes the `DefinitionStatement` into an `AssignStatement`, renaming the left-hand-side as appropriate.
     fn consume_definition(&mut self, definition: DefinitionStatement) -> Self::Output {
-        let mut statements = Vec::new();
-
         match definition.place {
             DefinitionPlace::Single(identifier) => {
                 // Consume the right-hand-side of the definition.
-                let (value, statements2) = self.consume_expression(definition.value);
-                statements = statements2;
+                let (value, mut rhs_statements) = self.consume_expression(definition.value);
+
+                // Rename identifier if needed.
                 let new_identifier = if self.rename_defs { self.rename_identifier(identifier) } else { identifier };
+
                 // Create a new assignment statement.
-                statements.push(self.simple_definition(new_identifier, value));
+                rhs_statements.push(self.simple_definition(new_identifier, value));
+                rhs_statements
             }
             DefinitionPlace::Multiple(identifiers) => {
-                let new_identifiers: Vec<Identifier> = if self.rename_defs {
-                    identifiers
-                        .into_iter()
-                        .map(
-                            |identifier| if self.rename_defs { self.rename_identifier(identifier) } else { identifier },
-                        )
-                        .collect()
+                // Rename identifiers if needed.
+                let new_identifiers = if self.rename_defs {
+                    identifiers.into_iter().map(|id| self.rename_identifier(id)).collect()
                 } else {
                     identifiers
                 };
@@ -268,27 +266,14 @@ impl StatementConsumer for SsaFormingVisitor<'_> {
                 // Construct the lhs of the assignment.
                 let place = DefinitionPlace::Multiple(new_identifiers);
 
-                let value = if let Expression::Call(mut call) = definition.value {
-                    for argument in call.arguments.iter_mut() {
-                        let (new_argument, new_statements) = self.consume_expression(std::mem::take(argument));
-                        *argument = new_argument;
-                        statements.extend(new_statements);
-                    }
-                    Expression::Call(call)
-                } else {
-                    let (value, new_statements) = self.consume_expression(definition.value);
-                    statements.extend(new_statements);
-                    value
-                };
+                let (value, mut rhs_statements) = self.consume_expression(definition.value);
 
                 // Create the definition.
-                let definition = DefinitionStatement { place, type_: None, value, ..definition }.into();
-
-                statements.push(definition);
+                let def_stmt = DefinitionStatement { place, type_: None, value, ..definition }.into();
+                rhs_statements.push(def_stmt);
+                rhs_statements
             }
         }
-
-        statements
     }
 
     /// Consumes the expressions associated with `ExpressionStatement`, returning the simplified `ExpressionStatement`.

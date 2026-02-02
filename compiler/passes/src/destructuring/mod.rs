@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -23,11 +23,9 @@ use leo_ast::ProgramReconstructor as _;
 
 use leo_errors::Result;
 
-mod expression;
+mod ast;
 
 mod program;
-
-mod statement;
 
 mod visitor;
 use visitor::*;
@@ -48,7 +46,7 @@ impl Pass for Destructuring {
         let mut ast = std::mem::take(&mut state.ast);
         let mut visitor = DestructuringVisitor { state, tuples: Default::default(), is_async: false };
         ast.ast = visitor.reconstruct_program(ast.ast);
-        visitor.state.handler.last_err().map_err(|e| *e)?;
+        visitor.state.handler.last_err()?;
         visitor.state.ast = ast;
         Ok(())
     }

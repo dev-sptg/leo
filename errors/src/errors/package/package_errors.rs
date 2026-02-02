@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -13,8 +13,6 @@
 
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
-
-use crate::create_messages;
 
 use std::{
     error::Error as ErrorArg,
@@ -238,7 +236,7 @@ create_messages!(
     /// For when file could not be read.
     @backtraced
     failed_to_read_file {
-        args: (path: impl Display, error: impl ErrorArg),
+        args: (path: impl Display, error: impl Display),
         msg: format!("failed to read file: {path}, error: {error}"),
         help: None,
     }
@@ -435,9 +433,9 @@ create_messages!(
 
     @backtraced
     conflicting_dependency {
-        args: (dependency: impl Display),
-        msg: format!("Conflicting data for dependency {dependency}."),
-        help: None,
+        args: (existing: impl Display, new: impl Display),
+        msg: format!("Conflicting dependency. The existing dependency is '{existing}', while the new one is '{new}'."),
+        help: Some("If your project has multiple dependencies on the same program, make sure that they are all network or all local dependencies, with the same editions.".to_string()),
     }
 
     @backtraced

@@ -6,8 +6,6 @@ function main:
     neg r0 into r2;
     is.eq r2 r1 into r3;
     assert.eq r3 true;
-    is.neq r0 -2group into r4;
+    is.neq r0 8444461749428370424248824938781546531375899335154063827935233455917409239039group into r4;
     assert.eq r4 true;
-    neg r0 into r5;
-    is.eq r5 r1 into r6;
-    output r6 as boolean.private;
+    output r3 as boolean.private;

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-//! A Leo program scope consists of struct, function, and mapping definitions.
+//! A Leo program scope consists of const, composite, function, and mapping definitions.
 
-use crate::{Composite, ConstDeclaration, Function, Indent, Mapping, ProgramId, Stub};
+use crate::{Composite, ConstDeclaration, Constructor, Function, Indent, Mapping, ProgramId, StorageVariable};
 
 use leo_span::{Span, Symbol};
 use serde::{Deserialize, Serialize};
@@ -27,33 +27,20 @@ use std::fmt;
 pub struct ProgramScope {
     /// The program id of the program scope.
     pub program_id: ProgramId,
-    /// A vector of const definitions
+    /// A vector of const definitions.
     pub consts: Vec<(Symbol, ConstDeclaration)>,
-    /// A vector of struct definitions.
-    pub structs: Vec<(Symbol, Composite)>,
+    /// A vector of composite definitions.
+    pub composites: Vec<(Symbol, Composite)>,
     /// A vector of mapping definitions.
     pub mappings: Vec<(Symbol, Mapping)>,
+    /// A vector of storage variable definitions.
+    pub storage_variables: Vec<(Symbol, StorageVariable)>,
     /// A vector of function definitions.
     pub functions: Vec<(Symbol, Function)>,
+    /// An optional constructor.
+    pub constructor: Option<Constructor>,
     /// The span associated with the program scope.
     pub span: Span,
-}
-
-impl From<Stub> for ProgramScope {
-    fn from(stub: Stub) -> Self {
-        Self {
-            program_id: stub.stub_id,
-            consts: stub.consts,
-            structs: stub.structs,
-            mappings: stub.mappings,
-            functions: stub
-                .functions
-                .into_iter()
-                .map(|(symbol, function)| (symbol, Function::from(function)))
-                .collect(),
-            span: stub.span,
-        }
-    }
 }
 
 impl fmt::Display for ProgramScope {
@@ -62,8 +49,11 @@ impl fmt::Display for ProgramScope {
         for (_, const_decl) in self.consts.iter() {
             writeln!(f, "{};", Indent(const_decl))?;
         }
-        for (_, struct_) in self.structs.iter() {
-            writeln!(f, "{}", Indent(struct_))?;
+        if let Some(constructor) = &self.constructor {
+            writeln!(f, "{}", Indent(constructor))?;
+        }
+        for (_, composite_) in self.composites.iter() {
+            writeln!(f, "{}", Indent(composite_))?;
         }
         for (_, mapping) in self.mappings.iter() {
             writeln!(f, "{};", Indent(mapping))?;

@@ -1,4 +1,5 @@
 {
+  "modules": {},
   "imports": {},
   "stubs": {},
   "program_scopes": {
@@ -10,7 +11,7 @@
             "lo": 9,
             "hi": 13
           },
-          "id": 0
+          "id": 34
         },
         "network": {
           "name": "aleo",
@@ -18,11 +19,11 @@
             "lo": 14,
             "hi": 18
           },
-          "id": 1
+          "id": 35
         }
       },
       "consts": [],
-      "structs": [],
+      "composites": [],
       "mappings": [
         [
           "Yo",
@@ -33,7 +34,7 @@
                 "lo": 33,
                 "hi": 35
               },
-              "id": 2
+              "id": 32
             },
             "key_type": {
               "Integer": "U32"
@@ -45,10 +46,11 @@
               "lo": 25,
               "hi": 48
             },
-            "id": 3
+            "id": 33
           }
         ]
       ],
+      "storage_variables": [],
       "functions": [
         [
           "main",
@@ -61,8 +63,9 @@
                 "lo": 71,
                 "hi": 75
               },
-              "id": 4
+              "id": 0
             },
+            "const_parameters": [],
             "input": [],
             "output": [
               {
@@ -78,7 +81,7 @@
                   "lo": 81,
                   "hi": 87
                 },
-                "id": 5
+                "id": 12
               }
             ],
             "output_type": {
@@ -99,7 +102,7 @@
                           "lo": 102,
                           "hi": 103
                         },
-                        "id": 6
+                        "id": 2
                       }
                     },
                     "type_": {
@@ -112,15 +115,24 @@
                     "value": {
                       "Call": {
                         "function": {
-                          "Identifier": {
+                          "user_program": null,
+                          "qualifier": [],
+                          "identifier": {
                             "name": "finalize_main",
                             "span": {
                               "lo": 114,
                               "hi": 127
                             },
-                            "id": 7
-                          }
+                            "id": 6
+                          },
+                          "target": "Unresolved",
+                          "span": {
+                            "lo": 114,
+                            "hi": 127
+                          },
+                          "id": 7
                         },
+                        "const_arguments": [],
                         "arguments": [
                           {
                             "Literal": {
@@ -128,7 +140,7 @@
                                 "lo": 128,
                                 "hi": 132
                               },
-                              "id": 8,
+                              "id": 4,
                               "variant": {
                                 "Integer": [
                                   "U32",
@@ -143,7 +155,7 @@
                                 "lo": 134,
                                 "hi": 138
                               },
-                              "id": 9,
+                              "id": 5,
                               "variant": {
                                 "Integer": [
                                   "U32",
@@ -153,38 +165,47 @@
                             }
                           }
                         ],
-                        "program": "test",
                         "span": {
                           "lo": 114,
                           "hi": 139
                         },
-                        "id": 10
+                        "id": 3
                       }
                     },
                     "span": {
                       "lo": 98,
-                      "hi": 139
+                      "hi": 140
                     },
-                    "id": 11
+                    "id": 1
                   }
                 },
                 {
                   "Return": {
                     "expression": {
-                      "Identifier": {
-                        "name": "f",
+                      "Path": {
+                        "user_program": null,
+                        "qualifier": [],
+                        "identifier": {
+                          "name": "f",
+                          "span": {
+                            "lo": 156,
+                            "hi": 157
+                          },
+                          "id": 10
+                        },
+                        "target": "Unresolved",
                         "span": {
                           "lo": 156,
                           "hi": 157
                         },
-                        "id": 12
+                        "id": 9
                       }
                     },
                     "span": {
                       "lo": 149,
                       "hi": 158
                     },
-                    "id": 13
+                    "id": 8
                   }
                 }
               ],
@@ -192,13 +213,13 @@
                 "lo": 88,
                 "hi": 164
               },
-              "id": 14
+              "id": 11
             },
             "span": {
               "lo": 54,
               "hi": 164
             },
-            "id": 15
+            "id": 13
           }
         ],
         [
@@ -212,8 +233,9 @@
                 "lo": 185,
                 "hi": 198
               },
-              "id": 16
+              "id": 14
             },
+            "const_parameters": [],
             "input": [
               {
                 "identifier": {
@@ -222,7 +244,7 @@
                     "lo": 199,
                     "hi": 200
                   },
-                  "id": 17
+                  "id": 15
                 },
                 "mode": "None",
                 "type_": {
@@ -232,7 +254,7 @@
                   "lo": 199,
                   "hi": 204
                 },
-                "id": 18
+                "id": 16
               },
               {
                 "identifier": {
@@ -241,7 +263,7 @@
                     "lo": 206,
                     "hi": 207
                   },
-                  "id": 19
+                  "id": 17
                 },
                 "mode": "None",
                 "type_": {
@@ -251,7 +273,7 @@
                   "lo": 206,
                   "hi": 211
                 },
-                "id": 20
+                "id": 18
               }
             ],
             "output": [
@@ -268,7 +290,7 @@
                   "lo": 216,
                   "hi": 222
                 },
-                "id": 21
+                "id": 30
               }
             ],
             "output_type": {
@@ -283,37 +305,43 @@
                 {
                   "Expression": {
                     "expression": {
-                      "AssociatedFunction": {
-                        "variant": {
-                          "name": "Mapping",
-                          "span": {
-                            "lo": 233,
-                            "hi": 240
-                          },
-                          "id": 22
-                        },
-                        "name": {
-                          "name": "set",
-                          "span": {
-                            "lo": 242,
-                            "hi": 245
-                          },
-                          "id": 23
-                        },
+                      "Intrinsic": {
+                        "name": "_mapping_set",
+                        "type_parameters": [],
                         "arguments": [
                           {
-                            "Identifier": {
-                              "name": "Yo",
+                            "Path": {
+                              "user_program": null,
+                              "qualifier": [],
+                              "identifier": {
+                                "name": "Yo",
+                                "span": {
+                                  "lo": 246,
+                                  "hi": 248
+                                },
+                                "id": 24
+                              },
+                              "target": "Unresolved",
                               "span": {
                                 "lo": 246,
                                 "hi": 248
                               },
-                              "id": 24
+                              "id": 23
                             }
                           },
                           {
-                            "Identifier": {
-                              "name": "a",
+                            "Path": {
+                              "user_program": null,
+                              "qualifier": [],
+                              "identifier": {
+                                "name": "a",
+                                "span": {
+                                  "lo": 250,
+                                  "hi": 251
+                                },
+                                "id": 26
+                              },
+                              "target": "Unresolved",
                               "span": {
                                 "lo": 250,
                                 "hi": 251
@@ -322,13 +350,23 @@
                             }
                           },
                           {
-                            "Identifier": {
-                              "name": "b",
+                            "Path": {
+                              "user_program": null,
+                              "qualifier": [],
+                              "identifier": {
+                                "name": "b",
+                                "span": {
+                                  "lo": 253,
+                                  "hi": 254
+                                },
+                                "id": 28
+                              },
+                              "target": "Unresolved",
                               "span": {
                                 "lo": 253,
                                 "hi": 254
                               },
-                              "id": 26
+                              "id": 27
                             }
                           }
                         ],
@@ -336,14 +374,14 @@
                           "lo": 233,
                           "hi": 255
                         },
-                        "id": 27
+                        "id": 20
                       }
                     },
                     "span": {
                       "lo": 233,
                       "hi": 256
                     },
-                    "id": 28
+                    "id": 19
                   }
                 }
               ],
@@ -357,12 +395,13 @@
               "lo": 170,
               "hi": 262
             },
-            "id": 30
+            "id": 31
           }
         ]
       ],
+      "constructor": null,
       "span": {
-        "lo": 1,
+        "lo": 0,
         "hi": 264
       }
     }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -19,10 +19,10 @@ use leo_ast::*;
 use super::UnrollingVisitor;
 
 impl ProgramReconstructor for UnrollingVisitor<'_> {
-    fn reconstruct_stub(&mut self, input: Stub) -> Stub {
+    fn reconstruct_aleo_program(&mut self, input: AleoProgram) -> AleoProgram {
         // Set the current program.
         self.program = input.stub_id.name.name;
-        Stub {
+        AleoProgram {
             functions: input.functions.into_iter().map(|(i, f)| (i, self.reconstruct_function_stub(f))).collect(),
             ..input
         }
@@ -33,6 +33,7 @@ impl ProgramReconstructor for UnrollingVisitor<'_> {
         self.program = input.program_id.name.name;
         ProgramScope {
             functions: input.functions.into_iter().map(|(i, f)| (i, self.reconstruct_function(f))).collect(),
+            constructor: input.constructor.map(|c| self.reconstruct_constructor(c)),
             ..input
         }
     }
@@ -40,5 +41,13 @@ impl ProgramReconstructor for UnrollingVisitor<'_> {
     // Reconstruct the function body, entering the associated scopes as needed.
     fn reconstruct_function(&mut self, function: Function) -> Function {
         self.in_scope(function.id(), |slf| Function { block: slf.reconstruct_block(function.block).0, ..function })
+    }
+
+    // Reconstruct the constructor body, entering the associated scopes as needed.
+    fn reconstruct_constructor(&mut self, constructor: Constructor) -> Constructor {
+        self.in_scope(constructor.id(), |slf| Constructor {
+            block: slf.reconstruct_block(constructor.block).0,
+            ..constructor
+        })
     }
 }

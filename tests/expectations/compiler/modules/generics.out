@@ -1,0 +1,67 @@
+program multifile.aleo;
+
+struct Foo__DEaGXd8fTqV:
+    a as [u32; 6u32];
+
+struct Baz__7rJrMSDZJ1K:
+    x as u32;
+
+struct Bar__A6TM98YzLQ9:
+    a as [u32; 29u32];
+    c as Baz__7rJrMSDZJ1K;
+
+struct Baz__IN239NRIjw7:
+    x as u32;
+
+struct Bar__G7zpQMYqmYX:
+    a as [u32; 30u32];
+    c as Baz__IN239NRIjw7;
+
+struct Baz__zZ2Nu9V1Ee:
+    x as u32;
+
+struct Bar__68Dd3f3Fy1M:
+    a as [u32; 31u32];
+    c as Baz__zZ2Nu9V1Ee;
+
+struct Foo__2GvnLDk7lVd:
+    a as [u32; 11u32];
+
+function main:
+    cast 42u32 42u32 42u32 42u32 42u32 42u32 into r0 as [u32; 6u32];
+    cast r0 into r1 as Foo__DEaGXd8fTqV;
+    cast 69u32 69u32 69u32 69u32 69u32 69u32 69u32 69u32 69u32 69u32 69u32 into r2 as [u32; 11u32];
+    cast r2 into r3 as Foo__2GvnLDk7lVd;
+    add 17u32 r1.a[3u32] into r4;
+    add r4 r3.a[3u32] into r5;
+    cast 66u32 66u32 66u32 66u32 66u32 66u32 into r6 as [u32; 6u32];
+    cast r6 into r7 as Foo__DEaGXd8fTqV;
+    cast 1000004u32 r7.a[1u32] r7.a[2u32] r7.a[3u32] r7.a[4u32] r7.a[5u32] into r8 as [u32; 6u32];
+    cast 69u32 into r9 as Baz__7rJrMSDZJ1K;
+    cast 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 into r10 as [u32; 29u32];
+    cast r10 r9 into r11 as Bar__A6TM98YzLQ9;
+    cast r11.a[0u32] r11.a[1u32] r11.a[2u32] r11.a[3u32] r11.a[4u32] r11.a[5u32] r11.a[6u32] r11.a[7u32] r11.a[8u32] r11.a[9u32] r11.a[10u32] r11.a[11u32] r11.a[12u32] r11.a[13u32] 333333u32 r11.a[15u32] r11.a[16u32] r11.a[17u32] r11.a[18u32] r11.a[19u32] r11.a[20u32] r11.a[21u32] r11.a[22u32] r11.a[23u32] r11.a[24u32] r11.a[25u32] r11.a[26u32] r11.a[27u32] r11.a[28u32] into r12 as [u32; 29u32];
+    add 35u32 r12[14u32] into r13;
+    add r8[0u32] r13 into r14;
+    add r14 6u32 into r15;
+    add r15 999999u32 into r16;
+    add r5 r16 into r17;
+    cast 6u32 6u32 6u32 6u32 6u32 6u32 6u32 6u32 6u32 6u32 6u32 into r18 as [u32; 11u32];
+    cast r18 into r19 as Foo__2GvnLDk7lVd;
+    add r19.a[0u32] 110u32 into r20;
+    add r20 11u32 into r21;
+    add r17 r21 into r22;
+    cast 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 into r23 as [u32; 30u32];
+    cast 169u32 into r24 as Baz__IN239NRIjw7;
+    cast r23 r24 into r25 as Bar__G7zpQMYqmYX;
+    cast r25.a[0u32] 999999u32 r25.a[2u32] r25.a[3u32] r25.a[4u32] r25.a[5u32] r25.a[6u32] r25.a[7u32] r25.a[8u32] r25.a[9u32] r25.a[10u32] r25.a[11u32] r25.a[12u32] r25.a[13u32] r25.a[14u32] r25.a[15u32] r25.a[16u32] r25.a[17u32] r25.a[18u32] r25.a[19u32] r25.a[20u32] r25.a[21u32] r25.a[22u32] r25.a[23u32] r25.a[24u32] r25.a[25u32] r25.a[26u32] r25.a[27u32] r25.a[28u32] r25.a[29u32] into r26 as [u32; 30u32];
+    add 36u32 r26[15u32] into r27;
+    add r22 r27 into r28;
+    cast 69u32 into r29 as Baz__zZ2Nu9V1Ee;
+    cast 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 43u32 into r30 as [u32; 31u32];
+    cast r30 r29 into r31 as Bar__68Dd3f3Fy1M;
+    cast r31.a[0u32] r31.a[1u32] r31.a[2u32] r31.a[3u32] r31.a[4u32] r31.a[5u32] r31.a[6u32] r31.a[7u32] r31.a[8u32] r31.a[9u32] r31.a[10u32] r31.a[11u32] r31.a[12u32] r31.a[13u32] r31.a[14u32] 333333u32 r31.a[16u32] r31.a[17u32] r31.a[18u32] r31.a[19u32] r31.a[20u32] r31.a[21u32] r31.a[22u32] r31.a[23u32] r31.a[24u32] r31.a[25u32] r31.a[26u32] r31.a[27u32] r31.a[28u32] r31.a[29u32] r31.a[30u32] into r32 as [u32; 31u32];
+    add 37u32 r32[15u32] into r33;
+    add r28 r33 into r34;
+    add r34 999999u32 into r35;
+    output r35 as u32.private;

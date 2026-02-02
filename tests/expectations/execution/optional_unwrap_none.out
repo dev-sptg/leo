@@ -1,0 +1,32 @@
+program unwrap_none_test.aleo;
+
+struct Optional__DOnC9eGtnsJ:
+    is_some as boolean;
+    val as u64;
+
+struct MaybeValue:
+    val as Optional__DOnC9eGtnsJ;
+
+struct Optional__8hhrPm4c3KB:
+    is_some as boolean;
+    val as u8;
+
+function unwrap_none:
+    cast false 0u8 into r0 as Optional__8hhrPm4c3KB;
+    assert.eq r0.is_some true;
+    gt r0.val 0u8 into r1;
+    assert.eq r1 true;
+
+function unwrap_struct_field_none:
+    cast false 0u64 into r0 as Optional__DOnC9eGtnsJ;
+    cast r0 into r1 as MaybeValue;
+    assert.eq r1.val.is_some true;
+    gt r1.val.val 0u64 into r2;
+    assert.eq r2 true;
+
+constructor:
+    assert.eq edition 0u16;
+status: failed: Any { .. }
+output: ()
+status: failed: Any { .. }
+output: ()

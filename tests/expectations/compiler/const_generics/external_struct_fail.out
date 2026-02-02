@@ -1,0 +1,5 @@
+Error [EPAR0370005]: expected ')', ',', '?' -- found '::'
+    --> compiler-test:5:38
+     |
+   5 |     transition main(c: child.aleo/Bar::[4]) {
+     |                                      ^^

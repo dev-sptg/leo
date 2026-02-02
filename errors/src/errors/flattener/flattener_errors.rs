@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -14,13 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::create_messages;
 use std::fmt::{Debug, Display};
-
-/// Generates the type name of a value.
-pub fn type_name<T>(_: &T) -> &'static str {
-    std::any::type_name::<T>()
-}
 
 create_messages!(
     /// CliError enum that represents all the errors for the `leo-lang` crate.
@@ -28,19 +22,19 @@ create_messages!(
     code_mask: 3000i32,
     code_prefix: "FLA",
 
-    /// For when a constant operation would cause an overflow.
+    // TODO: This error is unused.
     @formatted
     binary_overflow {
         args: (left: impl Display, op: impl Display, right: impl Display, right_type: impl Display),
-        msg: format!("The const operation `{left}{} {op} {right}{right_type}` causes an overflow.", type_name(&left)),
+        msg: format!("The const operation `{left}{} {op} {right}{right_type}` causes an overflow.", 0u32),
         help: None,
     }
 
-    /// For when a constant operation would cause an overflow.
+    // TODO: This error is unused.
     @formatted
     unary_overflow {
         args: (left: impl Display, op: impl Display),
-        msg: format!("The const operation `{left}{} {op}` causes an overflow.", type_name(&left)),
+        msg: format!("The const operation `{left}{} {op}` causes an overflow.", 0u32),
         help: None,
     }
 

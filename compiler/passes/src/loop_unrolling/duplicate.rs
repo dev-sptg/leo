@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-use leo_ast::{Block, ExpressionReconstructor, Statement, StatementReconstructor, *};
+use leo_ast::{AstReconstructor, Block, Statement, *};
 
 use crate::SymbolTable;
 
@@ -30,19 +30,19 @@ struct Duplicator<'a> {
 }
 
 impl Duplicator<'_> {
-    fn in_scope_duped<T>(&mut self, new_id: NodeID, old_id: NodeID, func: impl FnOnce(&mut Self) -> T) -> T {
-        self.symbol_table.enter_scope_duped(new_id, old_id);
-        let result = func(self);
+    fn in_scope_duped<T>(&mut self, old_id: NodeID, func: impl FnOnce(&mut Self, NodeID) -> T) -> T {
+        let new_id = self.symbol_table.enter_scope_duped(old_id, self.node_builder);
+        let result = func(self, new_id);
         self.symbol_table.enter_parent();
         result
     }
 }
 
-impl ExpressionReconstructor for Duplicator<'_> {
+impl AstReconstructor for Duplicator<'_> {
+    type AdditionalInput = ();
     type AdditionalOutput = ();
-}
 
-impl StatementReconstructor for Duplicator<'_> {
+    /* Statements */
     fn reconstruct_statement(&mut self, input: Statement) -> (Statement, Self::AdditionalOutput) {
         match input {
             Statement::Block(stmt) => {
@@ -56,9 +56,8 @@ impl StatementReconstructor for Duplicator<'_> {
     }
 
     fn reconstruct_block(&mut self, mut input: Block) -> (Block, Self::AdditionalOutput) {
-        let next_id = self.node_builder.next_id();
-        self.in_scope_duped(next_id, input.id(), |slf| {
-            input.id = next_id;
+        self.in_scope_duped(input.id(), |slf, new_id| {
+            input.id = new_id;
             input.statements = input.statements.into_iter().map(|stmt| slf.reconstruct_statement(stmt).0).collect();
             (input, Default::default())
         })
@@ -75,9 +74,8 @@ impl StatementReconstructor for Duplicator<'_> {
     }
 
     fn reconstruct_iteration(&mut self, mut input: IterationStatement) -> (Statement, Self::AdditionalOutput) {
-        let next_id = self.node_builder.next_id();
-        self.in_scope_duped(next_id, input.id(), |slf| {
-            input.id = next_id;
+        self.in_scope_duped(input.id(), |slf, new_id| {
+            input.id = new_id;
             input.block = slf.reconstruct_block(input.block).0;
             (input.into(), Default::default())
         })

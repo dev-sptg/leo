@@ -1,0 +1,13 @@
+Error [ETYC0372160]: The type `optional_record_test.aleo/Foo` cannot be wrapped in an optional.
+    --> compiler-test:10:9
+     |
+  10 |         let f: Foo? = Foo {
+     |         ^^^^^^^^^^^^^^^^^^^
+  11 |             owner: self.signer,
+     |             ^^^^^^^^^^^^^^^^^^^
+  12 |             val: 5,
+     |             ^^^^^^^
+  13 |         };
+     |         ^^
+     |
+     = Optionals cannot wrap signatures, futures, mappings, tuples, vectors, records, arrays whose elements are optional-unsafe, or structures containing any such types.

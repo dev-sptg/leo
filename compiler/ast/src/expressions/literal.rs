@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -19,14 +19,14 @@ use crate::IntegerType;
 use super::*;
 
 /// A literal.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub struct Literal {
     pub span: Span,
     pub id: NodeID,
     pub variant: LiteralVariant,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum LiteralVariant {
     /// An address literal, e.g., `aleo1qnr4dkkvkgfqph0vzc3y6z2eu975wnpz2925ntjccd5cfqxtyu8s7pyjh9` or `hello.aleo`.
     Address(String),
@@ -37,11 +37,15 @@ pub enum LiteralVariant {
     Field(String),
     /// A group literal, eg `42group`.
     Group(String),
-    /// An integer literal, e.g., `42`.
+    /// An integer literal, e.g., `42u32`.
     Integer(IntegerType, String),
+    /// A literal `None` for optional types.
+    None,
     /// A scalar literal, e.g. `1scalar`.
     /// An unsigned number followed by the keyword `scalar`.
     Scalar(String),
+    /// An unsuffixed literal, e.g. `42` (without a type suffix)
+    Unsuffixed(String),
     /// A string literal, e.g., `"foobar"`.
     String(String),
 }
@@ -54,7 +58,9 @@ impl fmt::Display for LiteralVariant {
             Self::Field(field) => write!(f, "{field}field"),
             Self::Group(group) => write!(f, "{group}group"),
             Self::Integer(type_, value) => write!(f, "{value}{type_}"),
+            Self::None => write!(f, "none"),
             Self::Scalar(scalar) => write!(f, "{scalar}scalar"),
+            Self::Unsuffixed(value) => write!(f, "{value}"),
             Self::String(string) => write!(f, "\"{string}\""),
         }
     }
@@ -68,9 +74,11 @@ impl fmt::Display for Literal {
 
 crate::simple_node_impl!(Literal);
 
-struct DisplayDecimal<'a>(&'a Literal);
-
 impl Literal {
+    pub fn string(s: String, span: Span, id: NodeID) -> Self {
+        Literal { variant: LiteralVariant::String(s), span, id }
+    }
+
     pub fn field(s: String, span: Span, id: NodeID) -> Self {
         Literal { variant: LiteralVariant::Field(s), span, id }
     }
@@ -95,58 +103,20 @@ impl Literal {
         Literal { variant: LiteralVariant::Integer(integer_type, s), span, id }
     }
 
-    /// For displaying a literal as decimal, regardless of the radix in which it was parsed.
-    ///
-    /// In particular this is useful for outputting .aleo files.
-    pub fn display_decimal(&self) -> impl '_ + fmt::Display {
-        DisplayDecimal(self)
+    pub fn unsuffixed(s: String, span: Span, id: NodeID) -> Self {
+        Literal { variant: LiteralVariant::Unsuffixed(s), span, id }
+    }
+
+    pub fn none(span: Span, id: NodeID) -> Self {
+        Literal { variant: LiteralVariant::None, span, id }
     }
 
     /// For an integer literal, parse it and cast it to a u32.
-    ///
-    /// Panics if `self` is not an integer literal.
     pub fn as_u32(&self) -> Option<u32> {
         if let LiteralVariant::Integer(_, s) = &self.variant {
             u32::from_str_by_radix(&s.replace("_", "")).ok()
         } else {
-            panic!("`as_u32` must only be called on integer literals");
-        }
-    }
-}
-
-impl fmt::Display for DisplayDecimal<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // This function is duplicated in `interpreter/src/cursor.rs`,
-        // but there's not really a great place to put a common implementation
-        // right now.
-        fn prepare_snarkvm_string(s: &str, suffix: &str) -> String {
-            // If there's a `-`, separate it from the rest of the string.
-            let (neg, rest) = s.strip_prefix("-").map(|rest| ("-", rest)).unwrap_or(("", s));
-            // Remove leading zeros.
-            let mut rest = rest.trim_start_matches('0');
-            if rest.is_empty() {
-                rest = "0";
-            }
-            format!("{neg}{rest}{suffix}")
-        }
-
-        match &self.0.variant {
-            LiteralVariant::Address(address) => write!(f, "{address}"),
-            LiteralVariant::Boolean(boolean) => write!(f, "{boolean}"),
-            LiteralVariant::Field(field) => write!(f, "{}", prepare_snarkvm_string(field, "field")),
-            LiteralVariant::Group(group) => write!(f, "{}", prepare_snarkvm_string(group, "group")),
-            LiteralVariant::Integer(type_, value) => {
-                let string = value.replace('_', "");
-                if value.starts_with('-') {
-                    let v = i128::from_str_by_radix(&string).expect("Failed to parse integer?");
-                    write!(f, "{v}{type_}")
-                } else {
-                    let v = u128::from_str_by_radix(&string).expect("Failed to parse integer?");
-                    write!(f, "{v}{type_}")
-                }
-            }
-            LiteralVariant::Scalar(scalar) => write!(f, "{}", prepare_snarkvm_string(scalar, "scalar")),
-            LiteralVariant::String(string) => write!(f, "\"{string}\""),
+            None
         }
     }
 }

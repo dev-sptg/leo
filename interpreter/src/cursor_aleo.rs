@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -16,30 +16,34 @@
 
 use super::*;
 
-use leo_ast::{BinaryOperation, CoreFunction, IntegerType, Type, UnaryOperation};
+use leo_ast::{
+    BinaryOperation,
+    IntegerType,
+    Intrinsic,
+    Location,
+    Type,
+    UnaryOperation,
+    interpreter_value::{self, AsyncExecution, Value},
+};
 
 use snarkvm::{
-    prelude::{
-        Access,
-        Boolean,
-        Field,
-        Identifier,
-        Literal,
-        LiteralType,
-        Network as _,
-        PlaintextType,
-        Register,
-        TestnetV0,
-        ToBits as _,
-        ToBytes as _,
-        integers::Integer,
+    prelude::{Identifier, LiteralType, PlaintextType, Register, TestnetV0},
+    synthesizer::{
+        Command,
+        Instruction,
+        program::{
+            CallOperator,
+            CastType,
+            CommitVariant,
+            DeserializeVariant,
+            ECDSAVerifyVariant,
+            HashVariant,
+            Operand,
+            SerializeVariant,
+        },
     },
-    synthesizer::{Command, Instruction},
 };
-use snarkvm_synthesizer_program::{CallOperator, CastType, Operand};
 
-use rand::Rng as _;
-use rand_chacha::{ChaCha20Rng, rand_core::SeedableRng};
 use std::mem;
 
 impl Cursor {
@@ -53,38 +57,17 @@ impl Cursor {
         self.lookup_mapping(program, name)
     }
 
-    fn get_register(&self, reg: &Register<TestnetV0>) -> &Value {
+    fn get_register(&self, reg: &Register<TestnetV0>) -> Value {
         let Some(Frame { element: Element::AleoExecution { registers, .. }, .. }) = self.frames.last() else {
             panic!();
         };
         match reg {
             Register::Locator(index) => {
-                registers.get(index).expect("valid .aleo code doesn't access undefined registers")
+                registers.get(index).expect("valid .aleo code doesn't access undefined registers").clone()
             }
             Register::Access(index, accesses) => {
-                let mut current_value =
-                    registers.get(index).expect("valid .aleo code doesn't access undefined registers");
-                for access in accesses.iter() {
-                    match access {
-                        Access::Member(id) => {
-                            if let Value::Struct(current_struct) = current_value {
-                                let name = snarkvm_identifier_to_symbol(id);
-                                current_value = current_struct.contents.get(&name).expect("struct missing member");
-                            } else {
-                                tc_fail!();
-                            }
-                        }
-                        Access::Index(index) => {
-                            if let Value::Array(current_array) = current_value {
-                                current_value = current_array.get(**index as usize).expect("array index out of bounds");
-                            } else {
-                                tc_fail!();
-                            }
-                        }
-                    }
-                }
-
-                current_value
+                let value = registers.get(index).expect("valid .aleo code doesn't access undefined registers");
+                value.accesses(accesses.iter().cloned()).expect("Accesses should work.")
             }
         }
     }
@@ -98,7 +81,7 @@ impl Cursor {
             Register::Locator(index) => {
                 registers.insert(index, value);
             }
-            Register::Access(_, _) => todo!(),
+            Register::Access(_, _) => panic!("Can't happen"),
         }
     }
 
@@ -153,37 +136,23 @@ impl Cursor {
 
     fn operand_value(&self, operand: &Operand<TestnetV0>) -> Value {
         match operand {
-            Operand::Literal(literal) => match literal {
-                Literal::Address(x) => Value::Address(*x),
-                Literal::Boolean(x) => Value::Bool(**x),
-                Literal::Field(x) => Value::Field(*x),
-                Literal::Group(x) => Value::Group(*x),
-                Literal::I8(x) => Value::I8(**x),
-                Literal::I16(x) => Value::I16(**x),
-                Literal::I32(x) => Value::I32(**x),
-                Literal::I64(x) => Value::I64(**x),
-                Literal::I128(x) => Value::I128(**x),
-                Literal::U8(x) => Value::U8(**x),
-                Literal::U16(x) => Value::U16(**x),
-                Literal::U32(x) => Value::U32(**x),
-                Literal::U64(x) => Value::U64(**x),
-                Literal::U128(x) => Value::U128(**x),
-                Literal::Scalar(x) => Value::Scalar(*x),
-                Literal::Signature(_) => todo!(),
-                Literal::String(_) => todo!(),
-            },
+            Operand::Literal(literal) => literal.clone().into(),
             Operand::Register(register) => self.get_register(register).clone(),
             Operand::ProgramID(_) => todo!(),
-            Operand::Signer => Value::Address(self.signer),
+            Operand::Signer => self.signer.clone(),
             Operand::Caller => {
                 if let Some(function_context) = self.contexts.last() {
-                    Value::Address(function_context.caller)
+                    function_context.caller.clone()
                 } else {
-                    Value::Address(self.signer)
+                    self.signer.clone()
                 }
             }
-            Operand::BlockHeight => Value::U32(self.block_height),
+            Operand::BlockHeight => self.block_height.into(),
+            Operand::BlockTimestamp => self.block_timestamp.into(),
             Operand::NetworkID => todo!(),
+            Operand::Checksum(_) => todo!(),
+            Operand::Edition(_) => todo!(),
+            Operand::ProgramOwner(_) => todo!(),
         }
     }
 
@@ -196,10 +165,13 @@ impl Cursor {
             panic!("frame expected");
         };
 
+        let program = self.contexts.current_program().expect("there should be a program");
+
         macro_rules! unary {
             ($svm_op: expr, $op: ident) => {{
                 let operand = self.operand_value(&$svm_op.operands()[0]);
-                let value = evaluate_unary(Default::default(), UnaryOperation::$op, &operand)?;
+                let value =
+                    interpreter_value::evaluate_unary(Default::default(), UnaryOperation::$op, &operand, &None)?;
                 self.increment_instruction_index();
                 (value, $svm_op.destinations()[0].clone())
             }};
@@ -209,74 +181,96 @@ impl Cursor {
             ($svm_op: expr, $op: ident) => {{
                 let operand0 = self.operand_value(&$svm_op.operands()[0]);
                 let operand1 = self.operand_value(&$svm_op.operands()[1]);
-                let value = evaluate_binary(Default::default(), BinaryOperation::$op, &operand0, &operand1)?;
+                let value = interpreter_value::evaluate_binary(
+                    Default::default(),
+                    BinaryOperation::$op,
+                    &operand0,
+                    &operand1,
+                    &None,
+                )?;
                 self.increment_instruction_index();
                 (value, $svm_op.destinations()[0].clone())
             }};
         }
 
         macro_rules! commit_function {
-            ($commit: expr,
-             $to_address: ident,
-             $to_field: ident,
-             $to_group: ident,
-            ) => {{
-                let core_function = match $commit.destination_type() {
-                    LiteralType::Address => CoreFunction::$to_address,
-                    LiteralType::Field => CoreFunction::$to_field,
-                    LiteralType::Group => CoreFunction::$to_group,
-                    _ => panic!("invalid commit destination type"),
-                };
-
+            ($commit: expr, $variant: expr) => {{
+                let intrinsic = Intrinsic::Commit($variant, $commit.destination_type());
                 let randomizer_value = self.operand_value(&$commit.operands()[0]);
                 let operand_value = self.operand_value(&$commit.operands()[1]);
                 self.values.push(randomizer_value);
                 self.values.push(operand_value);
-                let value = crate::evaluate_core_function(self, core_function, &[], Span::default())?;
+                let value = interpreter_value::evaluate_intrinsic(self, intrinsic, &[], Span::default())?;
                 self.increment_instruction_index();
                 (value.expect("Evaluation should work"), $commit.destinations()[0].clone())
             }};
         }
 
         macro_rules! hash_function {
-            ($hash: expr,
-             $to_address: ident,
-             $to_field: ident,
-             $to_group: ident,
-             $to_i8: ident,
-             $to_i16: ident,
-             $to_i32: ident,
-             $to_i64: ident,
-             $to_i128: ident,
-             $to_u8: ident,
-             $to_u16: ident,
-             $to_u32: ident,
-             $to_u64: ident,
-             $to_u128: ident,
-             $to_scalar: ident,
-            ) => {{
-                let core_function = match $hash.destination_type() {
-                    PlaintextType::Literal(LiteralType::Address) => CoreFunction::$to_address,
-                    PlaintextType::Literal(LiteralType::Field) => CoreFunction::$to_field,
-                    PlaintextType::Literal(LiteralType::Group) => CoreFunction::$to_group,
-                    PlaintextType::Literal(LiteralType::I8) => CoreFunction::$to_i8,
-                    PlaintextType::Literal(LiteralType::I16) => CoreFunction::$to_i16,
-                    PlaintextType::Literal(LiteralType::I32) => CoreFunction::$to_i32,
-                    PlaintextType::Literal(LiteralType::I64) => CoreFunction::$to_i64,
-                    PlaintextType::Literal(LiteralType::I128) => CoreFunction::$to_i128,
-                    PlaintextType::Literal(LiteralType::U8) => CoreFunction::$to_u8,
-                    PlaintextType::Literal(LiteralType::U16) => CoreFunction::$to_u16,
-                    PlaintextType::Literal(LiteralType::U32) => CoreFunction::$to_u32,
-                    PlaintextType::Literal(LiteralType::U64) => CoreFunction::$to_u64,
-                    PlaintextType::Literal(LiteralType::U128) => CoreFunction::$to_u128,
-                    PlaintextType::Literal(LiteralType::Scalar) => CoreFunction::$to_scalar,
-                    _ => panic!("invalid hash destination type"),
-                };
+            ($hash: expr, $variant: expr) => {{
+                // Note. The only supported output types of a `hash` function are literals or bit arrays.
+                let intrinsic =
+                    Intrinsic::Hash($variant, Type::from_snarkvm::<TestnetV0>($hash.destination_type(), program));
                 let operand_value = self.operand_value(&$hash.operands()[0]);
                 self.values.push(operand_value);
-                let value = crate::evaluate_core_function(self, core_function, &[], Span::default())?;
+                let value = interpreter_value::evaluate_intrinsic(self, intrinsic, &[], Span::default())?;
                 self.increment_instruction_index();
                 (value.expect("Evaluation should work"), $hash.destinations()[0].clone())
+            }};
+        }
+
+        macro_rules! ecdsa_function {
+            ($ecdsa: expr, $variant: expr) => {{
+                let intrinsic = Intrinsic::ECDSAVerify($variant);
+                let signature = self.operand_value(&$ecdsa.operands()[0]);
+                let public_key = self.operand_value(&$ecdsa.operands()[1]);
+                let message = self.operand_value(&$ecdsa.operands()[2]);
+                self.values.push(signature);
+                self.values.push(public_key);
+                self.values.push(message);
+                let value = interpreter_value::evaluate_intrinsic(self, intrinsic, &[], Span::default())?;
+                self.increment_instruction_index();
+                (value.expect("Evaluation should work"), $ecdsa.destinations()[0].clone())
+            }};
+        }
+
+        macro_rules! schnorr_function {
+            ($schnorr: expr, $variant: expr) => {{
+                let intrinsic = Intrinsic::SignatureVerify;
+                let signature = self.operand_value(&$schnorr.operands()[0]);
+                let public_key = self.operand_value(&$schnorr.operands()[1]);
+                let message = self.operand_value(&$schnorr.operands()[2]);
+                self.values.push(signature);
+                self.values.push(public_key);
+                self.values.push(message);
+                let value = interpreter_value::evaluate_intrinsic(self, intrinsic, &[], Span::default())?;
+                self.increment_instruction_index();
+                (value.expect("Evaluation should work"), $schnorr.destinations()[0].clone())
+            }};
+        }
+
+        macro_rules! serialize_function {
+            ($serialize: expr, $variant: expr) => {{
+                let intrinsic = Intrinsic::Serialize($variant);
+                let operand_value = self.operand_value(&$serialize.operands()[0]);
+                self.values.push(operand_value);
+                let value = interpreter_value::evaluate_intrinsic(self, intrinsic, &[], Span::default())?;
+                self.increment_instruction_index();
+                (value.expect("Evaluation should work"), $serialize.destinations()[0].clone())
+            }};
+        }
+
+        macro_rules! deserialize_function {
+            ($deserialize: expr, $variant: expr) => {{
+                let intrinsic = Intrinsic::Deserialize(
+                    $variant,
+                    Type::from_snarkvm::<TestnetV0>($deserialize.destination_type(), program),
+                );
+                let operand_value = self.operand_value(&$deserialize.operands()[0]);
+                self.values.push(operand_value);
+                let value = interpreter_value::evaluate_intrinsic(self, intrinsic, &[], Span::default())?;
+                self.increment_instruction_index();
+                (value.expect("Evaluation should work"), $deserialize.destinations()[0].clone())
             }};
         }
 
@@ -289,7 +283,7 @@ impl Cursor {
             AssertEq(assert_eq) => {
                 let operand0 = self.operand_value(&assert_eq.operands()[0]);
                 let operand1 = self.operand_value(&assert_eq.operands()[1]);
-                if operand0.neq(&operand1)? {
+                if !operand0.eq(&operand1)? {
                     halt_no_span!("assertion failure: {operand0} != {operand1}");
                 }
                 self.increment_instruction_index();
@@ -305,17 +299,17 @@ impl Cursor {
                 return Ok(());
             }
             Async(async_) if *step == 0 => {
-                let program = self.contexts.current_program().expect("there should be a program");
                 let name = snarkvm_identifier_to_symbol(async_.function_name());
                 let arguments: Vec<Value> = async_.operands().iter().map(|op| self.operand_value(op)).collect();
                 if self.really_async {
                     self.increment_instruction_index();
-                    let async_ex = AsyncExecution { function: GlobalId { name, program }, arguments };
-                    (Value::Future(Future(vec![async_ex])), async_.destinations()[0].clone())
+                    let async_ex =
+                        AsyncExecution::AsyncFunctionCall { function: Location::new(program, vec![name]), arguments };
+                    (vec![async_ex].into(), async_.destinations()[0].clone())
                 } else {
                     self.do_call(
                         program,
-                        name,
+                        &[name],
                         arguments.into_iter(),
                         true, // finalize
                         Span::default(),
@@ -338,7 +332,7 @@ impl Cursor {
                 let arguments: Vec<Value> = call.operands().iter().map(|op| self.operand_value(op)).collect();
                 self.do_call(
                     program,
-                    name,
+                    &[name],
                     arguments.into_iter(),
                     false, // finalize
                     Span::default(),
@@ -349,7 +343,7 @@ impl Cursor {
             Async(async_) if *step == 1 => {
                 // We've done a call, and the result is on the value stack.
                 self.values.pop();
-                self.set_register(async_.destinations()[0].clone(), Value::Future(Future(Vec::new())));
+                self.set_register(async_.destinations()[0].clone(), Vec::<AsyncExecution>::new().into());
                 self.increment_instruction_index();
                 return Ok(());
             }
@@ -361,11 +355,11 @@ impl Cursor {
                 if call.destinations().len() == 1 {
                     self.set_register(call.destinations()[0].clone(), result);
                 } else {
-                    let Value::Tuple(tuple) = result else {
-                        panic!("function returning multiple values should create a tuple");
-                    };
-                    for (dest, value) in call.destinations().iter().zip(tuple.into_iter()) {
-                        self.set_register(dest.clone(), value);
+                    for (i, dest) in call.destinations().iter().enumerate() {
+                        self.set_register(
+                            dest.clone(),
+                            result.tuple_index(i).expect("Function returning multiple values should create a tuple."),
+                        );
                     }
                 }
                 self.increment_instruction_index();
@@ -377,52 +371,74 @@ impl Cursor {
 
                 self.increment_instruction_index();
 
-                let make_struct = |program, name_identifier| {
-                    let name = snarkvm_identifier_to_symbol(name_identifier);
-                    let id = GlobalId { program, name };
-                    let struct_type = self.structs.get(&id).expect("struct type should exist");
-                    let operands = cast.operands().iter().map(|op| self.operand_value(op));
-                    Value::Struct(StructContents {
-                        name,
-                        contents: struct_type.iter().cloned().zip(operands).collect(),
-                    })
-                };
-
                 match cast.cast_type() {
                     CastType::GroupXCoordinate => {
-                        let Value::Group(g) = self.operand_value(&cast.operands()[0]) else {
-                            tc_fail!();
+                        let value = self.operand_value(&cast.operands()[0]);
+                        let mut values = vec![value];
+                        let Some(result_value) = interpreter_value::evaluate_intrinsic(
+                            &mut values,
+                            Intrinsic::GroupToXCoordinate,
+                            &[],
+                            Default::default(),
+                        )?
+                        else {
+                            halt_no_span!("GroupToXCoordinate didn't produce a value.");
                         };
-                        let value = Value::Field(g.to_x_coordinate());
-                        (value, destination)
+                        (result_value, destination)
                     }
                     CastType::GroupYCoordinate => {
-                        let Value::Group(g) = self.operand_value(&cast.operands()[0]) else {
-                            tc_fail!();
+                        let value = self.operand_value(&cast.operands()[0]);
+                        let mut values = vec![value];
+                        let Some(result_value) = interpreter_value::evaluate_intrinsic(
+                            &mut values,
+                            Intrinsic::GroupToYCoordinate,
+                            &[],
+                            Default::default(),
+                        )?
+                        else {
+                            halt_no_span!("GroupToYCoordinate didn't produce a value.");
                         };
-                        let value = Value::Field(g.to_y_coordinate());
-                        (value, destination)
+                        (result_value, destination)
                     }
                     CastType::Plaintext(PlaintextType::Array(_array)) => {
-                        let value = Value::Array(cast.operands().iter().map(|op| self.operand_value(op)).collect());
+                        let value = Value::make_array(cast.operands().iter().map(|op| self.operand_value(op)));
                         (value, destination)
                     }
                     CastType::Plaintext(PlaintextType::Literal(literal_type)) => {
                         let operand = self.operand_value(&cast.operands()[0]);
-                        let value = match operand.cast(&snarkvm_literal_type_to_type(*literal_type)) {
-                            Some(value) => value,
-                            None => halt_no_span!("cast failure"),
+                        let Some(value) = operand.cast(&snarkvm_literal_type_to_type(*literal_type)) else {
+                            halt_no_span!("cast failure");
                         };
                         (value, destination)
                     }
-                    CastType::Record(struct_name) | CastType::Plaintext(PlaintextType::Struct(struct_name)) => {
-                        let program = self.contexts.current_program().expect("there should be a current program");
-                        let value = make_struct(program, struct_name);
+                    CastType::Plaintext(PlaintextType::Struct(struct_name)) => {
+                        let name = Symbol::intern(&struct_name.to_string());
+                        let struct_type = self.composites.get([name].as_slice()).expect("struct type should exist");
+                        let operands = cast.operands().iter().map(|op| self.operand_value(op));
+                        let value = Value::make_struct(
+                            struct_type.keys().cloned().zip(operands),
+                            Location::new(self.current_program().unwrap(), vec![name]),
+                        );
+                        (value, destination)
+                    }
+                    CastType::Plaintext(PlaintextType::ExternalStruct(_)) => todo!(),
+                    CastType::Record(record_name) => {
+                        let name = Symbol::intern(&record_name.to_string());
+                        let path = vec![name];
+                        let record_type = self.records.get(&(program, path.clone())).expect("record type should exist");
+                        let operands = cast.operands().iter().map(|op| self.operand_value(op));
+                        let value =
+                            Value::make_record(record_type.keys().cloned().zip(operands), program, path.clone());
                         (value, destination)
                     }
                     CastType::ExternalRecord(locator) => {
-                        let program = snarkvm_identifier_to_symbol(locator.program_id().name());
-                        let value = make_struct(program, locator.name());
+                        let program = Symbol::intern(&locator.program_id().name().to_string());
+                        let name = Symbol::intern(&locator.resource().to_string());
+                        let path = vec![name];
+                        let record_type = self.records.get(&(program, path.clone())).expect("record type should exist");
+                        let operands = cast.operands().iter().map(|op| self.operand_value(op));
+                        let value =
+                            Value::make_record(record_type.keys().cloned().zip(operands), program, path.clone());
                         (value, destination)
                     }
                 }
@@ -432,297 +448,89 @@ impl Cursor {
                     CastType::Plaintext(PlaintextType::Literal(literal_type)) => {
                         // This is the only variant supported for lossy casts.
                         let operand = self.operand_value(&cast_lossy.operands()[0]);
-                        let operand_literal = value_to_snarkvm_literal(operand);
-                        let result_literal = match operand_literal.cast_lossy(*literal_type) {
-                            Ok(result_literal) => result_literal,
-                            Err(_) => halt_no_span!("cast failure"),
+                        let Some(value) = operand.cast_lossy(literal_type) else {
+                            halt_no_span!("Cast failure");
                         };
                         let destination = cast_lossy.destinations()[0].clone();
-                        self.increment_instruction_index();
-                        (snarkvm_literal_to_value(result_literal), destination)
+                        (value, destination)
                     }
                     _ => tc_fail!(),
                 }
             }
-            CommitBHP256(commit) => {
-                commit_function!(commit, BHP256CommitToAddress, BHP256CommitToField, BHP256CommitToGroup,)
-            }
-            CommitBHP512(commit) => {
-                commit_function!(commit, BHP512CommitToAddress, BHP512CommitToField, BHP512CommitToGroup,)
-            }
-            CommitBHP768(commit) => {
-                commit_function!(commit, BHP768CommitToAddress, BHP768CommitToField, BHP768CommitToGroup,)
-            }
-            CommitBHP1024(commit) => {
-                commit_function!(commit, BHP1024CommitToAddress, BHP1024CommitToField, BHP1024CommitToGroup,)
-            }
-            CommitPED64(commit) => {
-                commit_function!(commit, Pedersen64CommitToAddress, Pedersen64CommitToField, Pedersen64CommitToGroup,)
-            }
-            CommitPED128(commit) => {
-                commit_function!(commit, Pedersen128CommitToAddress, Pedersen128CommitToField, Pedersen128CommitToGroup,)
-            }
+            CommitBHP256(commit) => commit_function!(commit, CommitVariant::CommitBHP256),
+            CommitBHP512(commit) => commit_function!(commit, CommitVariant::CommitBHP512),
+            CommitBHP768(commit) => commit_function!(commit, CommitVariant::CommitBHP768),
+            CommitBHP1024(commit) => commit_function!(commit, CommitVariant::CommitBHP1024),
+            CommitPED64(commit) => commit_function!(commit, CommitVariant::CommitPED64),
+            CommitPED128(commit) => commit_function!(commit, CommitVariant::CommitPED128),
             Div(div) => binary!(div, Div),
             DivWrapped(div_wrapped) => binary!(div_wrapped, DivWrapped),
             Double(double) => unary!(double, Double),
             GreaterThan(gt) => binary!(gt, Gt),
             GreaterThanOrEqual(gte) => binary!(gte, Gte),
-            HashBHP256(hash) => hash_function!(
-                hash,
-                BHP256HashToAddress,
-                BHP256HashToField,
-                BHP256HashToGroup,
-                BHP256HashToI8,
-                BHP256HashToI16,
-                BHP256HashToI32,
-                BHP256HashToI64,
-                BHP256HashToI128,
-                BHP256HashToU8,
-                BHP256HashToU16,
-                BHP256HashToU32,
-                BHP256HashToU64,
-                BHP256HashToU128,
-                BHP256HashToScalar,
-            ),
-            HashBHP512(hash) => hash_function!(
-                hash,
-                BHP512HashToAddress,
-                BHP512HashToField,
-                BHP512HashToGroup,
-                BHP512HashToI8,
-                BHP512HashToI16,
-                BHP512HashToI32,
-                BHP512HashToI64,
-                BHP512HashToI128,
-                BHP512HashToU8,
-                BHP512HashToU16,
-                BHP512HashToU32,
-                BHP512HashToU64,
-                BHP512HashToU128,
-                BHP512HashToScalar,
-            ),
-            HashBHP768(hash) => hash_function!(
-                hash,
-                BHP768HashToAddress,
-                BHP768HashToField,
-                BHP768HashToGroup,
-                BHP768HashToI8,
-                BHP768HashToI16,
-                BHP768HashToI32,
-                BHP768HashToI64,
-                BHP768HashToI128,
-                BHP768HashToU8,
-                BHP768HashToU16,
-                BHP768HashToU32,
-                BHP768HashToU64,
-                BHP768HashToU128,
-                BHP768HashToScalar,
-            ),
-            HashBHP1024(hash) => hash_function!(
-                hash,
-                BHP1024HashToAddress,
-                BHP1024HashToField,
-                BHP1024HashToGroup,
-                BHP1024HashToI8,
-                BHP1024HashToI16,
-                BHP1024HashToI32,
-                BHP1024HashToI64,
-                BHP1024HashToI128,
-                BHP1024HashToU8,
-                BHP1024HashToU16,
-                BHP1024HashToU32,
-                BHP1024HashToU64,
-                BHP1024HashToU128,
-                BHP1024HashToScalar,
-            ),
-            HashKeccak256(hash) => hash_function!(
-                hash,
-                Keccak256HashToAddress,
-                Keccak256HashToField,
-                Keccak256HashToGroup,
-                Keccak256HashToI8,
-                Keccak256HashToI16,
-                Keccak256HashToI32,
-                Keccak256HashToI64,
-                Keccak256HashToI128,
-                Keccak256HashToU8,
-                Keccak256HashToU16,
-                Keccak256HashToU32,
-                Keccak256HashToU64,
-                Keccak256HashToU128,
-                Keccak256HashToScalar,
-            ),
-            HashKeccak384(hash) => hash_function!(
-                hash,
-                Keccak384HashToAddress,
-                Keccak384HashToField,
-                Keccak384HashToGroup,
-                Keccak384HashToI8,
-                Keccak384HashToI16,
-                Keccak384HashToI32,
-                Keccak384HashToI64,
-                Keccak384HashToI128,
-                Keccak384HashToU8,
-                Keccak384HashToU16,
-                Keccak384HashToU32,
-                Keccak384HashToU64,
-                Keccak384HashToU128,
-                Keccak384HashToScalar,
-            ),
-            HashKeccak512(hash) => hash_function!(
-                hash,
-                Keccak512HashToAddress,
-                Keccak512HashToField,
-                Keccak512HashToGroup,
-                Keccak512HashToI8,
-                Keccak512HashToI16,
-                Keccak512HashToI32,
-                Keccak512HashToI64,
-                Keccak512HashToI128,
-                Keccak512HashToU8,
-                Keccak512HashToU16,
-                Keccak512HashToU32,
-                Keccak512HashToU64,
-                Keccak512HashToU128,
-                Keccak512HashToScalar,
-            ),
-            HashPED64(hash) => hash_function!(
-                hash,
-                Pedersen64HashToAddress,
-                Pedersen64HashToField,
-                Pedersen64HashToGroup,
-                Pedersen64HashToI8,
-                Pedersen64HashToI16,
-                Pedersen64HashToI32,
-                Pedersen64HashToI64,
-                Pedersen64HashToI128,
-                Pedersen64HashToU8,
-                Pedersen64HashToU16,
-                Pedersen64HashToU32,
-                Pedersen64HashToU64,
-                Pedersen64HashToU128,
-                Pedersen64HashToScalar,
-            ),
-            HashPED128(hash) => hash_function!(
-                hash,
-                Pedersen128HashToAddress,
-                Pedersen128HashToField,
-                Pedersen128HashToGroup,
-                Pedersen128HashToI8,
-                Pedersen128HashToI16,
-                Pedersen128HashToI32,
-                Pedersen128HashToI64,
-                Pedersen128HashToI128,
-                Pedersen128HashToU8,
-                Pedersen128HashToU16,
-                Pedersen128HashToU32,
-                Pedersen128HashToU64,
-                Pedersen128HashToU128,
-                Pedersen128HashToScalar,
-            ),
-            HashPSD2(hash) => hash_function!(
-                hash,
-                Poseidon2HashToAddress,
-                Poseidon2HashToField,
-                Poseidon2HashToGroup,
-                Poseidon2HashToI8,
-                Poseidon2HashToI16,
-                Poseidon2HashToI32,
-                Poseidon2HashToI64,
-                Poseidon2HashToI128,
-                Poseidon2HashToU8,
-                Poseidon2HashToU16,
-                Poseidon2HashToU32,
-                Poseidon2HashToU64,
-                Poseidon2HashToU128,
-                Poseidon2HashToScalar,
-            ),
-            HashPSD4(hash) => hash_function!(
-                hash,
-                Poseidon4HashToAddress,
-                Poseidon4HashToField,
-                Poseidon4HashToGroup,
-                Poseidon4HashToI8,
-                Poseidon4HashToI16,
-                Poseidon4HashToI32,
-                Poseidon4HashToI64,
-                Poseidon4HashToI128,
-                Poseidon4HashToU8,
-                Poseidon4HashToU16,
-                Poseidon4HashToU32,
-                Poseidon4HashToU64,
-                Poseidon4HashToU128,
-                Poseidon4HashToScalar,
-            ),
-            HashPSD8(hash) => hash_function!(
-                hash,
-                Poseidon8HashToAddress,
-                Poseidon8HashToField,
-                Poseidon8HashToGroup,
-                Poseidon8HashToI8,
-                Poseidon8HashToI16,
-                Poseidon8HashToI32,
-                Poseidon8HashToI64,
-                Poseidon8HashToI128,
-                Poseidon8HashToU8,
-                Poseidon8HashToU16,
-                Poseidon8HashToU32,
-                Poseidon8HashToU64,
-                Poseidon8HashToU128,
-                Poseidon8HashToScalar,
-            ),
-            HashSha3_256(hash) => hash_function!(
-                hash,
-                SHA3_256HashToAddress,
-                SHA3_256HashToField,
-                SHA3_256HashToGroup,
-                SHA3_256HashToI8,
-                SHA3_256HashToI16,
-                SHA3_256HashToI32,
-                SHA3_256HashToI64,
-                SHA3_256HashToI128,
-                SHA3_256HashToU8,
-                SHA3_256HashToU16,
-                SHA3_256HashToU32,
-                SHA3_256HashToU64,
-                SHA3_256HashToU128,
-                SHA3_256HashToScalar,
-            ),
-            HashSha3_384(hash) => hash_function!(
-                hash,
-                SHA3_384HashToAddress,
-                SHA3_384HashToField,
-                SHA3_384HashToGroup,
-                SHA3_384HashToI8,
-                SHA3_384HashToI16,
-                SHA3_384HashToI32,
-                SHA3_384HashToI64,
-                SHA3_384HashToI128,
-                SHA3_384HashToU8,
-                SHA3_384HashToU16,
-                SHA3_384HashToU32,
-                SHA3_384HashToU64,
-                SHA3_384HashToU128,
-                SHA3_384HashToScalar,
-            ),
-            HashSha3_512(hash) => hash_function!(
-                hash,
-                SHA3_512HashToAddress,
-                SHA3_512HashToField,
-                SHA3_512HashToGroup,
-                SHA3_512HashToI8,
-                SHA3_512HashToI16,
-                SHA3_512HashToI32,
-                SHA3_512HashToI64,
-                SHA3_512HashToI128,
-                SHA3_512HashToU8,
-                SHA3_512HashToU16,
-                SHA3_512HashToU32,
-                SHA3_512HashToU64,
-                SHA3_512HashToU128,
-                SHA3_512HashToScalar,
-            ),
-            HashManyPSD2(_) | HashManyPSD4(_) | HashManyPSD8(_) => panic!("these instructions don't exist yet"),
+            HashBHP256(hash) => hash_function!(hash, HashVariant::HashBHP256),
+            HashBHP512(hash) => hash_function!(hash, HashVariant::HashBHP512),
+            HashBHP768(hash) => hash_function!(hash, HashVariant::HashBHP768),
+            HashBHP1024(hash) => hash_function!(hash, HashVariant::HashBHP1024),
+            HashKeccak256(hash) => hash_function!(hash, HashVariant::HashKeccak256),
+            HashKeccak384(hash) => hash_function!(hash, HashVariant::HashKeccak384),
+            HashKeccak512(hash) => hash_function!(hash, HashVariant::HashKeccak512),
+            HashPED64(hash) => hash_function!(hash, HashVariant::HashPED64),
+            HashPED128(hash) => hash_function!(hash, HashVariant::HashPED128),
+            HashPSD2(hash) => hash_function!(hash, HashVariant::HashPSD2),
+            HashPSD4(hash) => hash_function!(hash, HashVariant::HashPSD4),
+            HashPSD8(hash) => hash_function!(hash, HashVariant::HashPSD8),
+            HashSha3_256(hash) => hash_function!(hash, HashVariant::HashSha3_256),
+            HashSha3_384(hash) => hash_function!(hash, HashVariant::HashSha3_384),
+            HashSha3_512(hash) => hash_function!(hash, HashVariant::HashSha3_512),
+            HashBHP256Raw(hash) => hash_function!(hash, HashVariant::HashBHP256Raw),
+            HashBHP512Raw(hash) => hash_function!(hash, HashVariant::HashBHP512Raw),
+            HashBHP768Raw(hash) => hash_function!(hash, HashVariant::HashBHP768Raw),
+            HashBHP1024Raw(hash) => hash_function!(hash, HashVariant::HashBHP1024Raw),
+            HashKeccak256Raw(hash) => hash_function!(hash, HashVariant::HashKeccak256Raw),
+            HashKeccak384Raw(hash) => hash_function!(hash, HashVariant::HashKeccak384Raw),
+            HashKeccak512Raw(hash) => hash_function!(hash, HashVariant::HashKeccak512Raw),
+            HashPED64Raw(hash) => hash_function!(hash, HashVariant::HashPED64Raw),
+            HashPED128Raw(hash) => hash_function!(hash, HashVariant::HashPED128Raw),
+            HashPSD2Raw(hash) => hash_function!(hash, HashVariant::HashPSD2Raw),
+            HashPSD4Raw(hash) => hash_function!(hash, HashVariant::HashPSD4Raw),
+            HashPSD8Raw(hash) => hash_function!(hash, HashVariant::HashPSD8Raw),
+            HashSha3_256Raw(hash) => hash_function!(hash, HashVariant::HashSha3_256Raw),
+            HashSha3_384Raw(hash) => hash_function!(hash, HashVariant::HashSha3_384Raw),
+            HashSha3_512Raw(hash) => hash_function!(hash, HashVariant::HashSha3_512Raw),
+            HashKeccak256Native(hash) => hash_function!(hash, HashVariant::HashKeccak256Native),
+            HashKeccak384Native(hash) => hash_function!(hash, HashVariant::HashKeccak384Native),
+            HashKeccak512Native(hash) => hash_function!(hash, HashVariant::HashKeccak512Native),
+            HashSha3_256Native(hash) => hash_function!(hash, HashVariant::HashSha3_256Native),
+            HashSha3_384Native(hash) => hash_function!(hash, HashVariant::HashSha3_384Native),
+            HashSha3_512Native(hash) => hash_function!(hash, HashVariant::HashSha3_512Native),
+            HashKeccak256NativeRaw(hash) => hash_function!(hash, HashVariant::HashKeccak256NativeRaw),
+            HashKeccak384NativeRaw(hash) => hash_function!(hash, HashVariant::HashKeccak384NativeRaw),
+            HashKeccak512NativeRaw(hash) => hash_function!(hash, HashVariant::HashKeccak512NativeRaw),
+            HashSha3_256NativeRaw(hash) => hash_function!(hash, HashVariant::HashSha3_256NativeRaw),
+            HashSha3_384NativeRaw(hash) => hash_function!(hash, HashVariant::HashSha3_384NativeRaw),
+            HashSha3_512NativeRaw(hash) => hash_function!(hash, HashVariant::HashSha3_512NativeRaw),
+            ECDSAVerifyDigest(ecdsa) => ecdsa_function!(ecdsa, ECDSAVerifyVariant::Digest),
+            ECDSAVerifyDigestEth(ecdsa) => ecdsa_function!(ecdsa, ECDSAVerifyVariant::DigestEth),
+            ECDSAVerifyKeccak256(ecdsa) => ecdsa_function!(ecdsa, ECDSAVerifyVariant::HashKeccak256),
+            ECDSAVerifyKeccak256Raw(ecdsa) => ecdsa_function!(ecdsa, ECDSAVerifyVariant::HashKeccak256Raw),
+            ECDSAVerifyKeccak256Eth(ecdsa) => ecdsa_function!(ecdsa, ECDSAVerifyVariant::HashKeccak256Eth),
+            ECDSAVerifyKeccak384(ecdsa) => ecdsa_function!(ecdsa, ECDSAVerifyVariant::HashKeccak384),
+            ECDSAVerifyKeccak384Raw(ecdsa) => ecdsa_function!(ecdsa, ECDSAVerifyVariant::HashKeccak384Raw),
+            ECDSAVerifyKeccak384Eth(ecdsa) => ecdsa_function!(ecdsa, ECDSAVerifyVariant::HashKeccak384Eth),
+            ECDSAVerifyKeccak512(ecdsa) => ecdsa_function!(ecdsa, ECDSAVerifyVariant::HashKeccak512),
+            ECDSAVerifyKeccak512Raw(ecdsa) => ecdsa_function!(ecdsa, ECDSAVerifyVariant::HashKeccak512Raw),
+            ECDSAVerifyKeccak512Eth(ecdsa) => ecdsa_function!(ecdsa, ECDSAVerifyVariant::HashKeccak512Eth),
+            ECDSAVerifySha3_256(ecdsa) => ecdsa_function!(ecdsa, ECDSAVerifyVariant::HashSha3_256),
+            ECDSAVerifySha3_256Raw(ecdsa) => ecdsa_function!(ecdsa, ECDSAVerifyVariant::HashSha3_256Raw),
+            ECDSAVerifySha3_256Eth(ecdsa) => ecdsa_function!(ecdsa, ECDSAVerifyVariant::HashSha3_256Eth),
+            ECDSAVerifySha3_384(ecdsa) => ecdsa_function!(ecdsa, ECDSAVerifyVariant::HashSha3_384),
+            ECDSAVerifySha3_384Raw(ecdsa) => ecdsa_function!(ecdsa, ECDSAVerifyVariant::HashSha3_384Raw),
+            ECDSAVerifySha3_384Eth(ecdsa) => ecdsa_function!(ecdsa, ECDSAVerifyVariant::HashSha3_384Eth),
+            ECDSAVerifySha3_512(ecdsa) => ecdsa_function!(ecdsa, ECDSAVerifyVariant::HashSha3_512),
+            ECDSAVerifySha3_512Raw(ecdsa) => ecdsa_function!(ecdsa, ECDSAVerifyVariant::HashSha3_512Raw),
+            ECDSAVerifySha3_512Eth(ecdsa) => ecdsa_function!(ecdsa, ECDSAVerifyVariant::HashSha3_512Eth),
+            HashManyPSD2(_) | HashManyPSD4(_) | HashManyPSD8(_) => panic!("these functions don't exist yet"),
             Inv(inv) => unary!(inv, Inverse),
             IsEq(eq) => binary!(eq, Eq),
             IsNeq(neq) => binary!(neq, Neq),
@@ -744,22 +552,30 @@ impl Cursor {
             ShlWrapped(shl_wrapped) => binary!(shl_wrapped, ShlWrapped),
             Shr(shr) => binary!(shr, Shr),
             ShrWrapped(shr_wrapped) => binary!(shr_wrapped, ShrWrapped),
-            SignVerify(_) => todo!(),
+            SignVerify(schnorr) => schnorr_function!(schnorr, false),
             Square(square) => unary!(square, Square),
             SquareRoot(sqrt) => unary!(sqrt, SquareRoot),
             Sub(sub) => binary!(sub, Sub),
             SubWrapped(sub_wrapped) => binary!(sub_wrapped, SubWrapped),
             Ternary(ternary) => {
                 let condition = self.operand_value(&ternary.operands()[0]);
-                let result = match condition {
-                    Value::Bool(true) => &ternary.operands()[1],
-                    Value::Bool(false) => &ternary.operands()[2],
-                    _ => panic!(),
+                let result = match condition.try_into() {
+                    Ok(true) => &ternary.operands()[1],
+                    Ok(false) => &ternary.operands()[2],
+                    _ => tc_fail!(),
                 };
                 self.increment_instruction_index();
                 (self.operand_value(result), ternary.destinations()[0].clone())
             }
             Xor(xor) => binary!(xor, Xor),
+            SerializeBits(serialize_bits) => serialize_function!(serialize_bits, SerializeVariant::ToBits),
+            SerializeBitsRaw(serialize_bits_raw) => {
+                serialize_function!(serialize_bits_raw, SerializeVariant::ToBitsRaw)
+            }
+            DeserializeBits(deserialize_bits) => deserialize_function!(deserialize_bits, DeserializeVariant::FromBits),
+            DeserializeBitsRaw(deserialize_bits_raw) => {
+                deserialize_function!(deserialize_bits_raw, DeserializeVariant::FromBitsRaw)
+            }
         };
 
         self.set_register(destination, value);
@@ -786,7 +602,7 @@ impl Cursor {
         };
 
         if result.is_empty() {
-            result.push(Value::Unit);
+            result.push(Value::make_unit());
         }
         result
     }
@@ -800,17 +616,20 @@ impl Cursor {
                 return Ok(());
             }
             Await(await_) => {
-                let Value::Future(future) = self.get_register(await_.register()) else {
+                let value = self.get_register(await_.register());
+                let Some(asyncs) = value.as_future() else {
                     halt_no_span!("attempted to await a non-future");
                 };
-                self.contexts.add_future(future.clone());
+                self.contexts.add_future(asyncs.to_vec());
                 self.increment_instruction_index();
                 return Ok(());
             }
             Contains(contains) => {
+                // Value has interior mutability, since SnarkVM's value does, but this is okay - it's just the OnceCell which houses its bits.
+                #[allow(clippy::mutable_key_type)]
                 let mapping = self.mapping_by_call_operator(contains.mapping()).expect("mapping should be present");
                 let key = self.operand_value(contains.key());
-                let result = Value::Bool(mapping.contains_key(&key));
+                let result = mapping.contains_key(&key).into();
                 self.increment_instruction_index();
                 (result, contains.destination().clone())
             }
@@ -862,36 +681,10 @@ impl Cursor {
                 return Ok(());
             }
             RandChaCha(rand) => {
-                // If there are operands, they are additional seeds.
-                let mut bits = Vec::new();
-                for value in rand.operands().iter().map(|op| self.operand_value(op)) {
-                    value.write_bits_le(&mut bits);
-                }
-                let field: Field<TestnetV0> = self.rng.r#gen();
-                field.write_bits_le(&mut bits);
-                let seed_vec = TestnetV0::hash_bhp1024(&bits)?.to_bytes_le()?;
-                let mut seed = [0u8; 32];
-                seed.copy_from_slice(&seed_vec[..32]);
-                let mut rng = ChaCha20Rng::from_seed(seed);
-                let value = match rand.destination_type() {
-                    LiteralType::Address => Value::Address(rng.r#gen()),
-                    LiteralType::Boolean => Value::Bool(rng.r#gen()),
-                    LiteralType::Field => Value::Field(rng.r#gen()),
-                    LiteralType::Group => Value::Group(rng.r#gen()),
-                    LiteralType::I8 => Value::I8(rng.r#gen()),
-                    LiteralType::I16 => Value::I16(rng.r#gen()),
-                    LiteralType::I32 => Value::I32(rng.r#gen()),
-                    LiteralType::I64 => Value::I64(rng.r#gen()),
-                    LiteralType::I128 => Value::I128(rng.r#gen()),
-                    LiteralType::U8 => Value::U8(rng.r#gen()),
-                    LiteralType::U16 => Value::U16(rng.r#gen()),
-                    LiteralType::U32 => Value::U32(rng.r#gen()),
-                    LiteralType::U64 => Value::U64(rng.r#gen()),
-                    LiteralType::U128 => Value::U128(rng.r#gen()),
-                    LiteralType::Scalar => Value::Scalar(rng.r#gen()),
-                    LiteralType::Signature => halt_no_span!("Cannot create a random signature"),
-                    LiteralType::String => halt_no_span!("Cannot create a random string"),
-                };
+                // TODO - this is not using the other operands which are supposed to seed the RNG.
+                use Intrinsic::*;
+                let function = ChaChaRand(rand.destination_type());
+                let value = interpreter_value::evaluate_intrinsic(self, function, &[], Default::default())?.unwrap();
                 self.increment_instruction_index();
                 (value, rand.destination().clone())
             }
@@ -908,14 +701,17 @@ impl Cursor {
             BranchNeq(branch_neq) => {
                 let first = self.operand_value(branch_neq.first());
                 let second = self.operand_value(branch_neq.second());
-                if first.neq(&second)? {
+                if !first.eq(&second)? {
                     self.branch(branch_neq.position());
                 } else {
                     self.increment_instruction_index();
                 }
                 return Ok(());
             }
-            Position(_) => return Ok(()),
+            Position(_) => {
+                self.increment_instruction_index();
+                return Ok(());
+            }
         };
 
         self.set_register(destination, value);
@@ -933,14 +729,14 @@ impl Cursor {
             panic!();
         };
         for (i, cmd) in finalize.commands().iter().enumerate() {
-            if let Command::Position(position) = cmd {
-                if position.name() == label {
-                    *instruction_index = i;
-                    return;
-                }
+            if let Command::Position(position) = cmd
+                && position.name() == label
+            {
+                *instruction_index = i;
+                return;
             }
         }
-        panic!("branch to nonexistent label {}", label);
+        panic!("branch to nonexistent label {label}");
     }
 
     pub fn step_aleo(&mut self) -> Result<()> {
@@ -955,7 +751,7 @@ impl Cursor {
             self.frames.pop();
             self.contexts.pop();
             if outputs.len() > 1 {
-                self.values.push(Value::Tuple(outputs));
+                self.values.push(Value::make_tuple(outputs));
             } else {
                 self.values.push(mem::take(&mut outputs[0]));
             }
@@ -985,47 +781,5 @@ fn snarkvm_literal_type_to_type(snarkvm_type: LiteralType) -> Type {
         LiteralType::Scalar => Scalar,
         LiteralType::Signature => todo!(),
         LiteralType::String => todo!(),
-    }
-}
-
-fn snarkvm_literal_to_value(literal: Literal<TestnetV0>) -> Value {
-    match literal {
-        Literal::Address(x) => Value::Address(x),
-        Literal::Boolean(x) => Value::Bool(*x),
-        Literal::Field(x) => Value::Field(x),
-        Literal::Group(x) => Value::Group(x),
-        Literal::I8(x) => Value::I8(*x),
-        Literal::I16(x) => Value::I16(*x),
-        Literal::I32(x) => Value::I32(*x),
-        Literal::I64(x) => Value::I64(*x),
-        Literal::I128(x) => Value::I128(*x),
-        Literal::U8(x) => Value::U8(*x),
-        Literal::U16(x) => Value::U16(*x),
-        Literal::U32(x) => Value::U32(*x),
-        Literal::U64(x) => Value::U64(*x),
-        Literal::U128(x) => Value::U128(*x),
-        Literal::Scalar(x) => Value::Scalar(x),
-        Literal::Signature(_) | Literal::String(_) => tc_fail!(),
-    }
-}
-
-fn value_to_snarkvm_literal(value: Value) -> Literal<TestnetV0> {
-    match value {
-        Value::Bool(x) => Literal::Boolean(Boolean::new(x)),
-        Value::U8(x) => Literal::U8(Integer::new(x)),
-        Value::U16(x) => Literal::U16(Integer::new(x)),
-        Value::U32(x) => Literal::U32(Integer::new(x)),
-        Value::U64(x) => Literal::U64(Integer::new(x)),
-        Value::U128(x) => Literal::U128(Integer::new(x)),
-        Value::I8(x) => Literal::I8(Integer::new(x)),
-        Value::I16(x) => Literal::I16(Integer::new(x)),
-        Value::I32(x) => Literal::I32(Integer::new(x)),
-        Value::I64(x) => Literal::I64(Integer::new(x)),
-        Value::I128(x) => Literal::I128(Integer::new(x)),
-        Value::Group(x) => Literal::Group(x),
-        Value::Field(x) => Literal::Field(x),
-        Value::Scalar(x) => Literal::Scalar(x),
-        Value::Address(x) => Literal::Address(x),
-        Value::Array(_) | Value::Tuple(_) | Value::Unit | Value::Future(_) | Value::Struct(_) => tc_fail!(),
     }
 }

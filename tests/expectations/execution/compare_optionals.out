@@ -1,0 +1,95 @@
+program compare_optionals.aleo;
+
+struct Point:
+    x as u8;
+    y as u8;
+
+struct Optional__8hhrPm4c3KB:
+    is_some as boolean;
+    val as u8;
+
+struct Optional__F9VPlVJMrn6:
+    is_some as boolean;
+    val as i128;
+
+struct Optional__6Uxqmb23WYh:
+    is_some as boolean;
+    val as Point;
+
+struct Optional__DgH3wxYjBqC:
+    is_some as boolean;
+    val as [u8; 2u32];
+
+function u8_some_eq_none:
+    cast true 5u8 into r0 as Optional__8hhrPm4c3KB;
+    cast false 0u8 into r1 as Optional__8hhrPm4c3KB;
+    is.eq r0 r1 into r2;
+    output r2 as boolean.private;
+
+function i128_none_eq_none:
+    cast false 0i128 into r0 as Optional__F9VPlVJMrn6;
+    cast false 0i128 into r1 as Optional__F9VPlVJMrn6;
+    is.eq r0 r1 into r2;
+    output r2 as boolean.private;
+
+function u8_some_eq_some:
+    cast true 42u8 into r0 as Optional__8hhrPm4c3KB;
+    cast true 42u8 into r1 as Optional__8hhrPm4c3KB;
+    is.eq r0 r1 into r2;
+    output r2 as boolean.private;
+
+function i128_some_neq_some:
+    cast true 100i128 into r0 as Optional__F9VPlVJMrn6;
+    cast true -50i128 into r1 as Optional__F9VPlVJMrn6;
+    is.neq r0 r1 into r2;
+    output r2 as boolean.private;
+
+function struct_some_eq_some:
+    cast 1u8 2u8 into r0 as Point;
+    cast true r0 into r1 as Optional__6Uxqmb23WYh;
+    cast 1u8 2u8 into r2 as Point;
+    cast true r2 into r3 as Optional__6Uxqmb23WYh;
+    is.eq r1 r3 into r4;
+    output r4 as boolean.private;
+
+function struct_some_neq_none:
+    cast 5u8 9u8 into r0 as Point;
+    cast true r0 into r1 as Optional__6Uxqmb23WYh;
+    cast 0u8 0u8 into r2 as Point;
+    cast false r2 into r3 as Optional__6Uxqmb23WYh;
+    is.neq r1 r3 into r4;
+    output r4 as boolean.private;
+
+function array_some_eq_some:
+    cast 7u8 8u8 into r0 as [u8; 2u32];
+    cast true r0 into r1 as Optional__DgH3wxYjBqC;
+    cast true r0 into r2 as Optional__DgH3wxYjBqC;
+    is.eq r1 r2 into r3;
+    output r3 as boolean.private;
+
+function array_some_neq_some:
+    cast 1u8 2u8 into r0 as [u8; 2u32];
+    cast true r0 into r1 as Optional__DgH3wxYjBqC;
+    cast 3u8 4u8 into r2 as [u8; 2u32];
+    cast true r2 into r3 as Optional__DgH3wxYjBqC;
+    is.neq r1 r3 into r4;
+    output r4 as boolean.private;
+
+constructor:
+    assert.eq edition 0u16;
+status: success
+output: false
+status: success
+output: true
+status: success
+output: true
+status: success
+output: true
+status: success
+output: true
+status: success
+output: true
+status: success
+output: true
+status: success
+output: true

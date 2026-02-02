@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -13,8 +13,6 @@
 
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
-
-use crate::create_messages;
 
 use std::fmt::{Debug, Display};
 
@@ -57,6 +55,7 @@ create_messages!(
     }
 
     /// For when the parser encountered an unexpected whitespace.
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     unexpected_whitespace {
         args: (left: impl Display, right: impl Display),
@@ -82,6 +81,7 @@ create_messages!(
     }
 
     /// For when the parser encountered an unexpected identifier.
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     unexpected_ident {
         args: (found: impl Display, expected: &[impl Display]),
@@ -97,6 +97,7 @@ create_messages!(
     }
 
     /// For when the parser encountered an unexpected statement.
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     unexpected_statement {
         args: (found: impl Display, expected: impl Display),
@@ -105,6 +106,7 @@ create_messages!(
     }
 
     /// For when the parser encountered an unexpected string.
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     unexpected_str {
         args: (found: impl Display, expected: impl Display),
@@ -121,6 +123,7 @@ create_messages!(
     }
 
     /// When more input was expected but not found.
+    // TODO This error is unused. Remove it in a future version.
     @backtraced
     lexer_empty_input {
         args: (),
@@ -138,6 +141,7 @@ create_messages!(
     }
 
     /// When a string is not properly closed.
+    // TODO This error is unused. Remove it in a future version.
     @backtraced
     lexer_string_not_closed {
     args: (input: impl Display),
@@ -146,6 +150,7 @@ create_messages!(
     }
 
     /// When a block comment is empty.
+    // TODO This error is unused. Remove it in a future version.
     @backtraced
     lexer_empty_block_comment {
     args: (),
@@ -154,6 +159,7 @@ create_messages!(
     }
 
     /// When a block comment is not closed before end of file.
+    // TODO This error is unused. Remove it in a future version.
     @backtraced
     lexer_block_comment_does_not_close_before_eof {
     args: (input: impl Display),
@@ -170,6 +176,7 @@ create_messages!(
     }
 
     /// When the user tries to pass an implicit value.
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     implicit_values_not_allowed {
         args: (input: impl Display),
@@ -187,6 +194,7 @@ create_messages!(
     }
 
     /// For when a user specified more than one mode on a parameter.
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     inputs_multiple_variable_modes_specified {
         args: (),
@@ -210,6 +218,7 @@ create_messages!(
         help: None,
     }
 
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     invalid_associated_access {
         args: (name: impl Display),
@@ -217,6 +226,7 @@ create_messages!(
         help: Some("Double colon `::` syntax is only supported for core functions in Leo for mainnet.".to_string()),
     }
 
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     leo_and_aleo_imports_only {
         args: (),
@@ -224,6 +234,7 @@ create_messages!(
         help: Some("Only imports of Leo `.leo` and Aleo `.aleo` files are currently supported.".to_string()),
     }
 
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     space_in_annotation {
         args: (),
@@ -231,6 +242,7 @@ create_messages!(
         help: Some("Remove whitespace between the `@` symbol and the identifier.".to_string()),
     }
 
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     circuit_is_deprecated {
         args: (),
@@ -238,6 +250,7 @@ create_messages!(
         help: Some("Use `struct` instead.".to_string()),
     }
 
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     only_one_program_scope_is_allowed {
         args: (),
@@ -245,6 +258,7 @@ create_messages!(
         help: None,
     }
 
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     missing_program_scope {
         args: (),
@@ -266,6 +280,7 @@ create_messages!(
         help: None,
     }
 
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     async_finalize_is_deprecated {
         args: (),
@@ -273,6 +288,7 @@ create_messages!(
         help: Some("Use `return <expr> then finalize(<args>)` instead.".to_string()),
     }
 
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     finalize_statements_are_deprecated {
         args: (),
@@ -289,6 +305,7 @@ create_messages!(
     }
 
     /// Enforce that tuple index must not have leading 0, or underscore in between digits
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     tuple_index_must_be_whole_number {
         args: (found: impl Display),
@@ -303,6 +320,7 @@ create_messages!(
         help: None,
     }
 
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     invalid_external_type {
         args: (),
@@ -310,6 +328,7 @@ create_messages!(
         help: Some("External type should have the form `<program>.aleo/<record>`. For example `bank.aleo/loan`".to_string()),
     }
 
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     cannot_declare_external_struct {
         args: (),
@@ -317,6 +336,7 @@ create_messages!(
         help: None,
     }
 
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     external_type_cannot_be_used_inside_function {
         args: (program: impl Display, file_type: impl Display),
@@ -325,6 +345,7 @@ create_messages!(
     }
 
     /// Enforce that cannot use import in program scope
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     cannot_import_inside_program_body {
         args: (),
@@ -332,6 +353,7 @@ create_messages!(
         help: None,
     }
 
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     only_aleo_external_calls {
         args: (),
@@ -347,6 +369,7 @@ create_messages!(
     }
 
     /// For when the parser encountered a member declaration not followed by a comma.
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     comma_expected_after_member {
         args: (),
@@ -375,10 +398,82 @@ create_messages!(
         help: None,
     }
 
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     expected_identifier {
         args: (),
         msg: format!("Expected an identifier."),
         help: None,
+    }
+
+    @formatted
+    identifier_cannot_contain_double_underscore {
+        args : (ident: impl Display),
+        msg: format!("Identifier {ident} cannot contain a double underscore `__`"),
+        help: None,
+    }
+
+    @formatted
+    custom {
+        args: (msg: impl Display),
+        msg: format!("{msg}"),
+        help: None,
+    }
+
+    // TODO This error is unused. Remove it in a future version.
+    @backtraced
+    conflicting_module_definitions {
+        args: (module_name: impl Display, file_a: impl Display, file_b: impl Display),
+        msg: format!(
+            "Module `{module_name}` is defined in both `{file_a}` and `{file_b}`"
+        ),
+        help: Some({
+            let module_path_fs = format!("{module_name}").replace("::", "/");
+            format!(
+                "Use `{module_path_fs}.leo` for a simple module with no submodules, or place a `mod.leo` file in a `{module_path_fs}/` directory if it contains submodules — not both."
+            )
+        }),
+    }
+
+    @backtraced
+    keyword_used_as_module_name {
+        args: (module_name: impl Display, keyword: impl Display),
+        msg: format!(
+            "Module `{module_name}` uses the reserved keyword `{keyword}` as a name"
+        ),
+        help: {
+            Some(format!(
+                "Rename the module so it does not conflict with the language keyword `{keyword}`."
+            ))
+        },
+    }
+
+    @formatted
+    could_not_lex_span {
+    args: (input: impl Display),
+    msg: format!("Could not lex the following content: `{input}`.\n"),
+    help: None,
+    }
+
+    /// For when the lexer encountered a bidi override character
+    @formatted
+    lexer_bidi_override_span {
+        args: (),
+        msg: "Unicode bidi override code point encountered.",
+        help: None,
+    }
+
+    @formatted
+    wrong_digit_for_radix_span {
+        args: (digit: char, radix: u32, token: impl Display),
+        msg: format!("Digit {digit} invalid in radix {radix} (token {token})."),
+        help: None,
+    }
+
+    @formatted
+    identifier_cannot_start_with_underscore {
+        args: (),
+        msg: "Identifiers cannot start with an underscore.",
+        help: Some("Identifiers must start with a letter.".to_string()),
     }
 );

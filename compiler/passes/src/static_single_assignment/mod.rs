@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -62,9 +62,10 @@ mod program;
 
 mod statement;
 
-mod visitor;
+pub mod visitor;
 use visitor::*;
 
+#[derive(Clone)]
 pub struct SsaFormingInput {
     pub rename_defs: bool,
 }
@@ -86,7 +87,7 @@ impl Pass for SsaForming {
             rename_defs: input.rename_defs,
         };
         ast.ast = visitor.consume_program(ast.ast);
-        visitor.state.handler.last_err().map_err(|e| *e)?;
+        visitor.state.handler.last_err()?;
         visitor.state.ast = ast;
         Ok(())
     }

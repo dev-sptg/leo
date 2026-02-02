@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -16,16 +16,24 @@
 
 use super::DestructuringVisitor;
 
-use leo_ast::{Function, ProgramReconstructor, StatementReconstructor};
+use leo_ast::{AstReconstructor, Constructor, Function, ProgramReconstructor};
 
 impl ProgramReconstructor for DestructuringVisitor<'_> {
     fn reconstruct_function(&mut self, input: Function) -> Function {
         // Set the `is_async` flag before reconstructing the block.
+        // Note: There is no need to reset this flag as it is appropriately assigned before visiting a function or constructor.
         self.is_async = input.variant.is_async_function();
         // Reconstruct the block.
         let block = self.reconstruct_block(input.block).0;
-        // Reset the `is_async` flag.
-        self.is_async = false;
         Function { block, ..input }
+    }
+
+    fn reconstruct_constructor(&mut self, input: Constructor) -> Constructor {
+        // Set the `is_async` flag before reconstructing the block.
+        // Note: There is no need to reset this flag as it is appropriately assigned before visiting a function or constructor.
+        self.is_async = true;
+        // Reconstruct the block.
+        let block = self.reconstruct_block(input.block).0;
+        Constructor { block, ..input }
     }
 }

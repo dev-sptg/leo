@@ -8,131 +8,14 @@ function main:
     ternary r1 1u32 r3 into r4;
     is.eq r4 r0 into r5;
     output r5 as boolean.private;
-verified: true
-status: accepted
-errors:
-warnings:
-{
-  "transitions": [
-    {
-      "id": "au1hzqg93p7etdeqgczwcdrhg8rxnm4asj45ua3r7ghkd3ljmvl0cgq69j9wm",
-      "program": "test.aleo",
-      "function": "main",
-      "inputs": [
-        {
-          "type": "private",
-          "id": "6953419311602882877264123722720226641289835508545198761150737595396258412203field",
-          "value": "ciphertext1qyqxw90pale2e70ugzvd9pcdjyccs3ec7lwl0hee852nv0duhssyspqcd4n5d"
-        }
-      ],
-      "outputs": [
-        {
-          "type": "private",
-          "id": "2353607291785583568623403439935112602475256262085646369034606841147264194402field",
-          "value": "ciphertext1qyqd344q367nv4fp56sky5lhyaajfnvtwpx4sv29p5hw0e3smfs22rqhhuuhs"
-        }
-      ],
-      "tpk": "2008901565167727087603379343553849618470866384650375908280036072476919800057group",
-      "tcm": "4811898915284571481628761819769484234529456751418395396931339999034907080711field",
-      "scm": "8220440418322674195164483487745803082061008737967410239589727719682632967507field"
-    }
-  ],
-  "global_state_root": "sr1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6gk0xu"
-}
 
-verified: true
-status: accepted
-errors:
-warnings:
-{
-  "transitions": [
-    {
-      "id": "au1augdvesmpqdhdpm9l4xurxfawz9fyd784fldxay42jt0etgv5q9q05dhlu",
-      "program": "test.aleo",
-      "function": "main",
-      "inputs": [
-        {
-          "type": "private",
-          "id": "3601056638073185743266652841049431918129248715463599385618802384677547310249field",
-          "value": "ciphertext1qyqylelqpjrq5ttt8tespctglllsx6rn7v085jkk2gmc4pgnaap2cyqzjsr68"
-        }
-      ],
-      "outputs": [
-        {
-          "type": "private",
-          "id": "594529655892939991098936630292233670148277477270352254213345387159727600632field",
-          "value": "ciphertext1qyqqjm04gzxazgnspjts0ats69jpeuq7kja3gkdp62ll53fj7hxhxzcjgd595"
-        }
-      ],
-      "tpk": "5238482954808903413080991492259780377272854169778441858434797810441133730811group",
-      "tcm": "5020508401169151458565649109571080576538081384726486345660380550371501588875field",
-      "scm": "2538025943164821067382100734946093018413354433860920930629361514615546605015field"
-    }
-  ],
-  "global_state_root": "sr1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6gk0xu"
-}
-
-verified: true
-status: accepted
-errors:
-warnings:
-{
-  "transitions": [
-    {
-      "id": "au16dkamg606ef5ct8esl0tnwal6yc032gsfv4v9z4k4jce8u5hggxsv5f8d4",
-      "program": "test.aleo",
-      "function": "main",
-      "inputs": [
-        {
-          "type": "private",
-          "id": "2228931908649836518456695833211065423779716417748122889101902908913035439861field",
-          "value": "ciphertext1qyqflv9wku99qs6e2lvkp6se9vseudeky2n8t98jslcft45ng94g6zq5f2j4f"
-        }
-      ],
-      "outputs": [
-        {
-          "type": "private",
-          "id": "2628960908517824543785928616585121612851602150897598047256252065942210966040field",
-          "value": "ciphertext1qyqp3nyr2ksc78zlt6xu20gjpj7wkxeqrjmgwvk3p4l4a09xqae3upglggyk0"
-        }
-      ],
-      "tpk": "698262334080782271862840085479498431272644146907499960573987468164375228416group",
-      "tcm": "706131050009858534461584648147150867896924574774663578080207166732280522564field",
-      "scm": "3812296321146251969695936125722390257297867344410013694880917689450902674344field"
-    }
-  ],
-  "global_state_root": "sr1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6gk0xu"
-}
-
-verified: true
-status: accepted
-errors:
-warnings:
-{
-  "transitions": [
-    {
-      "id": "au13xhugllypte863q54neqk23wdnlk20d9xateghgquzkfm5r225xsvm9g3d",
-      "program": "test.aleo",
-      "function": "main",
-      "inputs": [
-        {
-          "type": "private",
-          "id": "8105979268416227077104126515262723295951262355967130537181695009688659661976field",
-          "value": "ciphertext1qyqys5gasw6r0vx5dddgc70hjgl43cc00hpj5dn4mh5v94ej3fky6rcgmjpwl"
-        }
-      ],
-      "outputs": [
-        {
-          "type": "private",
-          "id": "4254749264815561993990018278578225511953153174968266555511589546423940888590field",
-          "value": "ciphertext1qyqf5tyg2gzaz23lvfjxwjd8y30yrgkcq62kvgzq6h8jaf3a0hql6rqr5aa75"
-        }
-      ],
-      "tpk": "1925372464118103438650208588964781753471192053630406757733205214321032467158group",
-      "tcm": "6539603371557120585066156629462351140671262439162316331208324976365458255752field",
-      "scm": "4045603882222637594352969540453328973923533108815700447766218365077721133630field"
-    }
-  ],
-  "global_state_root": "sr1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6gk0xu"
-}
-
+constructor:
+    assert.eq edition 0u16;
+status: success
+output: true
+status: success
+output: true
+status: success
+output: true
+status: success
+output: false

@@ -1,16 +1,10 @@
 {
+  "modules": {},
   "imports": {
-    "hello": [
-      {
-        "imports": {},
-        "stubs": {},
-        "program_scopes": {}
-      },
-      {
-        "lo": 0,
-        "hi": 18
-      }
-    ]
+    "hello": {
+      "lo": 0,
+      "hi": 18
+    }
   },
   "stubs": {},
   "program_scopes": {
@@ -22,7 +16,7 @@
             "lo": 27,
             "hi": 31
           },
-          "id": 1
+          "id": 6
         },
         "network": {
           "name": "aleo",
@@ -30,12 +24,13 @@
             "lo": 32,
             "hi": 36
           },
-          "id": 2
+          "id": 7
         }
       },
       "consts": [],
-      "structs": [],
+      "composites": [],
       "mappings": [],
+      "storage_variables": [],
       "functions": [
         [
           "main",
@@ -48,8 +43,9 @@
                 "lo": 52,
                 "hi": 56
               },
-              "id": 3
+              "id": 0
             },
+            "const_parameters": [],
             "input": [],
             "output": [],
             "output_type": "Unit",
@@ -64,7 +60,7 @@
                           "lo": 73,
                           "hi": 74
                         },
-                        "id": 4
+                        "id": 2
                       }
                     },
                     "type_": {
@@ -76,7 +72,7 @@
                           "lo": 80,
                           "hi": 83
                         },
-                        "id": 5,
+                        "id": 3,
                         "variant": {
                           "Integer": [
                             "U8",
@@ -87,9 +83,9 @@
                     },
                     "span": {
                       "lo": 69,
-                      "hi": 83
+                      "hi": 84
                     },
-                    "id": 6
+                    "id": 1
                   }
                 }
               ],
@@ -97,18 +93,19 @@
                 "lo": 59,
                 "hi": 90
               },
-              "id": 7
+              "id": 4
             },
             "span": {
               "lo": 43,
               "hi": 90
             },
-            "id": 8
+            "id": 5
           }
         ]
       ],
+      "constructor": null,
       "span": {
-        "lo": 19,
+        "lo": 0,
         "hi": 92
       }
     }

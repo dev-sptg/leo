@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -19,21 +19,21 @@ use super::SsaFormingVisitor;
 use leo_ast::{
     ArrayAccess,
     ArrayExpression,
-    AssociatedFunctionExpression,
     BinaryExpression,
     CallExpression,
     CastExpression,
     Composite,
+    CompositeExpression,
+    CompositeFieldInitializer,
     Expression,
     ExpressionConsumer,
-    Identifier,
+    IntrinsicExpression,
     Literal,
-    Location,
     LocatorExpression,
     MemberAccess,
+    Path,
+    RepeatExpression,
     Statement,
-    StructExpression,
-    StructVariableInitializer,
     TernaryExpression,
     TupleAccess,
     TupleExpression,
@@ -48,12 +48,12 @@ impl SsaFormingVisitor<'_> {
     /// Consume this expression and assign it to a variable (unless it's already an Identifier).
     pub fn consume_expression_and_define(&mut self, input: Expression) -> (Expression, Vec<Statement>) {
         let (expr, mut statements) = self.consume_expression(input);
-        if matches!(expr, Expression::Identifier(..) | Expression::Unit(..) | Expression::Err(..)) {
+        if matches!(expr, Expression::Path(..) | Expression::Unit(..) | Expression::Err(..)) {
             (expr, statements)
         } else {
             let (place, statement) = self.unique_simple_definition(expr);
             statements.push(statement);
-            (place.into(), statements)
+            (Path::from(place).to_local().into(), statements)
         }
     }
 }
@@ -68,10 +68,10 @@ impl ExpressionConsumer for SsaFormingVisitor<'_> {
 
     fn consume_member_access(&mut self, input: MemberAccess) -> Self::Output {
         // If the access expression is of the form `self.<name>`, then don't rename it.
-        if let Expression::Identifier(Identifier { name, .. }) = input.inner {
-            if name == sym::SelfLower {
-                return (input.into(), Vec::new());
-            }
+        if let Expression::Path(path) = &input.inner
+            && path.identifier().name == sym::SelfLower
+        {
+            return (input.into(), Vec::new());
         }
 
         let (inner, statements) = self.consume_expression_and_define(input.inner);
@@ -146,74 +146,75 @@ impl ExpressionConsumer for SsaFormingVisitor<'_> {
         (CastExpression { expression, ..input }.into(), statements)
     }
 
-    /// Consumes a struct initialization expression with renamed variables, accumulating any statements that are generated.
-    fn consume_struct_init(&mut self, input: StructExpression) -> Self::Output {
+    /// Consumes a composite initialization expression with renamed variables, accumulating any statements that are generated.
+    fn consume_composite_init(&mut self, input: CompositeExpression) -> Self::Output {
         let mut statements = Vec::new();
 
         // Process the members, accumulating any statements produced.
-        let members: Vec<StructVariableInitializer> = input
+        let members: Vec<CompositeFieldInitializer> = input
             .members
             .into_iter()
             .map(|arg| {
                 let (expression, mut stmts) = if let Some(expr) = arg.expression {
                     self.consume_expression_and_define(expr)
                 } else {
-                    self.consume_identifier(arg.identifier)
+                    self.consume_path(Path::from(arg.identifier).to_local())
                 };
                 // Accumulate any statements produced.
                 statements.append(&mut stmts);
 
                 // Return the new member.
-                StructVariableInitializer { expression: Some(expression), ..arg }
+                CompositeFieldInitializer { expression: Some(expression), ..arg }
             })
             .collect();
 
-        // Reorder the members to match that of the struct definition.
+        // Reorder the members to match that of the composite definition.
 
-        // Lookup the struct definition.
-        let struct_definition: &Composite = self
+        // Lookup the composite definition.
+        let composite_location = input.path.expect_global_location();
+        let composite_definition: &Composite = self
             .state
             .symbol_table
-            .lookup_record(Location::new(self.program, input.name.name))
-            .or_else(|| self.state.symbol_table.lookup_struct(input.name.name))
+            .lookup_record(self.program, composite_location)
+            .or_else(|| self.state.symbol_table.lookup_struct(self.program, composite_location))
             .expect("Type checking guarantees this definition exists.");
 
         // Initialize the list of reordered members.
         let mut reordered_members = Vec::with_capacity(members.len());
 
         // Collect the members of the init expression into a map.
-        let mut member_map: IndexMap<Symbol, StructVariableInitializer> =
+        let mut member_map: IndexMap<Symbol, CompositeFieldInitializer> =
             members.into_iter().map(|member| (member.identifier.name, member)).collect();
 
         // If we are initializing a record, add the `owner` first.
         // Note that type checking guarantees that the above fields exist.
-        if struct_definition.is_record {
+        if composite_definition.is_record {
             // Add the `owner` field.
             // Note that the `unwrap` is safe, since type checking guarantees that the member exists.
             reordered_members.push(member_map.shift_remove(&sym::owner).unwrap());
         }
 
-        // For each member of the struct definition, push the corresponding member of the init expression.
-        for member in &struct_definition.members {
+        // For each member of the composite definition, push the corresponding member of the init expression.
+        for member in &composite_definition.members {
             // If the member is part of a record and it is `owner` then we have already added it.
-            if !(struct_definition.is_record && matches!(member.identifier.name, sym::owner)) {
+            if !(composite_definition.is_record && matches!(member.identifier.name, sym::owner)) {
                 // Lookup and push the member of the init expression.
                 // Note that the `unwrap` is safe, since type checking guarantees that the member exists.
                 reordered_members.push(member_map.shift_remove(&member.identifier.name).unwrap());
             }
         }
 
-        (StructExpression { members: reordered_members, ..input }.into(), statements)
+        (CompositeExpression { members: reordered_members, ..input }.into(), statements)
     }
 
     /// Retrieve the new name for this `Identifier`.
     ///
     /// Note that this shouldn't be used for `Identifier`s on the lhs of definitions or
     /// assignments.
-    fn consume_identifier(&mut self, identifier: Identifier) -> Self::Output {
+    fn consume_path(&mut self, path: Path) -> Self::Output {
         // If lookup fails, either it's the name of a mapping or we didn't rename it.
-        let name = *self.rename_table.lookup(identifier.name).unwrap_or(&identifier.name);
-        (Identifier { name, ..identifier }.into(), Default::default())
+        let name = *self.rename_table.lookup(path.identifier().name).unwrap_or(&path.identifier().name);
+        (path.with_updated_last_symbol(name).into(), Default::default())
     }
 
     /// Consumes and returns the literal without making any modifications.
@@ -224,6 +225,13 @@ impl ExpressionConsumer for SsaFormingVisitor<'_> {
     /// Consumes and returns the locator expression without making any modifications
     fn consume_locator(&mut self, input: LocatorExpression) -> Self::Output {
         (input.into(), Vec::new())
+    }
+
+    fn consume_repeat(&mut self, input: RepeatExpression) -> Self::Output {
+        let (expr, statements) = self.consume_expression_and_define(input.expr);
+
+        // By now, the repeat count should be a literal. So we just ignore it. There is no need to SSA it.
+        (RepeatExpression { expr, ..input }.into(), statements)
     }
 
     /// Consumes a ternary expression, accumulating any statements that are generated.
@@ -274,13 +282,9 @@ impl ExpressionConsumer for SsaFormingVisitor<'_> {
         (input.into(), Default::default())
     }
 
-    fn consume_associated_constant(&mut self, input: leo_ast::AssociatedConstantExpression) -> Self::Output {
-        (input.into(), Default::default())
-    }
-
-    fn consume_associated_function(&mut self, input: leo_ast::AssociatedFunctionExpression) -> Self::Output {
+    fn consume_intrinsic(&mut self, input: leo_ast::IntrinsicExpression) -> Self::Output {
         let mut statements = Vec::new();
-        let expr = AssociatedFunctionExpression {
+        let expr = IntrinsicExpression {
             arguments: input
                 .arguments
                 .into_iter()
@@ -295,5 +299,9 @@ impl ExpressionConsumer for SsaFormingVisitor<'_> {
         .into();
 
         (expr, statements)
+    }
+
+    fn consume_async(&mut self, input: leo_ast::AsyncExpression) -> Self::Output {
+        (input.into(), Default::default())
     }
 }

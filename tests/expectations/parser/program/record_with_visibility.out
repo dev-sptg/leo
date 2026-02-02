@@ -1,4 +1,5 @@
 {
+  "modules": {},
   "imports": {},
   "stubs": {},
   "program_scopes": {
@@ -10,7 +11,7 @@
             "lo": 9,
             "hi": 13
           },
-          "id": 0
+          "id": 4
         },
         "network": {
           "name": "aleo",
@@ -18,11 +19,11 @@
             "lo": 14,
             "hi": 18
           },
-          "id": 1
+          "id": 5
         }
       },
       "consts": [],
-      "structs": [
+      "composites": [
         [
           "token",
           {
@@ -34,6 +35,7 @@
               },
               "id": 2
             },
+            "const_parameters": [],
             "members": [
               {
                 "mode": "Private",
@@ -43,30 +45,31 @@
                     "lo": 56,
                     "hi": 61
                   },
-                  "id": 3
+                  "id": 0
                 },
                 "type_": "Address",
                 "span": {
-                  "lo": 56,
+                  "lo": 48,
                   "hi": 70
                 },
-                "id": 4
+                "id": 1
               }
             ],
-            "external": "test",
             "is_record": true,
             "span": {
               "lo": 25,
               "hi": 77
             },
-            "id": 5
+            "id": 3
           }
         ]
       ],
       "mappings": [],
+      "storage_variables": [],
       "functions": [],
+      "constructor": null,
       "span": {
-        "lo": 1,
+        "lo": 0,
         "hi": 79
       }
     }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -90,7 +90,7 @@ fn append_lines<'a>(
     last_chunk
 }
 
-fn code_text(s: &str, highlight: Option<(usize, usize)>) -> (Text, usize) {
+fn code_text(s: &str, highlight: Option<(usize, usize)>) -> (Text<'_>, usize) {
     let Some((lo, hi)) = highlight else {
         return (Text::from(s), 0);
     };

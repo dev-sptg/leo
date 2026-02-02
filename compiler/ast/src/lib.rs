@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -22,11 +22,14 @@
 
 #![allow(ambiguous_glob_reexports)]
 
-mod r#struct;
-pub use self::r#struct::*;
+mod composite;
+pub use self::composite::*;
 
 pub mod common;
 pub use self::common::*;
+
+pub mod constructor;
+pub use self::constructor::*;
 
 mod expressions;
 pub use self::expressions::*;
@@ -37,8 +40,13 @@ pub use self::functions::*;
 mod indent_display;
 use indent_display::*;
 
+pub mod interpreter_value;
+
 mod mapping;
 pub use self::mapping::*;
+
+mod module;
+pub use self::module::*;
 
 mod passes;
 pub use self::passes::*;
@@ -49,14 +57,14 @@ pub use self::program::*;
 mod statement;
 pub use self::statement::*;
 
+mod storage;
+pub use self::storage::*;
+
 mod types;
 pub use self::types::*;
 
 mod stub;
 pub use self::stub::*;
-
-mod value;
-pub use value::*;
 
 pub use common::node::*;
 

@@ -1,4 +1,5 @@
 {
+  "modules": {},
   "imports": {},
   "stubs": {},
   "program_scopes": {
@@ -10,7 +11,7 @@
             "lo": 8,
             "hi": 12
           },
-          "id": 0
+          "id": 58
         },
         "network": {
           "name": "aleo",
@@ -18,12 +19,13 @@
             "lo": 13,
             "hi": 17
           },
-          "id": 1
+          "id": 59
         }
       },
       "consts": [],
-      "structs": [],
+      "composites": [],
       "mappings": [],
+      "storage_variables": [],
       "functions": [
         [
           "main",
@@ -36,8 +38,9 @@
                 "lo": 41,
                 "hi": 45
               },
-              "id": 2
+              "id": 0
             },
+            "const_parameters": [],
             "input": [],
             "output": [
               {
@@ -90,9 +93,9 @@
                 },
                 "span": {
                   "lo": 51,
-                  "hi": 123
+                  "hi": 124
                 },
-                "id": 3
+                "id": 28
               }
             ],
             "output_type": {
@@ -152,7 +155,7 @@
                           "lo": 139,
                           "hi": 141
                         },
-                        "id": 4
+                        "id": 2
                       }
                     },
                     "type_": {
@@ -165,29 +168,44 @@
                     "value": {
                       "Call": {
                         "function": {
-                          "Identifier": {
+                          "user_program": {
+                            "name": "bye",
+                            "span": {
+                              "lo": 158,
+                              "hi": 161
+                            },
+                            "id": 4
+                          },
+                          "qualifier": [],
+                          "identifier": {
                             "name": "add",
                             "span": {
                               "lo": 167,
                               "hi": 170
                             },
-                            "id": 6
-                          }
+                            "id": 5
+                          },
+                          "target": "Unresolved",
+                          "span": {
+                            "lo": 158,
+                            "hi": 172
+                          },
+                          "id": 6
                         },
+                        "const_arguments": [],
                         "arguments": [],
-                        "program": "bye",
                         "span": {
                           "lo": 158,
                           "hi": 172
                         },
-                        "id": 7
+                        "id": 3
                       }
                     },
                     "span": {
                       "lo": 135,
-                      "hi": 172
+                      "hi": 173
                     },
-                    "id": 8
+                    "id": 1
                   }
                 },
                 {
@@ -199,7 +217,7 @@
                           "lo": 186,
                           "hi": 188
                         },
-                        "id": 9
+                        "id": 8
                       }
                     },
                     "type_": {
@@ -230,29 +248,44 @@
                     "value": {
                       "Call": {
                         "function": {
-                          "Identifier": {
+                          "user_program": {
+                            "name": "hello",
+                            "span": {
+                              "lo": 230,
+                              "hi": 235
+                            },
+                            "id": 10
+                          },
+                          "qualifier": [],
+                          "identifier": {
                             "name": "nested_fn",
                             "span": {
                               "lo": 241,
                               "hi": 250
                             },
                             "id": 11
-                          }
+                          },
+                          "target": "Unresolved",
+                          "span": {
+                            "lo": 230,
+                            "hi": 252
+                          },
+                          "id": 12
                         },
+                        "const_arguments": [],
                         "arguments": [],
-                        "program": "hello",
                         "span": {
                           "lo": 230,
                           "hi": 252
                         },
-                        "id": 12
+                        "id": 9
                       }
                     },
                     "span": {
                       "lo": 182,
-                      "hi": 252
+                      "hi": 253
                     },
-                    "id": 13
+                    "id": 7
                   }
                 },
                 {
@@ -316,15 +349,24 @@
                     "value": {
                       "Call": {
                         "function": {
-                          "Identifier": {
+                          "user_program": null,
+                          "qualifier": [],
+                          "identifier": {
                             "name": "finalize_main",
                             "span": {
                               "lo": 346,
                               "hi": 359
                             },
-                            "id": 15
-                          }
+                            "id": 22
+                          },
+                          "target": "Unresolved",
+                          "span": {
+                            "lo": 346,
+                            "hi": 359
+                          },
+                          "id": 23
                         },
+                        "const_arguments": [],
                         "arguments": [
                           {
                             "Literal": {
@@ -357,8 +399,18 @@
                             }
                           },
                           {
-                            "Identifier": {
-                              "name": "f0",
+                            "Path": {
+                              "user_program": null,
+                              "qualifier": [],
+                              "identifier": {
+                                "name": "f0",
+                                "span": {
+                                  "lo": 372,
+                                  "hi": 374
+                                },
+                                "id": 19
+                              },
+                              "target": "Unresolved",
                               "span": {
                                 "lo": 372,
                                 "hi": 374
@@ -367,48 +419,67 @@
                             }
                           },
                           {
-                            "Identifier": {
-                              "name": "f1",
+                            "Path": {
+                              "user_program": null,
+                              "qualifier": [],
+                              "identifier": {
+                                "name": "f1",
+                                "span": {
+                                  "lo": 376,
+                                  "hi": 378
+                                },
+                                "id": 21
+                              },
+                              "target": "Unresolved",
                               "span": {
                                 "lo": 376,
                                 "hi": 378
                               },
-                              "id": 19
+                              "id": 20
                             }
                           }
                         ],
-                        "program": "test",
                         "span": {
                           "lo": 346,
                           "hi": 379
                         },
-                        "id": 20
+                        "id": 15
                       }
                     },
                     "span": {
                       "lo": 262,
-                      "hi": 379
+                      "hi": 380
                     },
-                    "id": 21
+                    "id": 13
                   }
                 },
                 {
                   "Return": {
                     "expression": {
-                      "Identifier": {
-                        "name": "f2",
+                      "Path": {
+                        "user_program": null,
+                        "qualifier": [],
+                        "identifier": {
+                          "name": "f2",
+                          "span": {
+                            "lo": 396,
+                            "hi": 398
+                          },
+                          "id": 26
+                        },
+                        "target": "Unresolved",
                         "span": {
                           "lo": 396,
                           "hi": 398
                         },
-                        "id": 22
+                        "id": 25
                       }
                     },
                     "span": {
                       "lo": 389,
                       "hi": 399
                     },
-                    "id": 23
+                    "id": 24
                   }
                 }
               ],
@@ -416,13 +487,13 @@
                 "lo": 125,
                 "hi": 405
               },
-              "id": 24
+              "id": 27
             },
             "span": {
               "lo": 24,
               "hi": 405
             },
-            "id": 25
+            "id": 29
           }
         ],
         [
@@ -436,8 +507,9 @@
                 "lo": 425,
                 "hi": 438
               },
-              "id": 26
+              "id": 30
             },
+            "const_parameters": [],
             "input": [
               {
                 "identifier": {
@@ -446,7 +518,7 @@
                     "lo": 439,
                     "hi": 440
                   },
-                  "id": 27
+                  "id": 31
                 },
                 "mode": "None",
                 "type_": {
@@ -456,7 +528,7 @@
                   "lo": 439,
                   "hi": 445
                 },
-                "id": 28
+                "id": 32
               },
               {
                 "identifier": {
@@ -465,7 +537,7 @@
                     "lo": 447,
                     "hi": 448
                   },
-                  "id": 29
+                  "id": 33
                 },
                 "mode": "None",
                 "type_": {
@@ -475,7 +547,7 @@
                   "lo": 447,
                   "hi": 453
                 },
-                "id": 30
+                "id": 34
               },
               {
                 "identifier": {
@@ -484,7 +556,7 @@
                     "lo": 455,
                     "hi": 457
                   },
-                  "id": 31
+                  "id": 35
                 },
                 "mode": "None",
                 "type_": {
@@ -496,9 +568,9 @@
                 },
                 "span": {
                   "lo": 455,
-                  "hi": 470
+                  "hi": 471
                 },
-                "id": 32
+                "id": 36
               },
               {
                 "identifier": {
@@ -507,7 +579,7 @@
                     "lo": 473,
                     "hi": 475
                   },
-                  "id": 33
+                  "id": 37
                 },
                 "mode": "None",
                 "type_": {
@@ -537,9 +609,9 @@
                 },
                 "span": {
                   "lo": 473,
-                  "hi": 513
+                  "hi": 514
                 },
-                "id": 34
+                "id": 38
               }
             ],
             "output": [],
@@ -549,32 +621,28 @@
                 {
                   "Expression": {
                     "expression": {
-                      "AssociatedFunction": {
-                        "variant": {
-                          "name": "Future",
-                          "span": {
-                            "lo": 0,
-                            "hi": 0
-                          },
-                          "id": 37
-                        },
-                        "name": {
-                          "name": "await",
-                          "span": {
-                            "lo": 529,
-                            "hi": 534
-                          },
-                          "id": 36
-                        },
+                      "Intrinsic": {
+                        "name": "_future_await",
+                        "type_parameters": [],
                         "arguments": [
                           {
-                            "Identifier": {
-                              "name": "f0",
+                            "Path": {
+                              "user_program": null,
+                              "qualifier": [],
+                              "identifier": {
+                                "name": "f0",
+                                "span": {
+                                  "lo": 526,
+                                  "hi": 528
+                                },
+                                "id": 43
+                              },
+                              "target": "Unresolved",
                               "span": {
                                 "lo": 526,
                                 "hi": 528
                               },
-                              "id": 35
+                              "id": 42
                             }
                           }
                         ],
@@ -582,7 +650,7 @@
                           "lo": 526,
                           "hi": 536
                         },
-                        "id": 38
+                        "id": 44
                       }
                     },
                     "span": {
@@ -595,32 +663,28 @@
                 {
                   "Expression": {
                     "expression": {
-                      "AssociatedFunction": {
-                        "variant": {
-                          "name": "Future",
-                          "span": {
-                            "lo": 0,
-                            "hi": 0
-                          },
-                          "id": 42
-                        },
-                        "name": {
-                          "name": "await",
-                          "span": {
-                            "lo": 549,
-                            "hi": 554
-                          },
-                          "id": 41
-                        },
+                      "Intrinsic": {
+                        "name": "_future_await",
+                        "type_parameters": [],
                         "arguments": [
                           {
-                            "Identifier": {
-                              "name": "f1",
+                            "Path": {
+                              "user_program": null,
+                              "qualifier": [],
+                              "identifier": {
+                                "name": "f1",
+                                "span": {
+                                  "lo": 546,
+                                  "hi": 548
+                                },
+                                "id": 49
+                              },
+                              "target": "Unresolved",
                               "span": {
                                 "lo": 546,
                                 "hi": 548
                               },
-                              "id": 40
+                              "id": 48
                             }
                           }
                         ],
@@ -628,14 +692,14 @@
                           "lo": 546,
                           "hi": 556
                         },
-                        "id": 43
+                        "id": 50
                       }
                     },
                     "span": {
                       "lo": 546,
                       "hi": 557
                     },
-                    "id": 44
+                    "id": 45
                   }
                 },
                 {
@@ -643,32 +707,52 @@
                     "variant": {
                       "AssertEq": [
                         {
-                          "Identifier": {
-                            "name": "a",
+                          "Path": {
+                            "user_program": null,
+                            "qualifier": [],
+                            "identifier": {
+                              "name": "a",
+                              "span": {
+                                "lo": 576,
+                                "hi": 577
+                              },
+                              "id": 53
+                            },
+                            "target": "Unresolved",
                             "span": {
                               "lo": 576,
                               "hi": 577
                             },
-                            "id": 45
+                            "id": 52
                           }
                         },
                         {
-                          "Identifier": {
-                            "name": "b",
+                          "Path": {
+                            "user_program": null,
+                            "qualifier": [],
+                            "identifier": {
+                              "name": "b",
+                              "span": {
+                                "lo": 578,
+                                "hi": 579
+                              },
+                              "id": 55
+                            },
+                            "target": "Unresolved",
                             "span": {
                               "lo": 578,
                               "hi": 579
                             },
-                            "id": 46
+                            "id": 54
                           }
                         }
                       ]
                     },
                     "span": {
                       "lo": 566,
-                      "hi": 575
+                      "hi": 581
                     },
-                    "id": 47
+                    "id": 51
                   }
                 }
               ],
@@ -676,16 +760,17 @@
                 "lo": 516,
                 "hi": 587
               },
-              "id": 48
+              "id": 56
             },
             "span": {
               "lo": 410,
               "hi": 587
             },
-            "id": 49
+            "id": 57
           }
         ]
       ],
+      "constructor": null,
       "span": {
         "lo": 0,
         "hi": 589

@@ -1,5 +1,6 @@
 /*
 seed = 123456789
+min_height = 16
 
 [case]
 program = "test.aleo"
@@ -63,4 +64,7 @@ program test.aleo {
         ];
         
     }
+
+    @noupgrade
+    async constructor() {}
 }

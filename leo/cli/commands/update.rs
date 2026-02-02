@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -21,10 +21,13 @@ use crate::cli::helpers::updater::Updater;
 #[derive(Debug, Parser)]
 pub struct LeoUpdate {
     /// Lists all available versions of Leo
-    #[clap(short = 'l', long)]
+    #[clap(short = 'l', long, help = "List all available releases.")]
     list: bool,
+    /// Update to a specific named release
+    #[clap(short = 'n', long, help = "An optional release name.")]
+    name: Option<String>,
     /// Suppress outputs to terminal
-    #[clap(short = 'q', long)]
+    #[clap(short = 'q', long, help = "Suppress download logs.")]
     quiet: bool,
 }
 
@@ -50,7 +53,7 @@ impl Command for LeoUpdate {
                 Err(error) => tracing::info!("Failed to list the available versions of Leo\n{error}\n"),
             },
             false => {
-                let result = Updater::update_to_latest_release(!self.quiet);
+                let result = Updater::update(!self.quiet, self.name);
                 if !self.quiet {
                     match result {
                         Ok(status) => {

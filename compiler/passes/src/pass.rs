@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -14,12 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{Assigner, CallGraph, StructGraph, SymbolTable, TypeTable};
+use crate::{Assigner, SymbolTable, TypeTable};
 
-use leo_ast::{Ast, NodeBuilder};
-use leo_errors::{Handler, Result};
+use leo_ast::{Ast, CallGraph, CompositeGraph, NetworkName, NodeBuilder};
+use leo_errors::{Handler, LeoWarning, Result};
 
-/// Contains data share by many compiler passes.
+use std::{collections::HashSet, rc::Rc};
+
+/// Contains data shared by many compiler passes.
 #[derive(Default)]
 pub struct CompilerState {
     /// The Abstract Syntax Tree.
@@ -29,17 +31,21 @@ pub struct CompilerState {
     /// Maps node IDs to types.
     pub type_table: TypeTable,
     /// Creates incrementing node IDs.
-    pub node_builder: NodeBuilder,
+    pub node_builder: Rc<NodeBuilder>,
     /// Creates unique symbols and definitions.
     pub assigner: Assigner,
     /// Contains data about the variables and other entities in the program.
     pub symbol_table: SymbolTable,
-    /// A graph of which structs refer to each other.
-    pub struct_graph: StructGraph,
+    /// A graph of which composite refer to each other.
+    pub composite_graph: CompositeGraph,
     /// A graph of which functions call each other.
     pub call_graph: CallGraph,
+    /// A set of the warnings collected. This is used to make sure we don't emit the same exact warning twice.
+    pub warnings: HashSet<LeoWarning>,
     /// Is this a test program?
     pub is_test: bool,
+    /// The network.
+    pub network: NetworkName,
 }
 
 /// A compiler pass.

@@ -1,0 +1,4 @@
+program const_generics.aleo;
+
+function main:
+    output 1field as field.private;

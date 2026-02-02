@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{Location, NetworkName};
+use crate::Location;
+use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -27,14 +28,21 @@ pub struct Dependency {
     pub name: String,
     /// Network, local, or test dependency?
     pub location: Location,
-    /// For a network dependency, which network?
-    pub network: Option<NetworkName>,
     /// For a local dependency, where is its package? Or, for a test, where is its source file?
     pub path: Option<PathBuf>,
+    /// For a network dependency, what is its edition?
+    pub edition: Option<u16>,
 }
 
-impl Dependency {
-    pub fn new(name: String, location: Location, network: Option<NetworkName>, path: Option<PathBuf>) -> Self {
-        Self { name, location, network, path }
+impl Display for Dependency {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} (on {:?})", self.name, self.location)?;
+        if let Some(path) = &self.path {
+            write!(f, " (at {})", path.display())?;
+        }
+        if let Some(edition) = self.edition {
+            write!(f, " (edition {edition})")?;
+        }
+        Ok(())
     }
 }

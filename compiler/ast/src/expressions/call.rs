@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -15,20 +15,18 @@
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
 use super::*;
-use leo_span::Symbol;
 
 use itertools::Itertools as _;
 
 /// A function call expression, e.g.`foo(args)` or `Foo::bar(args)`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CallExpression {
-    /// An expression evaluating to a callable function,
-    /// either a member of a structure or a free function.
-    pub function: Expression, // todo: make this identifier?
-    /// Expressions for the arguments passed to the functions parameters.
+    /// A path to a callable function, either a member of a composite or a free function.
+    pub function: Path,
+    /// Expressions for the const arguments passed to the function's const parameters.
+    pub const_arguments: Vec<Expression>,
+    /// Expressions for the arguments passed to the function's parameters.
     pub arguments: Vec<Expression>,
-    /// The name of the parent program call, e.g.`bar` in `bar.aleo`.
-    pub program: Option<Symbol>,
     /// Span of the entire call `function(arguments)`.
     pub span: Span,
     /// The ID of the node.
@@ -37,7 +35,11 @@ pub struct CallExpression {
 
 impl fmt::Display for CallExpression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}({})", self.function, self.arguments.iter().format(", "))
+        write!(f, "{}", self.function)?;
+        if !self.const_arguments.is_empty() {
+            write!(f, "::[{}]", self.const_arguments.iter().format(", "))?;
+        }
+        write!(f, "({})", self.arguments.iter().format(", "))
     }
 }
 

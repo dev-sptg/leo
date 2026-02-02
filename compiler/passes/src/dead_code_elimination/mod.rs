@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -45,7 +45,7 @@
 //! }
 //! ```
 //! Note this pass relies on the following invariants:
-//! - No shadowing for all variables, struct names, function names, etc.
+//! - No shadowing for all variables, composite names, function names, etc.
 //! - Unique variable names (provided by SSA)
 //! - Flattened code (provided by the flattening pass)
 
@@ -54,11 +54,9 @@ use crate::Pass;
 use leo_ast::ProgramReconstructor as _;
 use leo_errors::Result;
 
-mod expression;
+mod ast;
 
 mod program;
-
-mod statement;
 
 mod visitor;
 use visitor::*;
@@ -86,7 +84,7 @@ impl Pass for DeadCodeEliminating {
             statements_after: 0,
         };
         ast.ast = visitor.reconstruct_program(ast.ast);
-        visitor.state.handler.last_err().map_err(|e| *e)?;
+        visitor.state.handler.last_err()?;
         visitor.state.ast = ast;
         Ok(DeadCodeEliminatingOutput {
             statements_before: visitor.statements_before,

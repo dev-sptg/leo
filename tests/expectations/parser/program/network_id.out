@@ -1,4 +1,5 @@
 {
+  "modules": {},
   "imports": {},
   "stubs": {},
   "program_scopes": {
@@ -10,7 +11,7 @@
             "lo": 8,
             "hi": 12
           },
-          "id": 0
+          "id": 11
         },
         "network": {
           "name": "aleo",
@@ -18,12 +19,13 @@
             "lo": 13,
             "hi": 17
           },
-          "id": 1
+          "id": 12
         }
       },
       "consts": [],
-      "structs": [],
+      "composites": [],
       "mappings": [],
+      "storage_variables": [],
       "functions": [
         [
           "main",
@@ -36,8 +38,9 @@
                 "lo": 33,
                 "hi": 37
               },
-              "id": 2
+              "id": 0
             },
+            "const_parameters": [],
             "input": [
               {
                 "identifier": {
@@ -46,7 +49,7 @@
                     "lo": 38,
                     "hi": 39
                   },
-                  "id": 3
+                  "id": 1
                 },
                 "mode": "None",
                 "type_": "Address",
@@ -54,7 +57,7 @@
                   "lo": 38,
                   "hi": 48
                 },
-                "id": 4
+                "id": 2
               }
             ],
             "output": [],
@@ -66,30 +69,15 @@
                     "variant": {
                       "AssertEq": [
                         {
-                          "MemberAccess": {
-                            "inner": {
-                              "Identifier": {
-                                "name": "network",
-                                "span": {
-                                  "lo": 70,
-                                  "hi": 77
-                                },
-                                "id": 5
-                              }
-                            },
-                            "name": {
-                              "name": "id",
-                              "span": {
-                                "lo": 78,
-                                "hi": 80
-                              },
-                              "id": 6
-                            },
+                          "Intrinsic": {
+                            "name": "_network_id",
+                            "type_parameters": [],
+                            "arguments": [],
                             "span": {
                               "lo": 70,
                               "hi": 80
                             },
-                            "id": 7
+                            "id": 4
                           }
                         },
                         {
@@ -98,7 +86,7 @@
                               "lo": 82,
                               "hi": 86
                             },
-                            "id": 8,
+                            "id": 5,
                             "variant": {
                               "Integer": [
                                 "U32",
@@ -111,28 +99,38 @@
                     },
                     "span": {
                       "lo": 60,
-                      "hi": 69
+                      "hi": 88
                     },
-                    "id": 9
+                    "id": 3
                   }
                 },
                 {
                   "Return": {
                     "expression": {
-                      "Identifier": {
-                        "name": "a",
+                      "Path": {
+                        "user_program": null,
+                        "qualifier": [],
+                        "identifier": {
+                          "name": "a",
+                          "span": {
+                            "lo": 104,
+                            "hi": 105
+                          },
+                          "id": 8
+                        },
+                        "target": "Unresolved",
                         "span": {
                           "lo": 104,
                           "hi": 105
                         },
-                        "id": 10
+                        "id": 7
                       }
                     },
                     "span": {
                       "lo": 97,
                       "hi": 106
                     },
-                    "id": 11
+                    "id": 6
                   }
                 }
               ],
@@ -140,16 +138,17 @@
                 "lo": 50,
                 "hi": 112
               },
-              "id": 12
+              "id": 9
             },
             "span": {
               "lo": 24,
               "hi": 112
             },
-            "id": 13
+            "id": 10
           }
         ]
       ],
+      "constructor": null,
       "span": {
         "lo": 0,
         "hi": 114

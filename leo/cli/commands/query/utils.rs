@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -70,7 +70,7 @@ pub fn is_valid_field(field: &str) -> Result<String, LeoError> {
     let split = field.split("field").collect::<Vec<&str>>();
 
     if split.len() == 1 && split[0].chars().all(|c| c.is_numeric()) {
-        Ok(format!("{}field", field))
+        Ok(format!("{field}field"))
     } else if split.len() == 2 && split[0].chars().all(|c| c.is_numeric()) && split[1].is_empty() {
         Ok(field.to_string())
     } else {

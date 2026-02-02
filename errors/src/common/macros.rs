@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -89,6 +89,17 @@ macro_rules! create_messages {
         // Steps over the list of functions with an initial code of 0.
         impl $type_ {
             create_messages!(@step 0i32, $(($(#[$docs])* $formatted_or_backtraced_list, $names($($arg_names: $arg_types,)*), $messages, $helps),)*);
+
+            // Return an instance of `Self` (i.e. of error type `$type_`) which has labels.
+            pub fn with_labels(self, labels: Vec<$crate::Label>) -> Self {
+                match self {
+                    Self::Formatted(f) => Self::Formatted(f.with_labels(labels)),
+                    Self::Backtraced(_) => {
+                        // Adding labels to Backtraced errors does nothing at the moment
+                        self
+                    }
+                }
+            }
         }
     };
     // Matches the function if it is a formatted message.

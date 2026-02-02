@@ -1,39 +1,39 @@
 version: 2.1
 
+parameters:
+  snarkos-rev:
+    type: string
+    default: "b1080b24ff45e7f5d9b5a72e6c951e2d0baa904b" # canary-v4.5.0
+
 # Notes
 # - `sccache` was removed because it doesn't actually provide much benefit in CI. Lots of cache misses.
 # - https://github.com/Swatinem/rust-cache?tab=readme-ov-file#cache-details provides guidance on which directories to cache.
 # - Incremental builds should be disabled in CI, since they don't provide much benefit.
 # - Enabling `--only_testnet` feature flag to reduce the amount of time spent building leo-lang, since it's not needed for the test suite.
 
-# Rust Version: 1.85.1
+# Rust Version: 1.92.0
 # Ensure that this matches the `rust-version` in `Cargo.toml`.
 # If this is changed, propogate the changes to all places in this file, including the `install-rust` command.
 
 # TODO:
 #  - The cache size can accumulate as the dependencies get upgraded. Ideally you want some pruning before the cache gets persisted.
 #    See swatinem/rust-cache for a sensible approach. Unfortunately, we'd have to build this for CircleCI.
-#  - Rust v1.83.0 is coming with some sensible cargo rebuild improvements. We should upgrade to that when it's released.
 
-
-environment:
-  CARGO_INCREMENTAL: 0
-  RUSTFLAGS: "-D warnings"
 
 orbs:
-  windows: circleci/windows@5.0
+  windows: circleci/windows@5.1.0
   codecov: codecov/codecov@1.0.2
 
 executors:
   macos-executor:
     macos:
-      xcode: "16.0.0"  # Use appropriate Xcode version
-    resource_class: m2pro.large
+      xcode: "26.0.1"  # Use appropriate Xcode version
+    resource_class: m4pro.large
 
   linux-executor:
     docker:
-      - image: "cimg/rust:1.85"  # Ensure that this matches the `rust-version` in `Cargo.toml`.
-    resource_class: xlarge
+      - image: "cimg/rust:1.92.0"  # Ensure that this matches the `rust-version` in `Cargo.toml`.
+    resource_class: 2xlarge
 
 commands:
   install-rust:
@@ -43,12 +43,12 @@ commands:
           name: Install Rust
           command: |
             # If Rust is not installed on the machine, install it
-            # (temporarily install it regardless, as we want 1.85.1, not 1.85.0)
+            # (temporarily install it regardless, as we want 1.92.0, not 1.85.0)
             # if ! command -v rustc &> /dev/null; then
               curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
               source "$HOME/.cargo/env"
-              rustup install 1.85.1
-              rustup override set 1.85.1
+              rustup install 1.92.0
+              rustup override set 1.92.0
               cargo --version --verbose
               rustc --version
             # fi
@@ -56,8 +56,8 @@ commands:
               cargo generate-lockfile
             fi
             cargo install cargo-mtime
-            
-            
+
+
 
   install-rust-windows:
     description: "Install Rust (Windows)"
@@ -70,8 +70,8 @@ commands:
             Invoke-WebRequest -Uri "https://win.rustup.rs/" -OutFile "C:\\rustup-init.exe"
             Start-Process "C:\\rustup-init.exe" -ArgumentList '-y' -Wait
             $Env:Path += ";$Env:USERPROFILE\.cargo\bin"
-            rustup install 1.85.1
-            rustup default 1.85.1
+            rustup install 1.92.0
+            rustup default 1.92.0
             cargo --version --verbose
             rustc --version | Out-File -FilePath "rust-version"
             if (!(Test-Path "Cargo.lock" -PathType Leaf)) {
@@ -79,22 +79,97 @@ commands:
             }
             cargo install cargo-mtime
 
+  install-snarkos:
+    description: "Install snarkOS (Linux/macOS)"
+    steps:
+      - restore_cache:
+          keys:
+            - snarkos-install-{{ arch }}-<< pipeline.parameters.snarkos-rev >>
+
+      - run:
+          name: Install snarkOS
+          command: |
+            set -euo pipefail
+            BIN="$HOME/.cargo/snarkos-<< pipeline.parameters.snarkos-rev >>/bin/snarkos"
+
+            if [ -f "$BIN" ] && [ -x "$BIN" ]; then
+                echo "Using cached snarkOS"
+                mkdir -p "$HOME/.cargo/bin"
+                ln -sf "$BIN" "$HOME/.cargo/bin/snarkos"
+                snarkos --version
+                exit 0
+            fi
+
+            rm -f "$HOME/.cargo/bin/snarkos"
+            git clone https://github.com/ProvableHQ/snarkOS.git
+            cd snarkOS
+            git checkout << pipeline.parameters.snarkos-rev >>
+            cargo install --path . --features test_network --locked --force \
+              --root "$HOME/.cargo/snarkos-<< pipeline.parameters.snarkos-rev >>"
+            cd ..
+            rm -rf snarkOS
+            ln -sf "$BIN" "$HOME/.cargo/bin/snarkos"
+            snarkos --version
+
+      - save_cache:
+          key: snarkos-install-{{ arch }}-<< pipeline.parameters.snarkos-rev >>
+          paths:
+            - ~/.cargo/snarkos-<< pipeline.parameters.snarkos-rev >>
+
   build-and-test:
     description: "Build and run tests"
+    parameters:
+      is_windows:
+        type: boolean
+        default: false
     steps:
+      - restore_cache:
+          keys:
+            - cargo-nextest-v1-{{ arch }}-{{ checksum "Cargo.lock" }}
+
+      - run:
+          name: Install cargo-nextest
+          command: |
+            <<# parameters.is_windows >>
+            powershell -Command "
+              if (Get-Command cargo-nextest -ErrorAction SilentlyContinue) {
+                cargo nextest --version
+              } else {
+                cargo install cargo-nextest --locked
+              }
+            "
+            <</ parameters.is_windows >>
+
+            <<^ parameters.is_windows >>
+            set -euo pipefail
+            if command -v cargo-nextest >/dev/null 2>&1; then
+              cargo nextest --version
+            else
+              cargo install cargo-nextest --locked
+            fi
+            <</ parameters.is_windows >>
+
+      - save_cache:
+          key: cargo-nextest-v1-{{ arch }}-{{ checksum "Cargo.lock" }}
+          paths:
+            - ~/.cargo/bin
+            - ~/.cargo/registry
+            - ~/.cargo/git
+
       - run:
           name: Build
           no_output_timeout: 30m
           command: |
             cargo-mtime . ~/.cache/mtimes/project.db
-            cargo test --no-run --all --locked --profile ci --features only_testnet
+            cargo nextest run --no-run --all --locked --cargo-profile ci --features only_testnet
+
       - run:
           name: Run tests
           no_output_timeout: 30m
           # The `--verbose` flag is used to check which files are being recompiled. Ideally, this should be none.
           command: |
             cargo-mtime . ~/.cache/mtimes/project.db
-            cargo test --all --locked --profile ci --features only_testnet --verbose
+            cargo nextest run --all --locked --cargo-profile ci --features only_testnet --verbose
 
   install_rust_nightly:
     description: "Install Rust nightly toolchain"
@@ -106,7 +181,16 @@ jobs:
     executor:
       name: windows/default
       size: xlarge
+    environment:
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+      RUST_MIN_STACK: "16777216"    # 16 MB stack for rustc
+      CARGO_INCREMENTAL: 0
     steps:
+      - run:
+          name: Force git to use HTTPS
+          command: |
+            git config --global url."https://github.com/".insteadOf "git@github.com:"
+            git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
       - checkout
       - restore_cache:
           keys:
@@ -117,12 +201,13 @@ jobs:
       - run:
           name: Update Submodules
           command: git submodule update --init --recursive
-      - build-and-test
+      - build-and-test:
+          is_windows: true
       - save_cache:
           key: cargo-v1-{{ arch }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}
           paths:
             - C:\Users\circleci\.cargo
-            - target
+            - C:\Users\circleci\.aleo\resources
 
   test-macos:
     executor: macos-executor
@@ -134,6 +219,11 @@ jobs:
             - cargo-v1-{{ arch }}-{{ checksum "Cargo.toml" }}
             - cargo-v1-{{ arch }}
       - install-rust
+      - install-snarkos
+      - run:
+          name: Verify SnarkOS installation
+          command: |
+            snarkos --version
       - run:
           name: Update Submodules
           command: git submodule update --init --recursive
@@ -142,7 +232,7 @@ jobs:
           key: cargo-v1-{{ arch }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}
           paths:
             - ~/.cargo
-            - target
+            - ~/.aleo/resources
 
   test-linux:
     executor: linux-executor
@@ -155,6 +245,22 @@ jobs:
             - cargo-v1-{{ arch }}
       - install-rust
       - run:
+          name: Install snarkos dependencies
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y \
+              build-essential \
+              clang \
+              libssl-dev \
+              llvm \
+              lld \
+              pkg-config
+      - install-snarkos
+      - run:
+          name: Verify SnarkOS installation
+          command: |
+            snarkos --version
+      - run:
             name: Update Submodules
             command: git submodule update --init --recursive
       - build-and-test
@@ -162,7 +268,7 @@ jobs:
           key: cargo-v1-{{ arch }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}
           paths:
             - ~/.cargo
-            - target
+            - ~/.aleo/resources
 
 # TODO: Move code-coverage to CircleCI
 #  code-coverage:
@@ -182,7 +288,7 @@ jobs:
 #          key: codecov-cargo-v1-{{ arch }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}
 #          paths:
 #            - ~/.cargo
-#            - target
+#            - ~/.aleo/resources
 
   check-style-clippy-docs:
     executor: linux-executor
@@ -220,7 +326,6 @@ jobs:
           key: cargo-v1-{{ arch }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}
           paths:
             - ~/.cargo
-            - target
 
   leo-executable:
     executor: linux-executor
@@ -247,11 +352,10 @@ jobs:
           key: cargo-v1-{{ arch }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}
           paths:
             - ~/.cargo
-            - target
 
   leo-new:
     docker:
-      - image: cimg/rust:1.85
+      - image: cimg/rust:1.92.0
     resource_class: xlarge
     steps:
       - attach_workspace:
@@ -264,7 +368,7 @@ jobs:
 
   leo-clean:
     docker:
-      - image: cimg/rust:1.85
+      - image: cimg/rust:1.92.0
     resource_class: xlarge
     steps:
       - attach_workspace:
@@ -277,7 +381,7 @@ jobs:
 
   test-examples:
     docker:
-      - image: cimg/rust:1.85
+      - image: cimg/rust:1.92.0
     resource_class: xlarge
     steps:
       - attach_workspace:
@@ -291,12 +395,25 @@ jobs:
 
 workflows:
   version: 2
-  main-workflow:
+
+  test-windows:
     jobs:
       - test-windows
+
+  test-macos:
+    jobs:
       - test-macos
+
+  test-linux:
+    jobs:
       - test-linux
+
+  code-quality:
+    jobs:
       - check-style-clippy-docs
+
+  leo-executable:
+    jobs:
       - leo-executable
       - leo-new:
           requires:

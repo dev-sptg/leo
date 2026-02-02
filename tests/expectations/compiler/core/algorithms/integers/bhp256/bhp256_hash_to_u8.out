@@ -1,9 +1,5 @@
 program test.aleo;
 
-struct Foo:
-    a as u128;
-    b as u128;
-
 function main:
     input r0 as i8.private;
     input r1 as i16.private;
@@ -43,4 +39,4 @@ function main:
     output r20 as u8.private;
     output r21 as u8.private;
     output r22 as u8.private;
-    output 124u8 as u8.private;
+    output 244u8 as u8.private;

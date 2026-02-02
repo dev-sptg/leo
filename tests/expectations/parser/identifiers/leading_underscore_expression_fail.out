@@ -1,0 +1,5 @@
+Error [EPAR0370005]: expected '(', '{', '::' -- found ';'
+    --> test:5:22
+     |
+   5 |         return _value;
+     |                      ^

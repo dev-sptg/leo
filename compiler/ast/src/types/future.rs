@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// A future type consisting of the type of the inputs.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FutureType {
     // Optional type specification of inputs.
     pub inputs: Vec<Type>,
@@ -56,5 +56,11 @@ impl Default for crate::FutureType {
 impl fmt::Display for crate::FutureType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Future<Fn({})>", self.inputs.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(","))
+    }
+}
+
+impl From<FutureType> for Type {
+    fn from(value: FutureType) -> Self {
+        Type::Future(value)
     }
 }

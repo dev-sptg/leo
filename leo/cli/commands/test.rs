@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -16,15 +16,15 @@
 
 use super::*;
 
-use leo_compiler::run_with_ledger;
+use leo_ast::{NetworkName, TEST_PRIVATE_KEY};
+use leo_compiler::run;
 use leo_package::{Package, ProgramData};
 use leo_span::Symbol;
 
 use snarkvm::prelude::TestnetV0;
 
 use colored::Colorize as _;
-use indexmap::IndexSet;
-use std::{fs, path::PathBuf};
+use std::fs;
 
 /// Test a leo program.
 #[derive(Parser, Debug)]
@@ -38,11 +38,13 @@ pub struct LeoTest {
 
     #[clap(flatten)]
     pub(crate) compiler_options: BuildOptions,
+    #[clap(flatten)]
+    pub(crate) env_override: EnvOptions,
 }
 
 impl Command for LeoTest {
     type Input = <LeoBuild as Command>::Output;
-    type Output = ();
+    type Output = TestOutput;
 
     fn log_span(&self) -> Span {
         tracing::span!(tracing::Level::INFO, "Leo")
@@ -51,68 +53,32 @@ impl Command for LeoTest {
     fn prelude(&self, context: Context) -> Result<Self::Input> {
         let mut options = self.compiler_options.clone();
         options.build_tests = true;
-        (LeoBuild { options }).execute(context)
+        (LeoBuild { env_override: self.env_override.clone(), options }).execute(context)
     }
 
-    fn apply(self, context: Context, input: Self::Input) -> Result<Self::Output> {
-        handle_test(self, context, input)
+    fn apply(self, _: Context, input: Self::Input) -> Result<Self::Output> {
+        handle_test(self, input)
     }
 }
 
-fn handle_test(command: LeoTest, context: Context, package: Package) -> Result<()> {
+fn handle_test(command: LeoTest, package: Package) -> Result<TestOutput> {
     // Get the private key.
-    let private_key = context.get_private_key::<TestnetV0>(&None)?;
-    let address = Address::try_from(&private_key)?;
+    let private_key = PrivateKey::<TestnetV0>::from_str(TEST_PRIVATE_KEY)?;
 
-    // Get the paths of all local dependencies.
-    let leo_paths: Vec<PathBuf> = package
-        .programs
-        .iter()
-        .flat_map(|program| match &program.data {
-            ProgramData::SourcePath(path) => Some(path.clone()),
-            ProgramData::Bytecode(..) => None,
-        })
-        .collect();
-    let local_dependency_symbols: IndexSet<Symbol> = package
-        .programs
-        .iter()
-        .flat_map(|program| match &program.data {
-            ProgramData::SourcePath(..) => {
-                // It's a local dependency.
-                Some(program.name)
-            }
-            ProgramData::Bytecode(..) => {
-                // It's a network dependency.
-                None
-            }
-        })
-        .collect();
-    let imports_directory = package.imports_directory();
+    let leo_paths = collect_leo_paths(&package);
+    let aleo_paths = collect_aleo_paths(&package);
 
-    // Get the paths to .aleo files in `imports` - but filter out the ones corresponding to local dependencies.
-    let aleo_paths: Vec<PathBuf> = imports_directory
-        .read_dir()
-        .ok()
-        .into_iter()
-        .flatten()
-        .flat_map(|maybe_filename| maybe_filename.ok())
-        .filter(|entry| entry.file_type().ok().map(|filetype| filetype.is_file()).unwrap_or(false))
-        .flat_map(|entry| {
-            let path = entry.path();
-            if let Some(filename) = leo_package::filename_no_aleo_extension(&path) {
-                let symbol = Symbol::intern(filename);
-                if local_dependency_symbols.contains(&symbol) { None } else { Some(path) }
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    let (native_test_functions, interpreter_result) =
-        leo_interpreter::find_and_run_tests(&leo_paths, &aleo_paths, address, 0u32, &command.test_name)?;
+    let (native_test_functions, interpreter_result) = leo_interpreter::find_and_run_tests(
+        &leo_paths,
+        &aleo_paths,
+        private_key.to_string(),
+        0u32,
+        chrono::Utc::now().timestamp(),
+        &command.test_name,
+        NetworkName::TestnetV0,
+    )?;
 
     // Now for native tests.
-
     let program_name = package.manifest.program.strip_suffix(".aleo").unwrap();
     let program_name_symbol = Symbol::intern(program_name);
     let build_directory = package.build_directory();
@@ -120,7 +86,7 @@ fn handle_test(command: LeoTest, context: Context, package: Package) -> Result<(
     let credits = Symbol::intern("credits");
 
     // Get bytecode and name for all programs, either directly or from the filesystem if they were compiled.
-    let programs: Vec<run_with_ledger::Program> = package
+    let programs: Vec<run::Program> = package
         .programs
         .iter()
         .filter_map(|program| {
@@ -130,83 +96,95 @@ fn handle_test(command: LeoTest, context: Context, package: Package) -> Result<(
             }
             let bytecode = match &program.data {
                 ProgramData::Bytecode(c) => c.clone(),
-                ProgramData::SourcePath(..) => {
+                ProgramData::SourcePath { .. } => {
                     // This was not a network dependency, so get its bytecode from the filesystem.
                     let aleo_path = if program.name == program_name_symbol {
                         build_directory.join("main.aleo")
                     } else {
-                        imports_directory.join(format!("{}.aleo", program.name))
+                        package.imports_directory().join(format!("{}.aleo", program.name))
                     };
                     fs::read_to_string(&aleo_path)
                         .unwrap_or_else(|e| panic!("Failed to read Aleo file at {}: {}", aleo_path.display(), e))
                 }
             };
-            Some(run_with_ledger::Program { bytecode, name: program.name.to_string() })
+            Some(run::Program { bytecode, name: program.name.to_string() })
         })
         .collect();
 
     let should_fails: Vec<bool> = native_test_functions.iter().map(|test_function| test_function.should_fail).collect();
-    let cases: Vec<run_with_ledger::Case> = native_test_functions
+    let cases: Vec<Vec<run::Case>> = native_test_functions
         .into_iter()
-        .map(|test_function| run_with_ledger::Case {
-            program_name: format!("{}.aleo", test_function.program),
-            function: test_function.function,
-            private_key: test_function.private_key,
-            input: Vec::new(),
+        .map(|test_function| {
+            // Note. We wrap each individual test in its own vector, so that they are run in insolation.
+            vec![run::Case {
+                program_name: format!("{}.aleo", test_function.program),
+                function: test_function.function,
+                private_key: test_function.private_key,
+                input: Vec::new(),
+            }]
         })
         .collect();
 
-    let (handler, buf) = Handler::new_with_buf();
+    let outcomes = run::run_with_ledger(&run::Config { seed: 0, start_height: None, programs }, &cases)?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
 
-    let outcomes = run_with_ledger::run_with_ledger(
-        &run_with_ledger::Config { seed: 0, min_height: 1, programs },
-        &cases,
-        &handler,
-        &buf,
-    )?;
-
-    let native_results: Vec<Option<String>> = outcomes
+    let native_results: Vec<_> = outcomes
         .into_iter()
         .zip(should_fails)
-        .map(|(outcome, should_fail)| match (&outcome.status, should_fail) {
-            (run_with_ledger::Status::Accepted, false) => None,
-            (run_with_ledger::Status::Accepted, true) => Some("Test succeeded when failure was expected.".to_string()),
-            (_, true) => None,
-            (_, false) => Some(format!("{} -- {}", outcome.status, outcome.errors)),
+        .map(|(outcome, should_fail)| {
+            let run::ExecutionOutcome { outcome: inner, status, .. } = outcome;
+
+            let message = match (&status, should_fail) {
+                (run::ExecutionStatus::Accepted, false) => None,
+                (run::ExecutionStatus::Accepted, true) => Some("Test succeeded when failure was expected.".to_string()),
+                (_, true) => None,
+                (_, false) => Some(format!("{} -- {}", status, inner.output)),
+            };
+
+            (inner.program_name, inner.function, message)
         })
-        .collect();
+        .collect::<Vec<_>>();
 
     // All tests are run. Report results.
     let total = interpreter_result.iter().count() + native_results.len();
     let total_passed = interpreter_result.iter().filter(|(_, test_result)| matches!(test_result, Ok(()))).count()
-        + native_results.iter().filter(|x| x.is_none()).count();
+        + native_results.iter().filter(|(_, _, x)| x.is_none()).count();
+
+    // Build structured output and print results.
+    let mut tests = Vec::new();
 
     if total == 0 {
         println!("No tests run.");
-        Ok(())
     } else {
         println!("{total_passed} / {total} tests passed.");
         let failed = "FAILED".bold().red();
         let passed = "PASSED".bold().green();
+
         for (id, id_result) in interpreter_result.iter() {
             // Wasteful to make this, but fill will work.
             let str_id = format!("{id}");
             if let Err(err) = id_result {
                 println!("{failed}: {str_id:<30} | {err}");
+                tests.push(TestResult { name: str_id, passed: false, error: Some(err.to_string()) });
             } else {
                 println!("{passed}: {str_id}");
+                tests.push(TestResult { name: str_id, passed: true, error: None });
             }
         }
 
-        for (case, case_result) in cases.iter().zip(native_results) {
-            let str_id = format!("{}/{}", case.program_name, case.function);
+        for (program, function, case_result) in &native_results {
+            let str_id = format!("{program}/{function}");
             if let Some(err_str) = case_result {
                 println!("{failed}: {str_id:<30} | {err_str}");
+                tests.push(TestResult { name: str_id, passed: false, error: Some(err_str.clone()) });
             } else {
                 println!("{passed}: {str_id}");
+                tests.push(TestResult { name: str_id, passed: true, error: None });
             }
         }
-
-        Ok(())
     }
+
+    Ok(TestOutput { passed: total_passed, failed: total - total_passed, tests })
 }

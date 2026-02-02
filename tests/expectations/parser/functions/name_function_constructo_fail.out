@@ -1,0 +1,5 @@
+Error [EPAR0370005]: expected an identifier -- found 'constructor'
+    --> test:2:22
+     |
+   2 |     async transition constructor(x: u8) -> u8 {
+     |                      ^^^^^^^^^^^

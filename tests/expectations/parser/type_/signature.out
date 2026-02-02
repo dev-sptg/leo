@@ -1,4 +1,5 @@
 {
+  "modules": {},
   "imports": {},
   "stubs": {},
   "program_scopes": {
@@ -10,7 +11,7 @@
             "lo": 9,
             "hi": 13
           },
-          "id": 0
+          "id": 52
         },
         "network": {
           "name": "aleo",
@@ -18,12 +19,13 @@
             "lo": 14,
             "hi": 18
           },
-          "id": 1
+          "id": 53
         }
       },
       "consts": [],
-      "structs": [],
+      "composites": [],
       "mappings": [],
+      "storage_variables": [],
       "functions": [
         [
           "baz",
@@ -36,8 +38,9 @@
                 "lo": 36,
                 "hi": 39
               },
-              "id": 2
+              "id": 0
             },
+            "const_parameters": [],
             "input": [
               {
                 "identifier": {
@@ -46,7 +49,7 @@
                     "lo": 40,
                     "hi": 41
                   },
-                  "id": 3
+                  "id": 1
                 },
                 "mode": "None",
                 "type_": "Signature",
@@ -54,7 +57,7 @@
                   "lo": 40,
                   "hi": 52
                 },
-                "id": 4
+                "id": 2
               },
               {
                 "identifier": {
@@ -63,7 +66,7 @@
                     "lo": 54,
                     "hi": 55
                   },
-                  "id": 5
+                  "id": 3
                 },
                 "mode": "None",
                 "type_": "Address",
@@ -71,7 +74,7 @@
                   "lo": 54,
                   "hi": 64
                 },
-                "id": 6
+                "id": 4
               },
               {
                 "identifier": {
@@ -80,27 +83,37 @@
                     "lo": 66,
                     "hi": 67
                   },
-                  "id": 7
+                  "id": 5
                 },
                 "mode": "None",
                 "type_": {
                   "Composite": {
-                    "id": {
-                      "name": "value",
+                    "path": {
+                      "user_program": null,
+                      "qualifier": [],
+                      "identifier": {
+                        "name": "value",
+                        "span": {
+                          "lo": 69,
+                          "hi": 74
+                        },
+                        "id": 6
+                      },
+                      "target": "Unresolved",
                       "span": {
                         "lo": 69,
                         "hi": 74
                       },
-                      "id": 8
+                      "id": 7
                     },
-                    "program": null
+                    "const_arguments": []
                   }
                 },
                 "span": {
                   "lo": 66,
                   "hi": 74
                 },
-                "id": 9
+                "id": 8
               }
             ],
             "output": [],
@@ -121,52 +134,68 @@
                     },
                     "type_": "Boolean",
                     "value": {
-                      "AssociatedFunction": {
-                        "variant": {
-                          "name": "signature",
-                          "span": {
-                            "lo": 100,
-                            "hi": 109
-                          },
-                          "id": 11
-                        },
-                        "name": {
-                          "name": "verify",
-                          "span": {
-                            "lo": 111,
-                            "hi": 117
-                          },
-                          "id": 12
-                        },
+                      "Intrinsic": {
+                        "name": "_signature_verify",
+                        "type_parameters": [],
                         "arguments": [
                           {
-                            "Identifier": {
-                              "name": "s",
+                            "Path": {
+                              "user_program": null,
+                              "qualifier": [],
+                              "identifier": {
+                                "name": "s",
+                                "span": {
+                                  "lo": 118,
+                                  "hi": 119
+                                },
+                                "id": 15
+                              },
+                              "target": "Unresolved",
                               "span": {
                                 "lo": 118,
                                 "hi": 119
-                              },
-                              "id": 13
-                            }
-                          },
-                          {
-                            "Identifier": {
-                              "name": "a",
-                              "span": {
-                                "lo": 121,
-                                "hi": 122
                               },
                               "id": 14
                             }
                           },
                           {
-                            "Identifier": {
-                              "name": "v",
+                            "Path": {
+                              "user_program": null,
+                              "qualifier": [],
+                              "identifier": {
+                                "name": "a",
+                                "span": {
+                                  "lo": 121,
+                                  "hi": 122
+                                },
+                                "id": 17
+                              },
+                              "target": "Unresolved",
+                              "span": {
+                                "lo": 121,
+                                "hi": 122
+                              },
+                              "id": 16
+                            }
+                          },
+                          {
+                            "Path": {
+                              "user_program": null,
+                              "qualifier": [],
+                              "identifier": {
+                                "name": "v",
+                                "span": {
+                                  "lo": 124,
+                                  "hi": 125
+                                },
+                                "id": 19
+                              },
+                              "target": "Unresolved",
                               "span": {
                                 "lo": 124,
                                 "hi": 125
                               },
-                              "id": 15
+                              "id": 18
                             }
                           }
                         ],
@@ -174,14 +203,14 @@
                           "lo": 100,
                           "hi": 126
                         },
-                        "id": 16
+                        "id": 11
                       }
                     },
                     "span": {
                       "lo": 86,
-                      "hi": 126
+                      "hi": 127
                     },
-                    "id": 17
+                    "id": 9
                   }
                 },
                 {
@@ -193,57 +222,73 @@
                           "lo": 140,
                           "hi": 141
                         },
-                        "id": 18
+                        "id": 21
                       }
                     },
                     "type_": "Boolean",
                     "value": {
-                      "AssociatedFunction": {
-                        "variant": {
-                          "name": "signature",
-                          "span": {
-                            "lo": 0,
-                            "hi": 0
-                          },
-                          "id": 23
-                        },
-                        "name": {
-                          "name": "verify",
-                          "span": {
-                            "lo": 152,
-                            "hi": 158
-                          },
-                          "id": 20
-                        },
+                      "Intrinsic": {
+                        "name": "_signature_verify",
+                        "type_parameters": [],
                         "arguments": [
                           {
-                            "Identifier": {
-                              "name": "s",
+                            "Path": {
+                              "user_program": null,
+                              "qualifier": [],
+                              "identifier": {
+                                "name": "s",
+                                "span": {
+                                  "lo": 150,
+                                  "hi": 151
+                                },
+                                "id": 25
+                              },
+                              "target": "Unresolved",
                               "span": {
                                 "lo": 150,
                                 "hi": 151
                               },
-                              "id": 19
+                              "id": 24
                             }
                           },
                           {
-                            "Identifier": {
-                              "name": "a",
+                            "Path": {
+                              "user_program": null,
+                              "qualifier": [],
+                              "identifier": {
+                                "name": "a",
+                                "span": {
+                                  "lo": 159,
+                                  "hi": 160
+                                },
+                                "id": 27
+                              },
+                              "target": "Unresolved",
                               "span": {
                                 "lo": 159,
                                 "hi": 160
                               },
-                              "id": 21
+                              "id": 26
                             }
                           },
                           {
-                            "Identifier": {
-                              "name": "v",
+                            "Path": {
+                              "user_program": null,
+                              "qualifier": [],
+                              "identifier": {
+                                "name": "v",
+                                "span": {
+                                  "lo": 162,
+                                  "hi": 163
+                                },
+                                "id": 29
+                              },
+                              "target": "Unresolved",
                               "span": {
                                 "lo": 162,
                                 "hi": 163
                               },
-                              "id": 22
+                              "id": 28
                             }
                           }
                         ],
@@ -251,14 +296,14 @@
                           "lo": 150,
                           "hi": 164
                         },
-                        "id": 24
+                        "id": 22
                       }
                     },
                     "span": {
                       "lo": 136,
-                      "hi": 164
+                      "hi": 165
                     },
-                    "id": 25
+                    "id": 20
                   }
                 },
                 {
@@ -266,32 +311,52 @@
                     "variant": {
                       "AssertEq": [
                         {
-                          "Identifier": {
-                            "name": "a",
+                          "Path": {
+                            "user_program": null,
+                            "qualifier": [],
+                            "identifier": {
+                              "name": "a",
+                              "span": {
+                                "lo": 184,
+                                "hi": 185
+                              },
+                              "id": 32
+                            },
+                            "target": "Unresolved",
                             "span": {
                               "lo": 184,
                               "hi": 185
                             },
-                            "id": 26
+                            "id": 31
                           }
                         },
                         {
-                          "Identifier": {
-                            "name": "b",
+                          "Path": {
+                            "user_program": null,
+                            "qualifier": [],
+                            "identifier": {
+                              "name": "b",
+                              "span": {
+                                "lo": 187,
+                                "hi": 188
+                              },
+                              "id": 34
+                            },
+                            "target": "Unresolved",
                             "span": {
                               "lo": 187,
                               "hi": 188
                             },
-                            "id": 27
+                            "id": 33
                           }
                         }
                       ]
                     },
                     "span": {
                       "lo": 174,
-                      "hi": 183
+                      "hi": 190
                     },
-                    "id": 28
+                    "id": 30
                   }
                 }
               ],
@@ -299,13 +364,13 @@
                 "lo": 76,
                 "hi": 196
               },
-              "id": 29
+              "id": 35
             },
             "span": {
               "lo": 25,
               "hi": 196
             },
-            "id": 30
+            "id": 36
           }
         ],
         [
@@ -319,8 +384,9 @@
                 "lo": 213,
                 "hi": 216
               },
-              "id": 31
+              "id": 37
             },
+            "const_parameters": [],
             "input": [
               {
                 "identifier": {
@@ -329,7 +395,7 @@
                     "lo": 217,
                     "hi": 218
                   },
-                  "id": 32
+                  "id": 38
                 },
                 "mode": "None",
                 "type_": {
@@ -339,7 +405,7 @@
                   "lo": 217,
                   "hi": 222
                 },
-                "id": 33
+                "id": 39
               }
             ],
             "output": [
@@ -352,7 +418,7 @@
                   "lo": 227,
                   "hi": 229
                 },
-                "id": 34
+                "id": 50
               }
             ],
             "output_type": {
@@ -369,7 +435,7 @@
                           "lo": 244,
                           "hi": 254
                         },
-                        "id": 35
+                        "id": 41
                       }
                     },
                     "type_": {
@@ -383,7 +449,7 @@
                               "lo": 261,
                               "hi": 264
                             },
-                            "id": 36,
+                            "id": 43,
                             "variant": {
                               "Integer": [
                                 "U8",
@@ -393,13 +459,23 @@
                           }
                         },
                         "right": {
-                          "Identifier": {
-                            "name": "x",
+                          "Path": {
+                            "user_program": null,
+                            "qualifier": [],
+                            "identifier": {
+                              "name": "x",
+                              "span": {
+                                "lo": 267,
+                                "hi": 268
+                              },
+                              "id": 45
+                            },
+                            "target": "Unresolved",
                             "span": {
                               "lo": 267,
                               "hi": 268
                             },
-                            "id": 37
+                            "id": 44
                           }
                         },
                         "op": "Add",
@@ -407,33 +483,43 @@
                           "lo": 261,
                           "hi": 268
                         },
-                        "id": 38
+                        "id": 42
                       }
                     },
                     "span": {
                       "lo": 240,
-                      "hi": 268
+                      "hi": 269
                     },
-                    "id": 39
+                    "id": 40
                   }
                 },
                 {
                   "Return": {
                     "expression": {
-                      "Identifier": {
-                        "name": "signature_",
+                      "Path": {
+                        "user_program": null,
+                        "qualifier": [],
+                        "identifier": {
+                          "name": "signature_",
+                          "span": {
+                            "lo": 285,
+                            "hi": 295
+                          },
+                          "id": 48
+                        },
+                        "target": "Unresolved",
                         "span": {
                           "lo": 285,
                           "hi": 295
                         },
-                        "id": 40
+                        "id": 47
                       }
                     },
                     "span": {
                       "lo": 278,
                       "hi": 296
                     },
-                    "id": 41
+                    "id": 46
                   }
                 }
               ],
@@ -441,225 +527,20 @@
                 "lo": 230,
                 "hi": 302
               },
-              "id": 42
+              "id": 49
             },
             "span": {
               "lo": 202,
               "hi": 302
             },
-            "id": 43
-          }
-        ],
-        [
-          "bax",
-          {
-            "annotations": [],
-            "variant": "Transition",
-            "identifier": {
-              "name": "bax",
-              "span": {
-                "lo": 318,
-                "hi": 321
-              },
-              "id": 44
-            },
-            "input": [
-              {
-                "identifier": {
-                  "name": "s",
-                  "span": {
-                    "lo": 322,
-                    "hi": 323
-                  },
-                  "id": 45
-                },
-                "mode": "None",
-                "type_": "Signature",
-                "span": {
-                  "lo": 322,
-                  "hi": 334
-                },
-                "id": 46
-              },
-              {
-                "identifier": {
-                  "name": "a",
-                  "span": {
-                    "lo": 336,
-                    "hi": 337
-                  },
-                  "id": 47
-                },
-                "mode": "None",
-                "type_": "Address",
-                "span": {
-                  "lo": 336,
-                  "hi": 346
-                },
-                "id": 48
-              },
-              {
-                "identifier": {
-                  "name": "v",
-                  "span": {
-                    "lo": 348,
-                    "hi": 349
-                  },
-                  "id": 49
-                },
-                "mode": "None",
-                "type_": {
-                  "Composite": {
-                    "id": {
-                      "name": "value",
-                      "span": {
-                        "lo": 351,
-                        "hi": 356
-                      },
-                      "id": 50
-                    },
-                    "program": null
-                  }
-                },
-                "span": {
-                  "lo": 348,
-                  "hi": 356
-                },
-                "id": 51
-              }
-            ],
-            "output": [],
-            "output_type": "Unit",
-            "block": {
-              "statements": [
-                {
-                  "Definition": {
-                    "place": {
-                      "Single": {
-                        "name": "a",
-                        "span": {
-                          "lo": 371,
-                          "hi": 372
-                        },
-                        "id": 52
-                      }
-                    },
-                    "type_": "Boolean",
-                    "value": {
-                      "AssociatedFunction": {
-                        "variant": {
-                          "name": "signature",
-                          "span": {
-                            "lo": 381,
-                            "hi": 390
-                          },
-                          "id": 53
-                        },
-                        "name": {
-                          "name": "sign",
-                          "span": {
-                            "lo": 392,
-                            "hi": 396
-                          },
-                          "id": 54
-                        },
-                        "arguments": [
-                          {
-                            "Identifier": {
-                              "name": "s",
-                              "span": {
-                                "lo": 397,
-                                "hi": 398
-                              },
-                              "id": 55
-                            }
-                          },
-                          {
-                            "Identifier": {
-                              "name": "a",
-                              "span": {
-                                "lo": 400,
-                                "hi": 401
-                              },
-                              "id": 56
-                            }
-                          },
-                          {
-                            "Identifier": {
-                              "name": "v",
-                              "span": {
-                                "lo": 403,
-                                "hi": 404
-                              },
-                              "id": 57
-                            }
-                          }
-                        ],
-                        "span": {
-                          "lo": 381,
-                          "hi": 405
-                        },
-                        "id": 58
-                      }
-                    },
-                    "span": {
-                      "lo": 367,
-                      "hi": 405
-                    },
-                    "id": 59
-                  }
-                },
-                {
-                  "Assert": {
-                    "variant": {
-                      "AssertEq": [
-                        {
-                          "Identifier": {
-                            "name": "a",
-                            "span": {
-                              "lo": 424,
-                              "hi": 425
-                            },
-                            "id": 60
-                          }
-                        },
-                        {
-                          "Identifier": {
-                            "name": "b",
-                            "span": {
-                              "lo": 427,
-                              "hi": 428
-                            },
-                            "id": 61
-                          }
-                        }
-                      ]
-                    },
-                    "span": {
-                      "lo": 414,
-                      "hi": 423
-                    },
-                    "id": 62
-                  }
-                }
-              ],
-              "span": {
-                "lo": 358,
-                "hi": 435
-              },
-              "id": 63
-            },
-            "span": {
-              "lo": 307,
-              "hi": 435
-            },
-            "id": 64
+            "id": 51
           }
         ]
       ],
+      "constructor": null,
       "span": {
-        "lo": 1,
-        "hi": 437
+        "lo": 0,
+        "hi": 304
       }
     }
   }

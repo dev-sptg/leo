@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::create_messages;
 use std::fmt::Debug;
 
 create_messages!(
@@ -23,6 +22,7 @@ create_messages!(
     code_mask: 9000i32,
     code_prefix: "LUN",
 
+    // TODO This error is unused. Remove it in a future version.
     @formatted
     loop_range_decreasing {
         args: (),
@@ -36,5 +36,12 @@ create_messages!(
         args: (),
         msg: format!("The array index must be constant."),
         help: None,
+    }
+
+    @formatted
+    value_out_of_i128_bounds {
+        args: (value: impl std::fmt::Display),
+        msg: format!("The loop bound {value} does not fit into an i128."),
+        help: Some("All loop bounds must fit into `i128`.".to_string()),
     }
 );

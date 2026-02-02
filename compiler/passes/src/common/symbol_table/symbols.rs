@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -25,8 +25,10 @@ use leo_span::Span;
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum VariableType {
     Const,
+    ConstParameter,
     Input(Mode),
     Mut,
+    Storage,
 }
 
 impl Display for VariableType {
@@ -35,8 +37,10 @@ impl Display for VariableType {
 
         match self {
             Const => write!(f, "const var"),
+            ConstParameter => write!(f, "const parameter"),
             Input(m) => write!(f, "{m} input"),
             Mut => write!(f, "mut var"),
+            Storage => write!(f, "storage var"),
         }
     }
 }
@@ -44,8 +48,9 @@ impl Display for VariableType {
 /// An entry for a variable in the symbol table.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct VariableSymbol {
-    /// The `Type` of the variable.
-    pub type_: Type,
+    /// The `Type` of the variable. This is an `Option` because variables are inserted into the
+    /// symbol table first without types. The types are only set in `TypeChecking`.
+    pub type_: Option<Type>,
     /// The `Span` associated with the variable.
     pub span: Span,
     /// The type of declaration for the variable.
@@ -54,7 +59,11 @@ pub struct VariableSymbol {
 
 impl Display for VariableSymbol {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.declaration, self.type_)?;
+        if let Some(type_) = &self.type_ {
+            write!(f, "{}: {}", self.declaration, type_)?;
+        } else {
+            write!(f, "{}", self.declaration)?;
+        }
         Ok(())
     }
 }

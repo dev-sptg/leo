@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -15,22 +15,21 @@
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
 use leo_ast::{
+    AstReconstructor,
     Block,
-    ExpressionReconstructor,
     IterationStatement,
     Literal,
     Node,
     NodeID,
     Statement,
-    StatementReconstructor,
     Type,
-    Value,
+    interpreter_value::Value,
 };
-
 use leo_errors::LoopUnrollerError;
 use leo_span::{Span, Symbol};
 
-use super::{Clusivity, LoopBound, RangeIterator};
+use itertools::Either;
+
 use crate::CompilerState;
 
 pub struct UnrollingVisitor<'a> {
@@ -51,36 +50,25 @@ impl UnrollingVisitor<'_> {
         result
     }
 
-    /// Emits a Loop Unrolling Error
-    pub fn emit_err(&self, err: LoopUnrollerError) {
-        self.state.handler.emit_err(err);
-    }
-
     /// Unrolls an IterationStatement.
-    pub fn unroll_iteration_statement<I: LoopBound>(
-        &mut self,
-        input: IterationStatement,
-        start: Value,
-        stop: Value,
-    ) -> Statement {
-        // Closure to check that the constant values are valid u128.
+    pub fn unroll_iteration_statement(&mut self, input: IterationStatement, start: Value, stop: Value) -> Statement {
         // We already know these are integers since loop unrolling occurs after type checking.
-        let cast_to_number = |v: Value| -> Result<I, Statement> {
-            match v.try_into() {
-                Ok(val_as_u128) => Ok(val_as_u128),
-                Err(err) => {
-                    self.state.handler.emit_err(err);
+        let cast_to_number = |v: Value| -> Result<i128, Statement> {
+            match v.as_i128() {
+                Some(val_as_i128) => Ok(val_as_i128),
+                None => {
+                    self.state.handler.emit_err(LoopUnrollerError::value_out_of_i128_bounds(v, input.span()));
                     Err(Statement::dummy())
                 }
             }
         };
 
-        // Cast `start` to `I`.
+        // Cast `start` to `i128`.
         let start = match cast_to_number(start) {
             Ok(v) => v,
             Err(s) => return s,
         };
-        // Cast `stop` to `I`.
+        // Cast `stop` to `i128`.
         let stop = match cast_to_number(stop) {
             Ok(v) => v,
             Err(s) => return s,
@@ -88,8 +76,7 @@ impl UnrollingVisitor<'_> {
 
         let new_block_id = self.state.node_builder.next_id();
 
-        let iter =
-            RangeIterator::new(start, stop, if input.inclusive { Clusivity::Inclusive } else { Clusivity::Exclusive });
+        let iter = if input.inclusive { Either::Left(start..=stop) } else { Either::Right(start..stop) };
 
         // Create a block statement to replace the iteration statement.
         self.in_scope(new_block_id, |slf| {
@@ -103,16 +90,20 @@ impl UnrollingVisitor<'_> {
     }
 
     /// A helper function to unroll a single iteration an IterationStatement.
-    fn unroll_single_iteration<I: LoopBound>(&mut self, input: &IterationStatement, iteration_count: I) -> Statement {
+    fn unroll_single_iteration(&mut self, input: &IterationStatement, iteration_count: i128) -> Statement {
         // Construct a new node ID.
         let const_id = self.state.node_builder.next_id();
+
+        let iterator_type =
+            self.state.type_table.get(&input.variable.id()).expect("guaranteed to have a type after type checking");
+
         // Update the type table.
-        self.state.type_table.insert(const_id, input.type_.clone());
+        self.state.type_table.insert(const_id, iterator_type.clone());
 
         let outer_block_id = self.state.node_builder.next_id();
 
         // Reconstruct `iteration_count` as a `Literal`.
-        let Type::Integer(integer_type) = &input.type_ else {
+        let Type::Integer(integer_type) = &iterator_type else {
             unreachable!("Type checking enforces that the iteration variable is of integer type");
         };
 
@@ -120,7 +111,7 @@ impl UnrollingVisitor<'_> {
             let value = Literal::integer(*integer_type, iteration_count.to_string(), Default::default(), const_id);
 
             // Add the loop variable as a constant for the current scope.
-            slf.state.symbol_table.insert_const(slf.program, input.variable.name, value.into());
+            slf.state.symbol_table.insert_local_const(input.variable.name, value.into());
 
             let duplicated_body =
                 super::duplicate::duplicate(input.block.clone(), &mut slf.state.symbol_table, &slf.state.node_builder);
@@ -130,8 +121,4 @@ impl UnrollingVisitor<'_> {
             Block { statements: vec![result], span: input.span(), id: outer_block_id }.into()
         })
     }
-}
-
-impl ExpressionReconstructor for UnrollingVisitor<'_> {
-    type AdditionalOutput = ();
 }

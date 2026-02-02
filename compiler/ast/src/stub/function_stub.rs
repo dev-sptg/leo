@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ use crate::{
     Node,
     NodeID,
     Output,
+    Path,
     ProgramId,
     TupleType,
     Type,
@@ -41,7 +42,7 @@ use snarkvm::{
         RegisterType::{ExternalRecord, Future, Plaintext, Record},
     },
     prelude::{Network, ValueType},
-    synthesizer::program::{ClosureCore, CommandTrait, FunctionCore, InstructionTrait},
+    synthesizer::program::{ClosureCore, FunctionCore},
 };
 use std::fmt;
 
@@ -128,46 +129,57 @@ impl FunctionStub {
     }
 
     /// Converts from snarkvm function type to leo FunctionStub, while also carrying the parent program name.
-    pub fn from_function_core<N: Network, Instruction: InstructionTrait<N>, Command: CommandTrait<N>>(
-        function: &FunctionCore<N, Instruction, Command>,
-        program: Symbol,
-    ) -> Self {
+    pub fn from_function_core<N: Network>(function: &FunctionCore<N>, program: Symbol) -> Self {
         let outputs = function
             .outputs()
             .iter()
             .map(|output| match output.value_type() {
                 ValueType::Constant(val) => vec![Output {
                     mode: Mode::Constant,
-                    type_: Type::from_snarkvm(val, None),
+                    type_: Type::from_snarkvm(val, program),
                     span: Default::default(),
                     id: Default::default(),
                 }],
                 ValueType::Public(val) => vec![Output {
                     mode: Mode::Public,
-                    type_: Type::from_snarkvm(val, None),
+                    type_: Type::from_snarkvm(val, program),
                     span: Default::default(),
                     id: Default::default(),
                 }],
                 ValueType::Private(val) => vec![Output {
                     mode: Mode::Private,
-                    type_: Type::from_snarkvm(val, None),
+                    type_: Type::from_snarkvm(val, program),
                     span: Default::default(),
                     id: Default::default(),
                 }],
                 ValueType::Record(id) => vec![Output {
                     mode: Mode::None,
-                    type_: Type::Composite(CompositeType { id: Identifier::from(id), program: Some(program) }),
+                    type_: Type::Composite(CompositeType {
+                        path: {
+                            let ident = Identifier::from(id);
+                            Path::from(ident)
+                                .to_global(Location::new(program, vec![ident.name]))
+                                .with_user_program(Identifier::new(program, Default::default()))
+                        },
+                        const_arguments: Vec::new(),
+                    }),
                     span: Default::default(),
                     id: Default::default(),
                 }],
                 ValueType::ExternalRecord(loc) => {
+                    let external_program = ProgramId::from(loc.program_id()).name.name;
                     vec![Output {
                         mode: Mode::None,
                         span: Default::default(),
                         id: Default::default(),
                         type_: Type::Composite(CompositeType {
-                            id: Identifier::from(loc.resource()),
-                            program: Some(ProgramId::from(loc.program_id()).name.name),
+                            path: {
+                                let ident = Identifier::from(loc.resource());
+                                Path::from(ident)
+                                    .to_global(Location::new(external_program, vec![ident.name]))
+                                    .with_user_program(Identifier::new(external_program, Default::default()))
+                            },
+                            const_arguments: Vec::new(),
                         }),
                     }]
                 }
@@ -177,7 +189,7 @@ impl FunctionStub {
                     id: Default::default(),
                     type_: Type::Future(FutureType::new(
                         Vec::new(),
-                        Some(Location::new(program, Identifier::from(function.name()).name)),
+                        Some(Location::new(program, vec![Symbol::intern(&function.name().to_string())])),
                         false,
                     )),
                 }],
@@ -208,41 +220,57 @@ impl FunctionStub {
                         ValueType::Constant(val) => Input {
                             identifier: arg_name,
                             mode: Mode::Constant,
-                            type_: Type::from_snarkvm(val, None),
+                            type_: Type::from_snarkvm(val, program),
                             span: Default::default(),
                             id: Default::default(),
                         },
                         ValueType::Public(val) => Input {
                             identifier: arg_name,
                             mode: Mode::Public,
-                            type_: Type::from_snarkvm(val, None),
+                            type_: Type::from_snarkvm(val, program),
                             span: Default::default(),
                             id: Default::default(),
                         },
                         ValueType::Private(val) => Input {
                             identifier: arg_name,
                             mode: Mode::Private,
-                            type_: Type::from_snarkvm(val, None),
+                            type_: Type::from_snarkvm(val, program),
                             span: Default::default(),
                             id: Default::default(),
                         },
                         ValueType::Record(id) => Input {
                             identifier: arg_name,
                             mode: Mode::None,
-                            type_: Type::Composite(CompositeType { id: Identifier::from(id), program: Some(program) }),
-                            span: Default::default(),
-                            id: Default::default(),
-                        },
-                        ValueType::ExternalRecord(loc) => Input {
-                            identifier: arg_name,
-                            mode: Mode::None,
-                            span: Default::default(),
-                            id: Default::default(),
                             type_: Type::Composite(CompositeType {
-                                id: Identifier::from(loc.resource()),
-                                program: Some(ProgramId::from(loc.program_id()).name.name),
+                                path: {
+                                    let ident = Identifier::from(id);
+                                    Path::from(ident)
+                                        .to_global(Location::new(program, vec![ident.name]))
+                                        .with_user_program(Identifier::new(program, Default::default()))
+                                },
+                                const_arguments: Vec::new(),
                             }),
+                            span: Default::default(),
+                            id: Default::default(),
                         },
+                        ValueType::ExternalRecord(loc) => {
+                            let external_program = ProgramId::from(loc.program_id()).name.name;
+                            Input {
+                                identifier: arg_name,
+                                mode: Mode::None,
+                                span: Default::default(),
+                                id: Default::default(),
+                                type_: Type::Composite(CompositeType {
+                                    path: {
+                                        let ident = Identifier::from(loc.resource());
+                                        Path::from(ident)
+                                            .to_global(Location::new(external_program, vec![ident.name]))
+                                            .with_user_program(Identifier::new(external_program, Default::default()))
+                                    },
+                                    const_arguments: Vec::new(),
+                                }),
+                            }
+                        }
                         ValueType::Future(_) => panic!("Functions do not contain futures as inputs"),
                     }
                 })
@@ -254,11 +282,7 @@ impl FunctionStub {
         }
     }
 
-    pub fn from_finalize<N: Network, Instruction: InstructionTrait<N>, Command: CommandTrait<N>>(
-        function: &FunctionCore<N, Instruction, Command>,
-        key_name: Symbol,
-        program: Symbol,
-    ) -> Self {
+    pub fn from_finalize<N: Network>(function: &FunctionCore<N>, key_name: Symbol, program: Symbol) -> Self {
         Self {
             annotations: Vec::new(),
             variant: Variant::AsyncFunction,
@@ -273,13 +297,12 @@ impl FunctionStub {
                     identifier: Identifier::new(Symbol::intern(&format!("arg{}", index + 1)), Default::default()),
                     mode: Mode::None,
                     type_: match input.finalize_type() {
-                        PlaintextFinalizeType(val) => Type::from_snarkvm(val, Some(program)),
+                        PlaintextFinalizeType(val) => Type::from_snarkvm(val, program),
                         FutureFinalizeType(val) => Type::Future(FutureType::new(
                             Vec::new(),
-                            Some(Location::new(
-                                Identifier::from(val.program_id().name()).name,
-                                Symbol::intern(&format!("finalize/{}", val.resource())),
-                            )),
+                            Some(Location::new(Identifier::from(val.program_id().name()).name, vec![Symbol::intern(
+                                &format!("finalize/{}", val.resource()),
+                            )])),
                             false,
                         )),
                     },
@@ -294,17 +317,14 @@ impl FunctionStub {
         }
     }
 
-    pub fn from_closure<N: Network, Instruction: InstructionTrait<N>>(
-        closure: &ClosureCore<N, Instruction>,
-        program: Symbol,
-    ) -> Self {
+    pub fn from_closure<N: Network>(closure: &ClosureCore<N>, program: Symbol) -> Self {
         let outputs = closure
             .outputs()
             .iter()
             .map(|output| match output.register_type() {
                 Plaintext(val) => Output {
                     mode: Mode::None,
-                    type_: Type::from_snarkvm(val, Some(program)),
+                    type_: Type::from_snarkvm(val, program),
                     span: Default::default(),
                     id: Default::default(),
                 },
@@ -333,7 +353,7 @@ impl FunctionStub {
                         Plaintext(val) => Input {
                             identifier: arg_name,
                             mode: Mode::None,
-                            type_: Type::from_snarkvm(val, None),
+                            type_: Type::from_snarkvm(val, program),
                             span: Default::default(),
                             id: Default::default(),
                         },

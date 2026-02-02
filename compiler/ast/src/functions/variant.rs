@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -15,6 +15,8 @@
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
 use serde::{Deserialize, Serialize};
+
+use std::fmt;
 
 /// Functions are always one of six variants.
 /// A transition function is permitted the ability to manipulate records.
@@ -59,5 +61,18 @@ impl Variant {
     /// Returns true if the variant is an async function.
     pub fn is_async_function(self) -> bool {
         matches!(self, Variant::AsyncFunction)
+    }
+}
+
+impl fmt::Display for Variant {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Inline => write!(f, "inline"),
+            Self::Function => write!(f, "function"),
+            Self::Transition => write!(f, "transition"),
+            Self::AsyncTransition => write!(f, "async transition"),
+            Self::AsyncFunction => write!(f, "async function"),
+            Self::Script => write!(f, "script"),
+        }
     }
 }

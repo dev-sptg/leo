@@ -1,0 +1,4 @@
+program test.aleo;
+
+function baz_caller:
+    output 0u8 as u8.private;

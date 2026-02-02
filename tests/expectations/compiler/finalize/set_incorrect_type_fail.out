@@ -1,9 +1,9 @@
-Error [ETYC0372117]: Expected type `Token` but type `u128` was found.
+Error [ETYC0372117]: Expected type `test.aleo/Token` but type `u128` was found.
     --> compiler-test:16:36
      |
   16 |         Mapping::set(tokens, addr, amount);
      |                                    ^^^^^^
-Error [ETYC0372117]: Expected type `Token` but type `u128` was found.
+Error [ETYC0372117]: Expected type `test.aleo/Token` but type `u128` was found.
     --> compiler-test:17:26
      |
   17 |         tokens.set(addr, amount);
@@ -29,22 +29,12 @@ Error [ETYC0372117]: Expected type `u128` but type `u8` was found.
   21 |         amounts.set(addr, 1u8);
      |                           ^^^
 Error [ETYC0372117]: Expected type `u128` but type `u8` was found.
-    --> compiler-test:22:65
+    --> compiler-test:22:70
      |
-  22 |         Mapping::set(tokens, addr, Token { owner: addr, amount: 1u8 });
-     |                                                                 ^^^
+  22 |         Mapping::set(tokens, addr, Token { owner_addr: addr, amount: 1u8 });
+     |                                                                      ^^^
 Error [ETYC0372117]: Expected type `u128` but type `u8` was found.
-    --> compiler-test:23:55
+    --> compiler-test:23:60
      |
-  23 |         tokens.set(addr, Token { owner: addr, amount: 1u8 });
-     |                                                       ^^^
-Error [ETYC0372005]: Unknown variable `foo`
-    --> compiler-test:24:22
-     |
-  24 |         Mapping::set(foo, addr, amount);
-     |                      ^^^
-Error [ETYC0372005]: Unknown variable `foo`
-    --> compiler-test:25:9
-     |
-  25 |         foo.set(addr, amount);
-     |         ^^^
+  23 |         tokens.set(addr, Token { owner_addr: addr, amount: 1u8 });
+     |                                                            ^^^

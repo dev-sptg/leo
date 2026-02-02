@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::create_messages;
 use std::{
     error::Error as ErrorArg,
     fmt::{Debug, Display},
@@ -157,6 +156,13 @@ create_messages!(
     function_not_found {
         args: (func: impl Display),
         msg: format!("function `{func}` not found"),
+        help: None,
+    }
+
+    @formatted
+    name_defined_multiple_times {
+        args: (name: impl Display),
+        msg: format!("The name `{name}` is defined multiple times."),
         help: None,
     }
 );

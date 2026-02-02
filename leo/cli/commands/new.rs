@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 use super::*;
 
-use leo_package::{NetworkName, Package};
+use leo_package::Package;
 
 /// Create new Leo project
 #[derive(Parser, Debug)]
@@ -29,7 +29,7 @@ pub struct LeoNew {
         short = 'e',
         long,
         help = "Endpoint to retrieve network state from.",
-        default_value = "https://api.explorer.provable.com/v1"
+        default_value = "http://localhost:3030"
     )]
     pub(crate) endpoint: String,
 }
@@ -47,9 +47,6 @@ impl Command for LeoNew {
     }
 
     fn apply(self, context: Context, _: Self::Input) -> Result<Self::Output> {
-        // Parse the network.
-        let network: NetworkName = self.network.parse()?;
-
         // Derive the location of the parent directory to the project.
         let package_path = context.parent_dir()?;
 
@@ -57,7 +54,7 @@ impl Command for LeoNew {
         std::env::set_current_dir(&package_path)
             .map_err(|err| PackageError::failed_to_set_cwd(package_path.display(), err))?;
 
-        let full_path = Package::initialize(&self.name, &package_path, network, &self.endpoint)?;
+        let full_path = Package::initialize(&self.name, &package_path)?;
 
         println!("Created program {} at `{}`.", self.name.bold(), full_path.display());
 

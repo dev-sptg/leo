@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -16,35 +16,26 @@
 
 use super::*;
 
-use leo_package::NetworkName;
+use check_transaction::TransactionStatus;
+use leo_ast::NetworkName;
+use leo_package::{Package, ProgramData, fetch_program_from_network};
 
 use aleo_std::StorageMode;
-use clap::Parser;
-use snarkvm::{
-    cli::helpers::dotenv_private_key,
-    prelude::{Network, Parser as SnarkVMParser},
-};
-use std::collections::HashMap;
+use snarkvm::prelude::{Execution, Itertools, Network, Program, execution_cost};
 
-use crate::cli::query::QueryCommands;
-use dialoguer::{Confirm, theme::ColorfulTheme};
+use clap::Parser;
+use colored::*;
+use std::{convert::TryFrom, path::PathBuf};
+
 #[cfg(not(feature = "only_testnet"))]
 use snarkvm::circuit::{AleoCanaryV0, AleoV0};
 use snarkvm::{
     circuit::{Aleo, AleoTestnetV0},
-    cli::LOCALE,
-    package::Package as SnarkVMPackage,
     prelude::{
         ConsensusVersion,
         Identifier,
-        Locator,
-        Process,
-        Program as SnarkVMProgram,
         ProgramID,
         VM,
-        Value,
-        execution_cost_v1,
-        execution_cost_v2,
         query::Query as SnarkVMQuery,
         store::{
             ConsensusStore,
@@ -56,59 +47,81 @@ use snarkvm::{
 /// Build, Prove and Run Leo program with inputs
 #[derive(Parser, Debug)]
 pub struct LeoExecute {
-    #[clap(name = "NAME", help = "The name of the function to execute.", default_value = "main")]
+    #[clap(
+        name = "NAME",
+        help = "The name of the function to execute, e.g `helloworld.aleo/main` or `main`.",
+        default_value = "main"
+    )]
     name: String,
-    #[clap(name = "INPUTS", help = "The inputs to the program.")]
+    #[clap(
+        name = "INPUTS",
+        help = "The program inputs e.g. `1u32`, `record1...` (record ciphertext), or `{ owner: ...}` "
+    )]
     inputs: Vec<String>,
-    #[clap(short, long, help = "Execute the transition on-chain.", default_value = "false")]
-    broadcast: bool,
-    #[clap(short, long, help = "Execute the local program on-chain.", default_value = "false")]
-    local: bool,
-    #[clap(short, long, help = "The program to execute on-chain.")]
-    program: Option<String>,
     #[clap(flatten)]
-    fee_options: FeeOptions,
+    pub(crate) fee_options: FeeOptions,
     #[clap(flatten)]
-    compiler_options: BuildOptions,
-    #[arg(short, long, help = "The inputs to the program, from a file. Overrides the INPUTS argument.")]
-    file: Option<String>,
-    #[clap(long, help = "Disables building of the project before execution.", default_value = "false")]
-    pub(crate) no_build: bool,
+    pub(crate) action: TransactionAction,
+    #[clap(flatten)]
+    pub(crate) env_override: EnvOptions,
+    #[clap(flatten)]
+    pub(crate) extra: ExtraOptions,
+    #[clap(flatten)]
+    build_options: BuildOptions,
 }
 
 impl Command for LeoExecute {
-    type Input = ();
-    type Output = ();
+    type Input = Option<Package>;
+    type Output = ExecuteOutput;
 
     fn log_span(&self) -> Span {
         tracing::span!(tracing::Level::INFO, "Leo")
     }
 
     fn prelude(&self, context: Context) -> Result<Self::Input> {
-        // No need to build if we are executing an external program.
-        if self.program.is_none() && !self.no_build {
-            LeoBuild { options: self.compiler_options.clone() }.execute(context)?;
+        // Get the path to the current directory.
+        let path = context.dir()?;
+        // Get the path to the home directory.
+        let home_path = context.home()?;
+        // Get the network, accounting for overrides.
+        let network = get_network(&self.env_override.network)?;
+        // Get the endpoint, accounting for overrides.
+        let endpoint = get_endpoint(&self.env_override.endpoint)?;
+        // If the current directory is a valid Leo package, then build it.
+        if Package::from_directory_no_graph(path, home_path, Some(network), Some(&endpoint)).is_ok() {
+            let package = LeoBuild {
+                env_override: self.env_override.clone(),
+                options: {
+                    let mut options = self.build_options.clone();
+                    options.no_cache = true;
+                    options
+                },
+            }
+            .execute(context)?;
+            // Return the package.
+            Ok(Some(package))
+        } else {
+            Ok(None)
         }
-        Ok(())
     }
 
-    fn apply(self, context: Context, _input: Self::Input) -> Result<Self::Output> {
-        // Parse the network.
-        let network: NetworkName = context.get_network(&self.compiler_options.network)?.parse()?;
-        let endpoint = context.get_endpoint(&self.compiler_options.endpoint)?;
+    fn apply(self, context: Context, input: Self::Input) -> Result<Self::Output> {
+        // Get the network, accounting for overrides.
+        let network = get_network(&self.env_override.network)?;
+        // Handle each network with the appropriate parameterization.
         match network {
-            NetworkName::TestnetV0 => handle_execute::<AleoTestnetV0>(self, context, network, &endpoint),
+            NetworkName::TestnetV0 => handle_execute::<AleoTestnetV0>(self, context, network, input),
             NetworkName::MainnetV0 => {
                 #[cfg(feature = "only_testnet")]
                 panic!("Mainnet chosen with only_testnet feature");
                 #[cfg(not(feature = "only_testnet"))]
-                return handle_execute::<AleoV0>(self, context, network, &endpoint);
+                handle_execute::<AleoV0>(self, context, network, input)
             }
             NetworkName::CanaryV0 => {
                 #[cfg(feature = "only_testnet")]
                 panic!("Canary chosen with only_testnet feature");
                 #[cfg(not(feature = "only_testnet"))]
-                return handle_execute::<AleoCanaryV0>(self, context, network, &endpoint);
+                handle_execute::<AleoCanaryV0>(self, context, network, input)
             }
         }
     }
@@ -119,367 +132,479 @@ fn handle_execute<A: Aleo>(
     command: LeoExecute,
     context: Context,
     network: NetworkName,
-    endpoint: &str,
+    package: Option<Package>,
 ) -> Result<<LeoExecute as Command>::Output> {
-    // If input values are provided, then run the program with those inputs.
-    // Otherwise, use the input file.
-    let mut inputs = command.inputs.clone();
+    // Get the private key and associated address, accounting for overrides.
+    let private_key = get_private_key(&command.env_override.private_key)?;
+    let address = Address::<A::Network>::try_from(&private_key)
+        .map_err(|e| CliError::custom(format!("Failed to parse address: {e}")))?;
 
-    // Add the inputs to the arguments.
-    if let Some(file) = command.file.clone() {
-        // Get the contents from the file.
-        let path = context.dir()?.join(file);
-        let raw_content =
-            std::fs::read_to_string(&path).map_err(|err| PackageError::failed_to_read_file(path.display(), err))?;
-        // Parse the values from the file.
-        let mut content = raw_content.as_str();
-        let mut values = vec![];
-        while let Ok((remaining, value)) = snarkvm::prelude::Value::<A::Network>::parse(content) {
-            content = remaining;
-            values.push(value);
+    // Get the endpoint, accounting for overrides.
+    let endpoint = get_endpoint(&command.env_override.endpoint)?;
+
+    // Get whether the network is a devnet, accounting for overrides.
+    let is_devnet = get_is_devnet(command.env_override.devnet);
+
+    // If the consensus heights are provided, use them; otherwise, use the default heights for the network.
+    let consensus_heights =
+        command.env_override.consensus_heights.clone().unwrap_or_else(|| get_consensus_heights(network, is_devnet));
+    // Validate the provided consensus heights.
+    validate_consensus_heights(&consensus_heights)
+        .map_err(|e| CliError::custom(format!("Invalid consensus heights: {e}")))?;
+    // Print the consensus heights being used.
+    let consensus_heights_string = consensus_heights.iter().format(",").to_string();
+    println!(
+        "\n📢 Using the following consensus heights: {consensus_heights_string}\n  To override, pass in `--consensus-heights` or override the environment variable `CONSENSUS_VERSION_HEIGHTS`.\n"
+    );
+
+    // Set the consensus heights in the environment.
+    #[allow(unsafe_code)]
+    unsafe {
+        // SAFETY:
+        //  - `CONSENSUS_VERSION_HEIGHTS` is only set once and is only read in `snarkvm::prelude::load_consensus_heights`.
+        //  - There are no concurrent threads running at this point in the execution.
+        // WHY:
+        //  - This is needed because there is no way to set the desired consensus heights for a particular `VM` instance
+        //    without using the environment variable `CONSENSUS_VERSION_HEIGHTS`. Which is itself read once, and stored in a `OnceLock`.
+        std::env::set_var("CONSENSUS_VERSION_HEIGHTS", consensus_heights_string);
+    }
+
+    // Parse the <NAME> into an optional program name and a function name.
+    // If only a function name is provided, then use the program name from the package.
+    let (program_name, function_name) = match command.name.split_once('/') {
+        Some((program_name, function_name)) => (program_name.to_string(), function_name.to_string()),
+        None => match &package {
+            Some(package) => (
+                format!(
+                    "{}.aleo",
+                    package.programs.last().expect("There must be at least one program in a Leo package").name
+                ),
+                command.name,
+            ),
+            None => {
+                return Err(CliError::custom(format!(
+                    "Running `leo execute {} ...`, without an explicit program name requires that your current working directory is a valid Leo project.",
+                    command.name
+                )).into());
+            }
+        },
+    };
+
+    // Parse the program name as a `ProgramID`.
+    let program_id = ProgramID::<A::Network>::from_str(&program_name)
+        .map_err(|e| CliError::custom(format!("Failed to parse program name: {e}")))?;
+    // Parse the function name as an `Identifier`.
+    let function_id = Identifier::<A::Network>::from_str(&function_name)
+        .map_err(|e| CliError::custom(format!("Failed to parse function name: {e}")))?;
+
+    // Get all the dependencies in the package if it exists.
+    // Get the programs and optional manifests for all programs.
+    let programs = if let Some(package) = &package {
+        // Get the package directories.
+        let build_directory = package.build_directory();
+        let imports_directory = package.imports_directory();
+        let source_directory = package.source_directory();
+        // Get the program names and their bytecode.
+        package
+            .programs
+            .iter()
+            .clone()
+            .map(|program| {
+                let program_id = ProgramID::<A::Network>::from_str(&format!("{}.aleo", program.name))
+                    .map_err(|e| CliError::custom(format!("Failed to parse program ID: {e}")))?;
+                match &program.data {
+                    ProgramData::Bytecode(bytecode) => Ok((program_id, bytecode.to_string(), program.edition)),
+                    ProgramData::SourcePath { source, .. } => {
+                        // Get the path to the built bytecode.
+                        let bytecode_path = if source.as_path() == source_directory.join("main.leo") {
+                            build_directory.join("main.aleo")
+                        } else {
+                            imports_directory.join(format!("{}.aleo", program.name))
+                        };
+                        // Fetch the bytecode.
+                        let bytecode = std::fs::read_to_string(&bytecode_path).map_err(|e| {
+                            CliError::custom(format!("Failed to read bytecode at {}: {e}", bytecode_path.display()))
+                        })?;
+                        // Return the bytecode and the manifest.
+                        Ok((program_id, bytecode, program.edition))
+                    }
+                }
+            })
+            .collect::<Result<Vec<_>>>()?
+    } else {
+        Vec::new()
+    };
+
+    // Parse the program strings into AVM programs.
+    let mut programs = programs
+        .into_iter()
+        .map(|(_, bytecode, edition)| {
+            // Parse the program.
+            let program = snarkvm::prelude::Program::<A::Network>::from_str(&bytecode)
+                .map_err(|e| CliError::custom(format!("Failed to parse program: {e}")))?;
+            // Return the program and its name.
+            Ok((program, edition))
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    // Determine whether the program is local or remote.
+    let is_local = programs.iter().any(|(program, _)| program.id() == &program_id);
+
+    // If the program is local, then check that the function exists.
+    if is_local {
+        let program = &programs
+            .iter()
+            .find(|(program, _)| program.id() == &program_id)
+            .expect("Program should exist since it is local")
+            .0;
+        if !program.contains_function(&function_id) {
+            return Err(CliError::custom(format!(
+                "Function `{function_name}` does not exist in program `{program_name}`."
+            ))
+            .into());
         }
-        // Check that the remaining content is empty.
-        if !content.trim().is_empty() {
-            return Err(PackageError::failed_to_read_input_file(path.display()).into());
-        }
-        // Convert the values to strings.
-        let mut inputs_from_file = values.into_iter().map(|value| value.to_string()).collect::<Vec<String>>();
-        // Add the inputs from the file to the arguments.
-        inputs.append(&mut inputs_from_file);
+    }
+
+    let inputs =
+        command.inputs.into_iter().map(|string| parse_input(&string, &private_key)).collect::<Result<Vec<_>>>()?;
+
+    // Get the first fee option.
+    let (_, priority_fee, record) =
+        parse_fee_options(&private_key, &command.fee_options, 1)?.into_iter().next().unwrap_or((None, None, None));
+
+    // Get the consensus version.
+    let consensus_version =
+        get_consensus_version(&command.extra.consensus_version, &endpoint, network, &consensus_heights, &context)?;
+
+    // Build the config for JSON output.
+    let config = Some(Config {
+        address: address.to_string(),
+        network: network.to_string(),
+        endpoint: Some(endpoint.clone()),
+        consensus_version: Some(consensus_version as u8),
+    });
+
+    // Print the execution plan.
+    print_execution_plan::<A::Network>(
+        &private_key,
+        &address,
+        &endpoint,
+        &network,
+        &program_name,
+        &function_name,
+        is_local,
+        priority_fee.unwrap_or(0),
+        record.is_some(),
+        &command.action,
+        consensus_version,
+        &check_task_for_warnings(&endpoint, network, &programs, consensus_version),
+    );
+
+    // Prompt the user to confirm the plan.
+    if !confirm("Do you want to proceed with execution?", command.extra.yes)? {
+        println!("❌ Execution aborted.");
+        return Ok(ExecuteOutput::default());
     }
 
     // Initialize an RNG.
     let rng = &mut rand::thread_rng();
 
-    // Get the private key.
-    let private_key = match command.fee_options.private_key.clone() {
-        Some(key) => PrivateKey::from_str(&key)?,
-        None => PrivateKey::from_str(
-            &dotenv_private_key().map_err(CliError::failed_to_read_environment_private_key)?.to_string(),
-        )?,
+    // Initialize a new VM.
+    let vm = VM::from(ConsensusStore::<A::Network, ConsensusMemory<A::Network>>::open(StorageMode::Production)?)?;
+
+    // Remove version suffixes from the endpoint.
+    let re = regex::Regex::new(r"v\d+$").unwrap();
+    let query_endpoint = re.replace(&endpoint, "").to_string();
+
+    // Specify the query.
+    let query = SnarkVMQuery::<A::Network, BlockMemory<A::Network>>::from(
+        query_endpoint
+            .parse::<Uri>()
+            .map_err(|e| CliError::custom(format!("Failed to parse endpoint URI '{endpoint}': {e}")))?,
+    );
+
+    // If the program is not local, then download it and its dependencies for the network.
+    // Note: The dependencies are downloaded in "post-order" (child before parent).
+    if !is_local {
+        println!("⬇️ Downloading {program_name} and its dependencies from {endpoint}...");
+        programs = load_latest_programs_from_network(&context, program_id, network, &endpoint)?;
     };
-    let address = Address::try_from(&private_key)?;
 
-    // If the `broadcast` flag is set, then broadcast the transaction.
-    if command.broadcast {
-        // Get the program name.
-        let program_name = match (command.program.clone(), command.local) {
-            (Some(name), true) => {
-                let local = context.open_manifest()?.program.clone();
-                // Throw error if local name doesn't match the specified name.
-                if name == local {
-                    local
-                } else {
-                    return Err(PackageError::conflicting_on_chain_program_name(local, name).into());
-                }
-            }
-            (Some(name), false) => name.clone(),
-            (None, true) => context.open_manifest()?.program.clone(),
-            (None, false) => return Err(PackageError::missing_on_chain_program_name().into()),
-        };
+    // Add the programs to the VM.
+    println!("\n➕Adding programs to the VM in the following order:");
+    let programs_and_editions = programs
+        .into_iter()
+        .map(|(program, edition)| {
+            print_program_source(&program.id().to_string(), edition);
+            let edition = edition.unwrap_or(LOCAL_PROGRAM_DEFAULT_EDITION);
+            (program, edition)
+        })
+        .collect::<Vec<_>>();
+    vm.process().write().add_programs_with_editions(&programs_and_editions)?;
 
-        // Specify the query
-        let query = SnarkVMQuery::<A::Network, BlockMemory<A::Network>>::from(endpoint);
+    // Execute the program and produce a transaction.
+    println!("\n⚙️ Executing {program_name}/{function_name}...");
+    let (transaction, response) = vm.execute_with_response(
+        &private_key,
+        (&program_name, &function_name),
+        inputs.iter(),
+        record,
+        priority_fee.unwrap_or(0),
+        Some(&query),
+        rng,
+    )?;
 
-        // Initialize the storage.
-        let store = ConsensusStore::<A::Network, ConsensusMemory<A::Network>>::open(StorageMode::Production)?;
+    // Compute and print the execution stats.
+    let stats = print_execution_stats::<A::Network>(
+        &vm,
+        &program_name,
+        transaction.execution().expect("Expected execution"),
+        priority_fee,
+        consensus_version,
+    )?;
 
-        // Initialize the VM.
-        let vm = VM::from(store)?;
-
-        // Remove the `.aleo` extension from the program name, if it exists.
-        let program_name = match program_name.strip_suffix(".aleo") {
-            Some(name) => name.to_string(),
-            None => program_name,
-        };
-        // Load the main program, and all of its imports.
-        let program_id = &ProgramID::<A::Network>::from_str(&format!("{program_name}.aleo"))?;
-        load_program_from_network(context.clone(), &mut vm.process().write(), program_id, network, endpoint)?;
-
-        // Compute the authorization.
-        let authorization = vm.authorize(&private_key, program_id, &command.name, inputs, rng)?;
-        // Determine if a fee is required.
-        let is_fee_required = !authorization.is_split();
-        // Determine if a priority fee is declared.
-        let is_priority_fee_declared = command.fee_options.priority_fee > 0;
-        // Compute the execution.
-        let execution = match vm.execute_authorization(authorization, None, Some(query.clone()), rng)? {
-            Transaction::Execute(_, _, execution, _) => execution,
-            _ => unreachable!("VM::execute_authorization should return a Transaction::Execute"),
-        };
-
-        let fee_record = if let Some(record) = command.fee_options.record {
-            Some(parse_record(&private_key, &record)?)
-        } else {
-            None
-        };
-
-        // Check the transaction cost.
-        let base_fee = match command.fee_options.base_fee {
-            Some(base_fee) => base_fee,
-            None => {
-                let (base_fee, (storage_cost, finalize_cost)) =
-                    // Attempt to get the height of the latest block to determine which version of the execution cost to use.
-                    if let Ok(height) = get_latest_block_height(endpoint, &network.to_string(), &context) {
-                        if height < A::Network::CONSENSUS_HEIGHT(ConsensusVersion::V2).unwrap() {
-                            execution_cost_v1(&vm.process().read(), &execution)?
-                        } else {
-                            execution_cost_v2(&vm.process().read(), &execution)?
-                        }
-                    }
-                    // Otherwise, default to the one provided in `fee_options`.
-                    else {
-                        // Get the consensus version from the command.
-                        let version = match command.fee_options.consensus_version {
-                            Some(1) => 1,
-                            None | Some(2) => 2,
-                            Some(version) => {
-                                panic!("Invalid consensus version: {version}. Please specify a valid version.")
-                            }
-                        };
-                        // Print a warning message.
-                        println!("Failed to get the latest block height. Defaulting to V{version}.",);
-                        // Use the provided version.
-                        match version {
-                            1 => execution_cost_v1(&vm.process().read(), &execution)?,
-                            2 => execution_cost_v2(&vm.process().read(), &execution)?,
-                            _ => unreachable!(),
-                        }
-                    };
-
-                // Print the cost breakdown.
-                execution_cost_breakdown(
-                    &program_name,
-                    base_fee as f64 / 1_000_000.0,
-                    storage_cost as f64 / 1_000_000.0,
-                    finalize_cost as f64 / 1_000_000.0,
-                    command.fee_options.priority_fee as f64 / 1_000_000.0,
-                )?;
-                base_fee
-            }
-        };
-
-        // Check if the public balance is sufficient.
-        if fee_record.is_none() {
-            check_balance::<A::Network>(
-                &private_key,
-                endpoint,
-                &network.to_string(),
-                &context,
-                base_fee + command.fee_options.priority_fee,
-            )?;
-        }
-
-        // Compute the fee.
-        let fee = match is_fee_required || is_priority_fee_declared {
-            true => {
-                // Compute the execution ID.
-                let execution_id = execution.to_execution_id()?;
-                // Authorize the fee.
-                let authorization = match fee_record {
-                    Some(record) => vm.authorize_fee_private(
-                        &private_key,
-                        record,
-                        base_fee,
-                        command.fee_options.priority_fee,
-                        execution_id,
-                        rng,
-                    )?,
-                    None => vm.authorize_fee_public(
-                        &private_key,
-                        base_fee,
-                        command.fee_options.priority_fee,
-                        execution_id,
-                        rng,
-                    )?,
-                };
-                // Execute the fee.
-                Some(vm.execute_fee_authorization(authorization, Some(query), rng)?)
-            }
-            false => None,
-        };
-        // Return the execute transaction.
-        let transaction = Transaction::from_execution(*execution, fee)?;
-
-        // Broadcast the execution transaction.
-        if !command.fee_options.dry_run {
-            if !command.fee_options.yes {
-                let prompt = format!(
-                    "Do you want to submit execution of function `{}` on program `{program_name}.aleo` to network {} via endpoint {} using address {}?",
-                    &command.name, network, endpoint, address
-                );
-                // Ask the user for confirmation of the transaction.
-                let confirmation =
-                    Confirm::with_theme(&ColorfulTheme::default()).with_prompt(prompt).default(false).interact();
-
-                // Check if the user confirmed the transaction.
-                if let Ok(confirmation) = confirmation {
-                    if !confirmation {
-                        println!("✅ Successfully aborted the execution transaction for '{}'\n", program_name.bold());
-                        return Ok(());
-                    }
-                } else {
-                    return Err(CliError::confirmation_failed().into());
-                }
-            }
-            println!("✅ Created execution transaction for '{}'\n", program_id.to_string().bold());
-            handle_broadcast(&format!("{}/{}/transaction/broadcast", endpoint, network), transaction, &program_name)?;
-        } else {
-            println!("✅ Successful dry run execution for '{}'\n", program_id.to_string().bold());
-        }
-
-        return Ok(());
+    // Print the transaction.
+    // If the `print` option is set, print the execution transaction to the console.
+    // The transaction is printed in JSON format.
+    if command.action.print {
+        let transaction_json = serde_json::to_string_pretty(&transaction)
+            .map_err(|e| CliError::custom(format!("Failed to serialize transaction: {e}")))?;
+        println!("🖨️ Printing execution for {program_name}\n{transaction_json}");
     }
 
-    // Open the Leo build/ directory.
-    let path = context.dir()?.join("build/");
-
-    // Unset the Leo panic hook.
-    let _ = std::panic::take_hook();
-
-    // Conduct the execution locally (code lifted from snarkVM).
-    // Load the package.
-    let package = SnarkVMPackage::open(&path)?;
-    // Convert the inputs.
-    let mut parsed_inputs: Vec<Value<A::Network>> = Vec::new();
-    for input in inputs.iter() {
-        let value = Value::from_str(input)?;
-        parsed_inputs.push(value);
-    }
-    // Execute the request.
-    let (response, execution, metrics) = package
-        .execute::<A, _>(
-            endpoint.to_string(),
-            &private_key,
-            Identifier::try_from(command.name.clone())?,
-            &parsed_inputs,
-            rng,
-        )
-        .map_err(PackageError::execution_error)?;
-
-    let fee = None;
-
-    // Construct the transaction.
-    let transaction = Transaction::from_execution(execution, fee)?;
-
-    // Log the metrics.
-    use num_format::ToFormattedString;
-
-    // Count the number of times a function is called.
-    let mut program_frequency = HashMap::<String, usize>::new();
-    for metric in metrics.iter() {
-        // Prepare the function name string.
-        let function_name_string = format!("'{}/{}'", metric.program_id, metric.function_name).bold();
-
-        // Prepare the function constraints string
-        let function_constraints_string = format!(
-            "{function_name_string} - {} constraints",
-            metric.num_function_constraints.to_formatted_string(LOCALE)
-        );
-
-        // Increment the counter for the function call.
-        match program_frequency.get_mut(&function_constraints_string) {
-            Some(counter) => *counter += 1,
-            None => {
-                let _ = program_frequency.insert(function_constraints_string, 1);
-            }
-        }
+    // If the `save` option is set, save the execution transaction to a file in the specified directory.
+    // The file format is `program_name.execution.json`.
+    // The directory is created if it doesn't exist.
+    if let Some(path) = &command.action.save {
+        // Create the directory if it doesn't exist.
+        std::fs::create_dir_all(path).map_err(|e| CliError::custom(format!("Failed to create directory: {e}")))?;
+        // Save the transaction to a file.
+        let file_path = PathBuf::from(path).join(format!("{program_name}.execution.json"));
+        println!("💾 Saving execution for {program_name} at {}", file_path.display());
+        let transaction_json = serde_json::to_string_pretty(&transaction)
+            .map_err(|e| CliError::custom(format!("Failed to serialize transaction: {e}")))?;
+        std::fs::write(file_path, transaction_json)
+            .map_err(|e| CliError::custom(format!("Failed to write transaction to file: {e}")))?;
     }
 
-    println!("⛓  Constraints\n");
-    for (function_constraints, counter) in program_frequency {
-        // Log the constraints
-        let counter_string = match counter {
-            1 => "(called 1 time)".to_string().dimmed(),
-            counter => format!("(called {counter} times)").dimmed(),
-        };
+    let mut broadcast_stats = None;
 
-        println!(" •  {function_constraints} {counter_string}",)
-    }
+    // Collect outputs.
+    let outputs: Vec<String> = response.outputs().iter().map(|o| o.to_string()).collect();
 
-    // Log the outputs.
-    match response.outputs().len() {
+    match outputs.len() {
         0 => (),
         1 => println!("\n➡️  Output\n"),
         _ => println!("\n➡️  Outputs\n"),
     };
-    for output in response.outputs() {
-        println!(" • {output}");
+    for o in &outputs {
+        println!(" • {o}");
     }
     println!();
 
-    // Print the transaction.
-    println!("{transaction}\n");
+    // If the `broadcast` option is set, broadcast each deployment transaction to the network.
+    if command.action.broadcast {
+        println!("📡 Broadcasting execution for {program_name}...");
+        // Get and confirm the fee with the user.
+        let mut fee_id = None;
+        let mut fee_transaction_id = None;
+        if let Some(fee) = transaction.fee_transition() {
+            // Most transactions will have fees, but some, like credits.aleo/upgrade executions, may not.
+            if !confirm_fee(&fee, &private_key, &address, &endpoint, network, &context, command.extra.yes)? {
+                println!("❌ Execution aborted.");
+                return Ok(ExecuteOutput {
+                    config: config.clone(),
+                    program: program_name.clone(),
+                    function: function_name.clone(),
+                    outputs,
+                    transaction_id: transaction.id().to_string(),
+                    stats: Some(stats),
+                    broadcast: None,
+                });
+            }
+            fee_id = Some(fee.id().to_string());
+            fee_transaction_id = Some(Transaction::from_fee(fee.clone())?.id().to_string());
+        }
+        let id = transaction.id().to_string();
+        let height_before = check_transaction::current_height(&endpoint, network)?;
+        // Broadcast the transaction to the network.
+        let (message, status) =
+            handle_broadcast(&format!("{endpoint}/{network}/transaction/broadcast"), &transaction, &program_name)?;
 
-    // Prepare the locator.
-    let locator = Locator::<A::Network>::from_str(&format!("{}/{}", package.program_id(), command.name))?;
-    // Prepare the path string.
-    let path_string = format!("(in \"{}\")", path.display());
-
-    println!("✅ Executed '{}' {}", locator.to_string().bold(), path_string.dimmed());
-    Ok(())
-}
-
-/// A helper function to recursively load the program and all of its imports into the process. Lifted from snarkOS.
-fn load_program_from_network<N: Network>(
-    context: Context,
-    process: &mut Process<N>,
-    program_id: &ProgramID<N>,
-    network: NetworkName,
-    endpoint: &str,
-) -> Result<()> {
-    // Fetch the program.
-    let program_src = LeoQuery {
-        endpoint: Some(endpoint.to_string()),
-        network: Some(network.to_string()),
-        command: QueryCommands::Program {
-            command: query::LeoProgram { name: program_id.to_string(), mappings: false, mapping_value: None },
-        },
-    }
-    .execute(Context::new(context.path.clone(), context.home.clone(), true)?)?;
-    let program = SnarkVMProgram::<N>::from_str(&program_src)?;
-
-    // Return early if the program is already loaded.
-    if process.contains_program(program.id()) {
-        return Ok(());
-    }
-
-    // Iterate through the program imports.
-    for import_program_id in program.imports().keys() {
-        // Add the imports to the process if does not exist yet.
-        if !process.contains_program(import_program_id) {
-            // Recursively load the program and its imports.
-            load_program_from_network(context.clone(), process, import_program_id, network, endpoint)?;
+        match status {
+            200..=299 => {
+                let tx_status = check_transaction::check_transaction_with_message(
+                    &id,
+                    fee_id.as_deref(),
+                    &endpoint,
+                    network,
+                    height_before + 1,
+                    command.extra.max_wait,
+                    command.extra.blocks_to_check,
+                )?;
+                let confirmed = tx_status == Some(TransactionStatus::Accepted);
+                if confirmed {
+                    println!("✅ Execution confirmed!");
+                }
+                broadcast_stats = Some(BroadcastStats {
+                    fee_id: fee_id.unwrap_or_default(),
+                    fee_transaction_id: fee_transaction_id.unwrap_or_default(),
+                    confirmed,
+                });
+            }
+            _ => {
+                println!("❌ Failed to broadcast execution: {message}.");
+            }
         }
     }
 
-    // Add the program to the process if it does not already exist.
-    if !process.contains_program(program.id()) {
-        process.add_program(&program)?;
-    }
-
-    Ok(())
+    Ok(ExecuteOutput {
+        config,
+        program: program_name.clone(),
+        function: function_name.clone(),
+        outputs,
+        transaction_id: transaction.id().to_string(),
+        stats: Some(stats),
+        broadcast: broadcast_stats,
+    })
 }
 
-// A helper function to display a cost breakdown of the execution.
-fn execution_cost_breakdown(
-    name: &str,
-    base_fee: f64,
-    storage_cost: f64,
-    finalize_cost: f64,
-    priority_fee: f64,
-) -> Result<()> {
-    println!("\nBase execution cost for '{}' is {} credits.\n", name.bold(), base_fee);
-    // Display the cost breakdown in a table.
-    let data = [
-        [name, "Cost (credits)"],
-        ["Transaction Storage", &format!("{:.6}", storage_cost)],
-        ["On-chain Execution", &format!("{:.6}", finalize_cost)],
-        ["Priority Fee", &format!("{:.6}", priority_fee)],
-        ["Total", &format!("{:.6}", base_fee + priority_fee)],
-    ];
-    let mut out = Vec::new();
-    text_tables::render(&mut out, data).map_err(CliError::table_render_failed)?;
-    println!("{}", std::str::from_utf8(&out).map_err(CliError::table_render_failed)?);
-    Ok(())
+/// Check the execution task for warnings.
+/// The following properties are checked:
+///   - The component programs exist on the network and match the local ones.
+fn check_task_for_warnings<N: Network>(
+    endpoint: &str,
+    network: NetworkName,
+    programs: &[(Program<N>, Option<u16>)],
+    consensus_version: ConsensusVersion,
+) -> Vec<String> {
+    let mut warnings = Vec::new();
+    for (program, _) in programs {
+        // Check if the program exists on the network.
+        if let Ok(remote_program) = fetch_program_from_network(&program.id().to_string(), endpoint, network) {
+            // Parse the program.
+            let remote_program = match Program::<N>::from_str(&remote_program) {
+                Ok(program) => program,
+                Err(e) => {
+                    warnings.push(format!("Could not parse '{}' from the network. Error: {e}", program.id()));
+                    continue;
+                }
+            };
+            // Check if the program matches the local one.
+            if remote_program != *program {
+                warnings.push(format!(
+                    "The program '{}' on the network does not match the local copy. If you have a local dependency, you may use the `--no-local` flag to use the network version instead.",
+                    program.id()
+                ));
+            }
+        } else {
+            warnings.push(format!(
+                "The program '{}' does not exist on the network. You may use `leo deploy --broadcast` to deploy it.",
+                program.id()
+            ));
+        }
+    }
+    // Check for a consensus version mismatch.
+    if let Err(e) = check_consensus_version_mismatch(consensus_version, endpoint, network) {
+        warnings.push(format!("{e}. In some cases, the execution may fail"));
+    }
+    warnings
+}
+
+/// Pretty-print the execution plan in a readable format.
+#[allow(clippy::too_many_arguments)]
+fn print_execution_plan<N: Network>(
+    private_key: &PrivateKey<N>,
+    address: &Address<N>,
+    endpoint: &str,
+    network: &NetworkName,
+    program_name: &str,
+    function_name: &str,
+    is_local: bool,
+    priority_fee: u64,
+    fee_record: bool,
+    action: &TransactionAction,
+    consensus_version: ConsensusVersion,
+    warnings: &[String],
+) {
+    println!("\n{}", "🚀 Execution Plan Summary".bold().underline());
+    println!("{}", "──────────────────────────────────────────────".dimmed());
+
+    println!("{}", "🔧 Configuration:".bold());
+    println!("  {:20}{}", "Private Key:".cyan(), format!("{}...", &private_key.to_string()[..24]).yellow());
+    println!("  {:20}{}", "Address:".cyan(), format!("{}...", &address.to_string()[..24]).yellow());
+    println!("  {:20}{}", "Endpoint:", endpoint.yellow());
+    println!("  {:20}{}", "Network:", network.to_string().yellow());
+    println!("  {:20}{}", "Consensus Version:", (consensus_version as u8).to_string().yellow());
+
+    println!("\n{}", "🎯 Execution Target:".bold());
+    println!("  {:16}{}", "Program:", program_name.cyan());
+    println!("  {:16}{}", "Function:", function_name.cyan());
+    println!("  {:16}{}", "Source:", if is_local { "local" } else { "remote" });
+
+    println!("\n{}", "💸 Fee Info:".bold());
+    println!("  {:16}{}", "Priority Fee:", format!("{priority_fee} μcredits").green());
+    println!("  {:16}{}", "Fee Record:", if fee_record { "yes" } else { "no (public fee)" });
+
+    println!("\n{}", "⚙️ Actions:".bold());
+    if !is_local {
+        println!("  - Program and its dependencies will be downloaded from the network.");
+    }
+    if action.print {
+        println!("  - Transaction will be printed to the console.");
+    } else {
+        println!("  - Transaction will NOT be printed to the console.");
+    }
+    if let Some(path) = &action.save {
+        println!("  - Transaction will be saved to {}", path.bold());
+    } else {
+        println!("  - Transaction will NOT be saved to a file.");
+    }
+    if action.broadcast {
+        println!("  - Transaction will be broadcast to {}", endpoint.bold());
+    } else {
+        println!("  - Transaction will NOT be broadcast to the network.");
+    }
+
+    // ── Warnings ─────────────────────────────────────────────────────────
+    if !warnings.is_empty() {
+        println!("\n{}", "⚠️ Warnings:".bold().red());
+        for warning in warnings {
+            println!("  • {}", warning.dimmed());
+        }
+    }
+
+    println!("{}", "──────────────────────────────────────────────\n".dimmed());
+}
+
+/// Compute execution statistics.
+fn compute_execution_stats<N: Network>(
+    vm: &VM<N, ConsensusMemory<N>>,
+    execution: &Execution<N>,
+    priority_fee: Option<u64>,
+    consensus_version: ConsensusVersion,
+) -> Result<ExecutionStats> {
+    let (_, (storage_cost, exec_cost)) = execution_cost(&vm.process().read(), execution, consensus_version)?;
+
+    Ok(ExecutionStats { cost: CostBreakdown::for_execution(storage_cost, exec_cost, priority_fee.unwrap_or(0)) })
+}
+
+/// Pretty-print execution statistics.
+fn print_execution_stats<N: Network>(
+    vm: &VM<N, ConsensusMemory<N>>,
+    program_name: &str,
+    execution: &Execution<N>,
+    priority_fee: Option<u64>,
+    consensus_version: ConsensusVersion,
+) -> Result<ExecutionStats> {
+    use colored::*;
+
+    let stats = compute_execution_stats(vm, execution, priority_fee, consensus_version)?;
+
+    println!("\n{} {}", "📊 Execution Summary for".bold(), program_name.bold());
+    println!("{}", "──────────────────────────────────────────────".dimmed());
+    print!("{stats}");
+    println!("{}", "──────────────────────────────────────────────".dimmed());
+
+    Ok(stats)
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -14,14 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-mod future_checker;
-
 mod await_checker;
 use self::await_checker::AwaitChecker;
 
-mod expression;
-
-mod statement;
+mod future_checker;
 
 mod program;
 
@@ -52,7 +48,7 @@ impl Pass for StaticAnalyzing {
             non_async_external_call_seen: false,
         };
         visitor.visit_program(ast.as_repr());
-        visitor.state.handler.last_err().map_err(|e| *e)?;
+        visitor.state.handler.last_err()?;
         visitor.state.ast = ast;
         Ok(())
     }

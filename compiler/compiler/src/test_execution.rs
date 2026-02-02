@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -14,118 +14,104 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{Compiler, run_with_ledger};
+use crate::run;
 
-use leo_ast::Stub;
-use leo_disassembler::disassemble_from_str;
-use leo_errors::{BufferEmitter, Handler, LeoError, Result};
-use leo_span::{Symbol, create_session_if_not_set_then, source_map::FileName};
-
-use snarkvm::prelude::TestnetV0;
+use leo_ast::NodeBuilder;
+use leo_errors::{BufferEmitter, Handler, Result};
+use leo_span::{Symbol, create_session_if_not_set_then};
 
 use indexmap::IndexMap;
 use itertools::Itertools as _;
-use serial_test::serial;
-use std::fmt::Write as _;
 
-type CurrentNetwork = TestnetV0;
-
-const PROGRAM_DELIMITER: &str = "// --- Next Program --- //";
-
-fn whole_compile(
-    source: &str,
-    handler: &Handler,
-    import_stubs: IndexMap<Symbol, Stub>,
-) -> Result<(String, String), LeoError> {
-    let mut compiler = Compiler::<TestnetV0>::new(
-        None,
-        /* is_test (a Leo test) */ false,
-        handler.clone(),
-        "/fakedirectory-wont-use".into(),
-        None,
-        import_stubs,
-    );
-
-    let filename = FileName::Custom("execution-test".into());
-
-    let bytecode = compiler.compile(source, filename)?;
-
-    Ok((bytecode, compiler.program_name.unwrap()))
-}
+use std::{fmt::Write as _, rc::Rc};
 
 // Execution test configuration.
 #[derive(Debug)]
 struct Config {
     seed: u64,
-    min_height: u32,
+    start_height: Option<u32>,
     sources: Vec<String>,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Self { seed: 1234567890, min_height: 1, sources: Vec::new() }
+        Self { seed: 1234567890, start_height: None, sources: Vec::new() }
     }
 }
 
 fn execution_run_test(
     config: &Config,
-    cases: &[run_with_ledger::Case],
+    cases: &[run::Case],
     handler: &Handler,
-    buf: &BufferEmitter,
+    node_builder: &Rc<NodeBuilder>,
 ) -> Result<String> {
     let mut import_stubs = IndexMap::new();
 
-    let mut ledger_config =
-        run_with_ledger::Config { seed: config.seed, min_height: config.min_height, programs: Vec::new() };
+    let mut ledger_config = run::Config { seed: config.seed, start_height: config.start_height, programs: Vec::new() };
 
-    // Compile each source file.
-    for source in &config.sources {
-        let (bytecode, name) = whole_compile(source, handler, import_stubs.clone())?;
+    // We assume config.sources is non-empty.
+    let (last, rest) = config.sources.split_last().expect("non-empty sources");
 
-        let stub = disassemble_from_str::<CurrentNetwork>(&name, &bytecode)?;
-        import_stubs.insert(Symbol::intern(&name), stub);
+    // Parse-only for intermediate programs.
+    for source in rest {
+        let (program, program_name) = super::test_utils::parse(source, handler, node_builder, import_stubs.clone())?;
 
-        ledger_config.programs.push(run_with_ledger::Program { bytecode, name });
+        import_stubs.insert(Symbol::intern(&program_name), program.into());
     }
 
-    let outcomes = run_with_ledger::run_with_ledger(&ledger_config, cases, handler, buf)?;
+    // Full compile for the final program.
+    let (compiled, program_name) = super::test_utils::whole_compile(last, handler, node_builder, import_stubs.clone())?;
 
-    assert_eq!(outcomes.len(), cases.len());
+    // Add imports.
+    let mut requires_ledger = false;
+    for import in &compiled.imports {
+        requires_ledger |= import.bytecode.contains("async");
+        ledger_config.programs.push(run::Program { bytecode: import.bytecode.clone(), name: import.name.clone() });
+    }
 
-    // Output bytecode.
-    let mut output = ledger_config
+    // Add main program.
+    let primary_bytecode = compiled.primary.bytecode.clone();
+    requires_ledger |= primary_bytecode.contains("async");
+    ledger_config.programs.push(run::Program { bytecode: primary_bytecode, name: program_name });
+
+    let mut result = ledger_config
         .programs
+        .clone()
         .into_iter()
         .map(|program| program.bytecode)
-        .format(&format!("{}\n", PROGRAM_DELIMITER))
+        .format(&format!("{}\n", super::test_utils::PROGRAM_DELIMITER))
         .to_string();
 
-    // Output each case outcome.
-    for outcome in outcomes {
-        let err_space = if outcome.errors.is_empty() { "" } else { " " };
-        let warning_space = if outcome.warnings.is_empty() { "" } else { " " };
+    if requires_ledger {
+        // Note: We wrap cases in a slice to run them all in one ledger instance.
+        let outcomes =
+            run::run_with_ledger(&ledger_config, &[cases.to_vec()])?.into_iter().flatten().collect::<Vec<_>>();
 
-        write!(
-            output,
-            "verified: {verified}\nstatus: {status}\nerrors:{err_space}{errors}\nwarnings:{warning_space}{warnings}\n",
-            verified = outcome.verified,
-            status = outcome.status,
-            errors = outcome.errors,
-            warnings = outcome.warnings,
-        )
-        .unwrap();
-        writeln!(output, "{}\n", outcome.execution).unwrap();
+        assert_eq!(outcomes.len(), cases.len());
+
+        for outcome in outcomes {
+            write!(result, "verified: {}\nstatus: {}\n", outcome.verified, outcome.status).unwrap();
+            writeln!(result, "{}\n", outcome.execution).unwrap();
+        }
+    } else {
+        let outcomes = run::run_without_ledger(&ledger_config, cases)?;
+        assert_eq!(outcomes.len(), cases.len());
+
+        for outcome in outcomes {
+            write!(result, "status: {}\noutput: {}\n", outcome.status, outcome.outcome.output).unwrap();
+        }
     }
 
-    Ok(output)
+    Ok(result)
 }
 
 fn execution_runner(source: &str) -> String {
     let buf = BufferEmitter::new();
     let handler = Handler::new(buf.clone());
+    let node_builder = Rc::new(NodeBuilder::default());
 
     let mut config = Config::default();
-    let mut cases = Vec::<run_with_ledger::Case>::new();
+    let mut cases = Vec::<run::Case>::new();
 
     // Captures quote-delimited strings.
     let re_input = regex::Regex::new(r#""([^"]+)""#).unwrap();
@@ -144,22 +130,23 @@ fn execution_runner(source: &str) -> String {
             cases.last_mut().unwrap().input = re_input.captures_iter(rest).map(|s| s[1].to_string()).collect();
         } else if let Some(rest) = line.strip_prefix("seed = ") {
             config.seed = rest.parse::<u64>().unwrap();
-        } else if let Some(rest) = line.strip_prefix("min_height = ") {
-            config.min_height = rest.parse::<u32>().unwrap();
+        } else if let Some(rest) = line.strip_prefix("start_height = ") {
+            config.start_height = Some(rest.parse::<u32>().unwrap())
         }
     }
 
     // Split the sources and add them to the config.
-    config.sources = source.split(PROGRAM_DELIMITER).map(|s| s.trim().to_string()).collect();
+    config.sources = source.split(super::test_utils::PROGRAM_DELIMITER).map(|s| s.trim().to_string()).collect();
 
-    create_session_if_not_set_then(|_| match execution_run_test(&config, &cases, &handler, &buf) {
+    create_session_if_not_set_then(|_| match execution_run_test(&config, &cases, &handler, &node_builder) {
         Ok(s) => s,
-        Err(e) => e.to_string(),
+        Err(e) => {
+            format!("Error while running execution tests:\n{e}\n\nErrors:\n{}", buf.extract_errs())
+        }
     })
 }
 
-#[test]
-#[serial]
-fn test_execution() {
-    leo_test_framework::run_tests("execution", execution_runner);
+#[cfg(test)]
+mod execution_tests {
+    include!(concat!(env!("OUT_DIR"), "/execution_tests.rs"));
 }

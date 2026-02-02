@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -27,18 +27,23 @@ pub struct ScopeState {
     pub(crate) has_return: bool,
     /// Current program name.
     pub(crate) program_name: Option<Symbol>,
+    /// Current module name.
+    pub(crate) module_name: Vec<Symbol>,
     /// Whether or not we are currently traversing a stub.
     pub(crate) is_stub: bool,
     /// The futures that must be propagated to an async function.
+    /// We only expect futures in the top level program scope at this stage so just refer to them by their names.
     pub(crate) futures: IndexMap<Symbol, Location>,
     /// Whether the finalize caller has called the finalize function.
     pub(crate) has_called_finalize: bool,
-    /// Whether currently traversing a conditional statement.
+    /// Whether this function already contains an `async` block.
+    pub(crate) already_contains_an_async_block: bool,
+    /// Whether we are currently traversing a conditional statement.
     pub(crate) is_conditional: bool,
-    /// Whether the current function is a call.
-    pub(crate) is_call: bool,
     /// Location of most recent external call that produced a future.
     pub(crate) call_location: Option<Location>,
+    /// Whether we are currently traversing a constructor.
+    pub(crate) is_constructor: bool,
 }
 
 impl ScopeState {
@@ -49,27 +54,45 @@ impl ScopeState {
             variant: None,
             has_return: false,
             program_name: None,
-            is_stub: true,
+            module_name: vec![],
+            is_stub: false,
             futures: IndexMap::new(),
             has_called_finalize: false,
+            already_contains_an_async_block: false,
             is_conditional: false,
-            is_call: false,
             call_location: None,
+            is_constructor: false,
         }
     }
 
-    /// Initialize state variables for new function.
-    pub fn initialize_function_state(&mut self, variant: Variant) {
-        self.variant = Some(variant);
+    /// Resets the scope state to a valid starting state, before traversing a function or constructor.
+    pub fn reset(&mut self) {
+        self.function = None;
+        self.variant = None;
+        self.has_return = false;
+        self.is_stub = false;
         self.has_called_finalize = false;
+        self.is_conditional = false;
+        self.call_location = None;
+        self.is_constructor = false;
+        self.already_contains_an_async_block = false;
         self.futures = IndexMap::new();
     }
 
     /// Get the current location.
     pub fn location(&self) -> Location {
+        let function_path = self
+            .module_name
+            .iter()
+            .cloned()
+            .chain(std::iter::once(
+                self.function.expect("Only call ScopeState::location when visiting a function or function stub."),
+            ))
+            .collect::<Vec<Symbol>>();
+
         Location::new(
             self.program_name.expect("Only call ScopeState::location when visiting a function or function stub."),
-            self.function.expect("Only call ScopeState::location when visiting a function or function stub."),
+            function_path,
         )
     }
 }

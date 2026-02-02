@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -14,8 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
+use leo_ast::NetworkName;
 use leo_errors::UtilError;
-use leo_package::{NetworkName, fetch_from_network, verify_valid_program};
+use leo_package::{fetch_from_network, verify_valid_program};
 
 use super::*;
 
@@ -46,10 +47,8 @@ use utils::*;
 ///  Query live data from the Aleo network.
 #[derive(Parser, Debug)]
 pub struct LeoQuery {
-    #[clap(short, long, global = true, help = "Endpoint to retrieve network state from. Defaults to entry in `.env`.")]
-    pub endpoint: Option<String>,
-    #[clap(short, long, global = true, help = "Network to use. Defaults to entry in `.env`.")]
-    pub(crate) network: Option<String>,
+    #[clap(flatten)]
+    pub(crate) env_override: EnvOptions,
     #[clap(subcommand)]
     pub command: QueryCommands,
 }
@@ -68,8 +67,8 @@ impl Command for LeoQuery {
 
     fn apply(self, context: Context, _: Self::Input) -> Result<Self::Output> {
         // Parse the network.
-        let network: NetworkName = context.get_network(&self.network)?.parse()?;
-        let endpoint = context.get_endpoint(&self.endpoint)?;
+        let network: NetworkName = get_network(&self.env_override.network)?;
+        let endpoint = get_endpoint(&self.env_override.endpoint)?;
         handle_query(self, context, network, &endpoint)
     }
 }
@@ -112,11 +111,11 @@ fn handle_query(
     };
 
     // Make GET request to retrieve on-chain state.
-    let url = format!("{}/{}/{output}", endpoint, network);
+    let url = format!("{endpoint}/{network}/{output}");
     let result = fetch_from_network(&url)?;
     if !recursive {
         tracing::info!("✅ Successfully retrieved data from '{url}'.\n");
-        println!("{}\n", result);
+        println!("{result}\n");
     }
 
     // Verify that the source file parses into a valid Aleo program.

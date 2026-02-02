@@ -1,0 +1,116 @@
+program test_hash_and_commit.aleo;
+
+struct Optional__K4XRQPOk9yX:
+    is_some as boolean;
+    val as field;
+
+struct Optional__8aTicnNTOvk:
+    is_some as boolean;
+    val as group;
+
+struct S:
+    x as Optional__K4XRQPOk9yX;
+    y as Optional__8aTicnNTOvk;
+
+struct Optional__3FgA2LC7NnF:
+    is_some as boolean;
+    val as S;
+
+struct Optional__GCjgE2f9kbt:
+    is_some as boolean;
+    val as [Optional__K4XRQPOk9yX; 3u32];
+
+struct Outer:
+    inner as Optional__3FgA2LC7NnF;
+    arr as Optional__GCjgE2f9kbt;
+
+struct Optional__IsLXQFUQ9Dr:
+    is_some as boolean;
+    val as Outer;
+
+function hash:
+    input r0 as field.private;
+    input r1 as group.private;
+    cast true r0 into r2 as Optional__K4XRQPOk9yX;
+    cast false 0group into r3 as Optional__8aTicnNTOvk;
+    cast r2 r3 into r4 as S;
+    cast true r4 into r5 as Optional__3FgA2LC7NnF;
+    cast true 1field into r6 as Optional__K4XRQPOk9yX;
+    cast false 0field into r7 as Optional__K4XRQPOk9yX;
+    cast true 3field into r8 as Optional__K4XRQPOk9yX;
+    cast r6 r7 r8 into r9 as [Optional__K4XRQPOk9yX; 3u32];
+    cast true r9 into r10 as Optional__GCjgE2f9kbt;
+    cast r5 r10 into r11 as Outer;
+    cast true r11 into r12 as Optional__IsLXQFUQ9Dr;
+    hash.bhp256 r12 into r13 as field;
+    hash.bhp512 r12 into r14 as field;
+    hash.bhp768 r12 into r15 as field;
+    hash.bhp1024 r12 into r16 as field;
+    hash.keccak256 r12 into r17 as field;
+    hash.keccak384 r12 into r18 as field;
+    cast r13 r14 r15 r16 r17 r18 into r19 as [field; 6u32];
+    output r19 as [field; 6u32].public;
+    output 1150511686575711078894586425189063917444782989726258642013897653550157939585group as group.public;
+
+function commit:
+    input r0 as field.private;
+    input r1 as group.private;
+    input r2 as scalar.private;
+    cast false 0field into r3 as Optional__K4XRQPOk9yX;
+    cast true r1 into r4 as Optional__8aTicnNTOvk;
+    cast r3 r4 into r5 as S;
+    cast true r5 into r6 as Optional__3FgA2LC7NnF;
+    cast true 10field into r7 as Optional__K4XRQPOk9yX;
+    cast true 20field into r8 as Optional__K4XRQPOk9yX;
+    cast false 0field into r9 as Optional__K4XRQPOk9yX;
+    cast r7 r8 r9 into r10 as [Optional__K4XRQPOk9yX; 3u32];
+    cast true r10 into r11 as Optional__GCjgE2f9kbt;
+    cast r6 r11 into r12 as Outer;
+    cast true r12 into r13 as Optional__IsLXQFUQ9Dr;
+    commit.bhp256 r13 r2 into r14 as field;
+    commit.bhp512 r13 r2 into r15 as field;
+    commit.bhp768 r13 r2 into r16 as field;
+    commit.bhp1024 r13 r2 into r17 as field;
+    commit.ped64 12u8 r2 into r18 as field;
+    commit.ped128 12u8 r2 into r19 as field;
+    cast r14 r15 r16 r17 r18 r19 into r20 as [field; 6u32];
+    output r20 as [field; 6u32].public;
+
+constructor:
+    assert.eq edition 0u16;
+status: success
+output: ([
+  2389033528541317015369294191168082905997398578750323243557863145864901166796field,
+  172644632788497785943688808800949204936067994109484882301800054670053524265field,
+  2935345460655404712415242713194718975328574533267387132400005962185865883341field,
+  5817416973664279054460665977366739932224416429242942751719449180201781184059field,
+  287759063810391575934384180273548695577458018507724744356046584908730543160field,
+  3913727974389014614204978536390891835714340433349594459667742811322222489454field
+], 1150511686575711078894586425189063917444782989726258642013897653550157939585group)
+status: success
+output: ([
+  6798576775415172930024795384318601958199326755638942990496387325229766236562field,
+  4658232586824243767278641586542664532562957796225217469667907688947722388616field,
+  7509757352560318781395278165510886076858703556666965559922627566156232816240field,
+  6787929851299748200027290095196989629826553332067904143983285052766229554185field,
+  8226379729174501730566792169755728656333931983456501340185779664235836140061field,
+  2203427332685986822261672436628391935982043288069613336766290705077140103740field
+], 1150511686575711078894586425189063917444782989726258642013897653550157939585group)
+status: success
+output: [
+  795030275469581018113843893465458625686956867721830537891077681856251355681field,
+  2051092141746943876971026129425566328031447904501559842871545308546409489654field,
+  1787783807904866638188600931812480528147681090909771391565424951145519226119field,
+  6174454920467770503595848815678429283609684775040999808750336819868027948121field,
+  6339168462124445112396069236239199958854302525960952726307885875355328695096field,
+  1988347487270930693704710895794270146989393282665276486645089490877252967414field
+]
+status: success
+output: [
+  795030275469581018113843893465458625686956867721830537891077681856251355681field,
+  2051092141746943876971026129425566328031447904501559842871545308546409489654field,
+  1787783807904866638188600931812480528147681090909771391565424951145519226119field,
+  6174454920467770503595848815678429283609684775040999808750336819868027948121field,
+  6339168462124445112396069236239199958854302525960952726307885875355328695096field,
+  1988347487270930693704710895794270146989393282665276486645089490877252967414field
+]

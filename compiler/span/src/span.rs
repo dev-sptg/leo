@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -16,10 +16,10 @@
 
 //! Defines the `Span` type used to track where code comes from.
 
+use crate::symbol::with_session_globals;
+
 use serde::{Deserialize, Serialize};
 use std::fmt;
-
-use crate::symbol::with_session_globals;
 
 /// The span type which tracks where formatted errors originate from in a Leo file.
 /// This is used in many spots throughout the rest of the Leo crates.

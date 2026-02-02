@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::create_messages;
 use std::{
     error::Error as ErrorArg,
     fmt::{Debug, Display},
@@ -61,7 +60,7 @@ create_messages!(
         help: None,
     }
 
-    @formatted
+    @backtraced
     network_error {
         args: (url: impl Display, status: impl Display),
         msg: format!("Failed network request to {url}. Status: {status}"),
@@ -75,6 +74,7 @@ create_messages!(
         help: None,
     }
 
+    // TODO: Unused, remove.
     @backtraced
     reqwest_error {
         args: (error: impl Display),
@@ -138,10 +138,10 @@ create_messages!(
         help: None,
     }
 
-    @formatted
+    @backtraced
     failed_to_retrieve_from_endpoint {
-        args: (error: impl ErrorArg),
-        msg: format!("{error}"),
+        args: (url: impl Display, error: impl Display),
+        msg: format!("Failed to retrieve from endpoint `{url}`: {error}"),
         help: None,
     }
 
@@ -206,5 +206,12 @@ create_messages!(
         args: (endpoint: impl Display),
         msg: format!("The endpoint `{endpoint}` has been permanently moved."),
         help: Some("Try using `https://api.explorer.provable.com/v1` in your `.env` file or via the `--endpoint` flag.".to_string()),
+    }
+
+    @backtraced
+    program_size_limit_exceeded {
+        args: (name: impl Display, size: usize, limit: usize),
+        msg: format!("Program `{name}.aleo` exceeds the maximum size limit. Program size: {size} bytes; maximum allowed: {limit} bytes."),
+        help: Some("Reduce the program size by removing unnecessary code, optimizing functions, or splitting the program into smaller programs.".to_string()),
     }
 );

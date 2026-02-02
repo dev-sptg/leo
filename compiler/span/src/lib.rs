@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -15,7 +15,7 @@
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
 #![forbid(unsafe_code)]
-#![recursion_limit = "256"]
+#![recursion_limit = "1024"]
 
 mod symbol;
 pub use symbol::{Symbol, create_session_if_not_set_then, sym, with_session_globals};

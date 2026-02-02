@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -16,11 +16,11 @@
 
 use super::WriteTransformingVisitor;
 
-use leo_ast::{Function, ProgramReconstructor, StatementReconstructor as _};
+use leo_ast::{AstReconstructor as _, Constructor, Function, ProgramReconstructor};
 
 impl ProgramReconstructor for WriteTransformingVisitor<'_> {
     fn reconstruct_function(&mut self, input: Function) -> Function {
-        // Since the input parameters may be structs or arrays that are written to,
+        // Since the input parameters may be composites or arrays that are written to,
         // we may need to define variable members.
         let mut statements = Vec::new();
         for parameter in input.input.iter() {
@@ -32,10 +32,19 @@ impl ProgramReconstructor for WriteTransformingVisitor<'_> {
         Function { block, ..input }
     }
 
+    fn reconstruct_constructor(&mut self, input: Constructor) -> Constructor {
+        let mut statements = Vec::new();
+        let mut block = self.reconstruct_block(input.block).0;
+        statements.extend(block.statements);
+        block.statements = statements;
+        Constructor { block, ..input }
+    }
+
     fn reconstruct_program_scope(&mut self, input: leo_ast::ProgramScope) -> leo_ast::ProgramScope {
         self.program = input.program_id.name.name;
         leo_ast::ProgramScope {
             functions: input.functions.into_iter().map(|(i, f)| (i, self.reconstruct_function(f))).collect(),
+            constructor: input.constructor.map(|c| self.reconstruct_constructor(c)),
             ..input
         }
     }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -20,20 +20,18 @@ use leo_ast::ProgramReconstructor as _;
 
 use leo_errors::Result;
 
-mod expression;
+mod ast;
 
 mod program;
-
-mod statement;
 
 mod visitor;
 use visitor::*;
 
-/// A pass to rewrite assignments to array accesses and struct accesses.
+/// A pass to rewrite assignments to array accesses and composite accesses.
 ///
-/// This pass makes variables for members of arrays and structs that are written to,
+/// This pass makes variables for members of arrays and composites that are written to,
 /// changes assignments to those members into assignments to those variables, and,
-/// whenever the arrays or structs are accessed, reconstructs them from the variables.
+/// whenever the arrays or composites are accessed, reconstructs them from the variables.
 /// So code like this:
 ///
 /// let s = S { a: 1u8, b: [2u8, 3u8] };
@@ -54,7 +52,7 @@ use visitor::*;
 /// Since the pass will create new assignments, `SsaForming` must be run again afterwards.
 ///
 /// A note on the semantics of the language as implemented by this pass:
-/// assignments and definitions in essence copy structs and arrays. Thus if we do
+/// assignments and definitions in essence copy composites and arrays. Thus if we do
 /// ```leo
 /// let x = [0u8, 1u8];
 /// let y = x;
@@ -73,7 +71,7 @@ impl Pass for WriteTransforming {
         let mut ast = std::mem::take(&mut state.ast);
         let mut visitor = WriteTransformingVisitor::new(state, ast.as_repr());
         ast.ast = visitor.reconstruct_program(ast.ast);
-        visitor.state.handler.last_err().map_err(|e| *e)?;
+        visitor.state.handler.last_err()?;
         visitor.state.ast = ast;
         Ok(())
     }

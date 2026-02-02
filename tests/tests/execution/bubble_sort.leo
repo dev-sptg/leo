@@ -1,5 +1,6 @@
 /*
 seed = 123456789
+min_height = 16
 
 [case]
 program = "bubble_sort.aleo"
@@ -30,4 +31,7 @@ program bubble_sort.aleo {
         }
         return xs;
     }
+
+    @noupgrade
+    async constructor() {}
 }

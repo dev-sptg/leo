@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -29,7 +29,11 @@ pub struct SsaFormingVisitor<'a> {
     pub rename_defs: bool,
 }
 
-impl SsaFormingVisitor<'_> {
+impl<'a> SsaFormingVisitor<'a> {
+    pub fn new(state: &'a mut CompilerState, input: crate::SsaFormingInput, program: Symbol) -> Self {
+        Self { state, rename_table: RenameTable::new(None), program, rename_defs: input.rename_defs }
+    }
+
     /// Pushes a new scope, setting the current scope as the new scope's parent.
     pub(crate) fn push(&mut self) {
         let parent_table = core::mem::take(&mut self.rename_table);

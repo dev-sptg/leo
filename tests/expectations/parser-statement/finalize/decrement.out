@@ -3,60 +3,98 @@
     "expression": {
       "Call": {
         "function": {
-          "Identifier": {
+          "user_program": null,
+          "qualifier": [],
+          "identifier": {
             "name": "decrement",
             "span": {
               "lo": 0,
               "hi": 9
             },
-            "id": 0
-          }
+            "id": 8
+          },
+          "target": "Unresolved",
+          "span": {
+            "lo": 0,
+            "hi": 9
+          },
+          "id": 9
         },
+        "const_arguments": [],
         "arguments": [
           {
-            "Identifier": {
-              "name": "foo",
+            "Path": {
+              "user_program": null,
+              "qualifier": [],
+              "identifier": {
+                "name": "foo",
+                "span": {
+                  "lo": 10,
+                  "hi": 13
+                },
+                "id": 3
+              },
+              "target": "Unresolved",
               "span": {
                 "lo": 10,
                 "hi": 13
-              },
-              "id": 1
-            }
-          },
-          {
-            "Identifier": {
-              "name": "bar",
-              "span": {
-                "lo": 15,
-                "hi": 18
               },
               "id": 2
             }
           },
           {
-            "Identifier": {
-              "name": "baz",
+            "Path": {
+              "user_program": null,
+              "qualifier": [],
+              "identifier": {
+                "name": "bar",
+                "span": {
+                  "lo": 15,
+                  "hi": 18
+                },
+                "id": 5
+              },
+              "target": "Unresolved",
+              "span": {
+                "lo": 15,
+                "hi": 18
+              },
+              "id": 4
+            }
+          },
+          {
+            "Path": {
+              "user_program": null,
+              "qualifier": [],
+              "identifier": {
+                "name": "baz",
+                "span": {
+                  "lo": 20,
+                  "hi": 23
+                },
+                "id": 7
+              },
+              "target": "Unresolved",
               "span": {
                 "lo": 20,
                 "hi": 23
               },
-              "id": 3
+              "id": 6
             }
           }
         ],
-        "program": null,
         "span": {
           "lo": 0,
           "hi": 24
         },
-        "id": 4
+        "id": 1
       }
     },
     "span": {
       "lo": 0,
       "hi": 25
     },
-    "id": 5
+    "id": 0
   }
 }
 
@@ -65,24 +103,43 @@
     "expression": {
       "Call": {
         "function": {
-          "Identifier": {
+          "user_program": null,
+          "qualifier": [],
+          "identifier": {
             "name": "decrement",
             "span": {
               "lo": 26,
               "hi": 35
             },
-            "id": 0
-          }
+            "id": 6
+          },
+          "target": "Unresolved",
+          "span": {
+            "lo": 26,
+            "hi": 35
+          },
+          "id": 7
         },
+        "const_arguments": [],
         "arguments": [
           {
-            "Identifier": {
-              "name": "foo",
+            "Path": {
+              "user_program": null,
+              "qualifier": [],
+              "identifier": {
+                "name": "foo",
+                "span": {
+                  "lo": 36,
+                  "hi": 39
+                },
+                "id": 3
+              },
+              "target": "Unresolved",
               "span": {
                 "lo": 36,
                 "hi": 39
               },
-              "id": 1
+              "id": 2
             }
           },
           {
@@ -91,7 +148,7 @@
                 "lo": 41,
                 "hi": 44
               },
-              "id": 2,
+              "id": 4,
               "variant": {
                 "Integer": [
                   "U8",
@@ -106,7 +163,7 @@
                 "lo": 46,
                 "hi": 49
               },
-              "id": 3,
+              "id": 5,
               "variant": {
                 "Integer": [
                   "U8",
@@ -116,19 +173,18 @@
             }
           }
         ],
-        "program": null,
         "span": {
           "lo": 26,
           "hi": 50
         },
-        "id": 4
+        "id": 1
       }
     },
     "span": {
       "lo": 26,
       "hi": 51
     },
-    "id": 5
+    "id": 0
   }
 }
 
@@ -137,50 +193,78 @@
     "expression": {
       "Call": {
         "function": {
-          "Identifier": {
+          "user_program": null,
+          "qualifier": [],
+          "identifier": {
             "name": "decrement",
             "span": {
               "lo": 52,
               "hi": 61
             },
-            "id": 0
-          }
+            "id": 6
+          },
+          "target": "Unresolved",
+          "span": {
+            "lo": 52,
+            "hi": 61
+          },
+          "id": 7
         },
+        "const_arguments": [],
         "arguments": [
           {
-            "Identifier": {
-              "name": "foo",
+            "Path": {
+              "user_program": null,
+              "qualifier": [],
+              "identifier": {
+                "name": "foo",
+                "span": {
+                  "lo": 62,
+                  "hi": 65
+                },
+                "id": 3
+              },
+              "target": "Unresolved",
               "span": {
                 "lo": 62,
                 "hi": 65
               },
-              "id": 1
+              "id": 2
             }
           },
           {
-            "Identifier": {
-              "name": "bar",
+            "Path": {
+              "user_program": null,
+              "qualifier": [],
+              "identifier": {
+                "name": "bar",
+                "span": {
+                  "lo": 67,
+                  "hi": 70
+                },
+                "id": 5
+              },
+              "target": "Unresolved",
               "span": {
                 "lo": 67,
                 "hi": 70
               },
-              "id": 2
+              "id": 4
             }
           }
         ],
-        "program": null,
         "span": {
           "lo": 52,
           "hi": 71
         },
-        "id": 3
+        "id": 1
       }
     },
     "span": {
       "lo": 52,
       "hi": 72
     },
-    "id": 4
+    "id": 0
   }
 }
 
@@ -189,17 +273,25 @@
     "expression": {
       "Call": {
         "function": {
-          "Identifier": {
+          "user_program": null,
+          "qualifier": [],
+          "identifier": {
             "name": "decrement",
             "span": {
               "lo": 73,
               "hi": 82
             },
-            "id": 0
-          }
+            "id": 2
+          },
+          "target": "Unresolved",
+          "span": {
+            "lo": 73,
+            "hi": 82
+          },
+          "id": 3
         },
+        "const_arguments": [],
         "arguments": [],
-        "program": null,
         "span": {
           "lo": 73,
           "hi": 84
@@ -211,7 +303,7 @@
       "lo": 73,
       "hi": 85
     },
-    "id": 2
+    "id": 0
   }
 }
 
