@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -67,7 +67,7 @@ impl AwaitChecker {
             // Extend all paths by one node to represent the upcoming `then` branch.
             for node in self.to_await.iter() {
                 // Extend current path.
-                current_nodes.push(node.clone().create_child());
+                current_nodes.push(node.create_child());
             }
             // Update the set of nodes to be current set.
             self.to_await = current_nodes.clone();

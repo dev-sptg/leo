@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -16,7 +16,8 @@
 
 use crate::cli::{commands::*, context::*, helpers::*};
 use clap::Parser;
-use leo_errors::Result;
+use leo_errors::{CliError, Result};
+use serde::Serialize;
 use std::{path::PathBuf, process::exit};
 
 /// CLI Arguments entry point - includes global parameters and subcommands
@@ -28,6 +29,9 @@ pub struct CLI {
 
     #[clap(short, global = true, help = "Suppress CLI output")]
     quiet: bool,
+
+    #[clap(long, global = true, help = "Write results as JSON to a file. Defaults to build/json-outputs/<command>.json if no path specified.", num_args = 0..=1, require_equals = true, default_missing_value = "")]
+    json_output: Option<String>,
 
     #[clap(long, global = true, help = "Disable Leo's daily check for version updates")]
     disable_update_check: bool,
@@ -127,6 +131,29 @@ enum Commands {
     },
 }
 
+impl Commands {
+    fn name(&self) -> &'static str {
+        match self {
+            Commands::Account { .. } => "account",
+            Commands::New { .. } => "new",
+            Commands::Run { .. } => "run",
+            Commands::Test { .. } => "test",
+            Commands::Execute { .. } => "execute",
+            Commands::Deploy { .. } => "deploy",
+            Commands::Devnet { .. } => "devnet",
+            Commands::Query { .. } => "query",
+            Commands::Build { .. } => "build",
+            Commands::Debug { .. } => "debug",
+            Commands::Add { .. } => "add",
+            Commands::Remove { .. } => "remove",
+            Commands::Clean { .. } => "clean",
+            Commands::Synthesize { .. } => "synthesize",
+            Commands::Update { .. } => "update",
+            Commands::Upgrade { .. } => "upgrade",
+        }
+    }
+}
+
 pub fn handle_error<T>(res: Result<T>) -> T {
     match res {
         Ok(t) => t,
@@ -137,10 +164,26 @@ pub fn handle_error<T>(res: Result<T>) -> T {
     }
 }
 
+/// JSON output types for commands that support `--json`.
+#[derive(Serialize)]
+#[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
+enum JsonOutput {
+    Deploy(DeployOutput),
+    Run(RunOutput),
+    Execute(ExecuteOutput),
+    Test(TestOutput),
+    Query(serde_json::Value),
+    Synthesize(SynthesizeOutput),
+}
+
 /// Run command with custom build arguments.
 pub fn run_with_args(cli: CLI) -> Result<()> {
+    // JSON output mode implies quiet mode.
+    let quiet = cli.quiet || cli.json_output.is_some();
+
     // Print the variables found in the `.env` files.
-    if let Ok(vars) = dotenvy::dotenv_iter().map(|v| v.flatten().collect::<Vec<_>>()) {
+    if !quiet && let Ok(vars) = dotenvy::dotenv_iter().map(|v| v.flatten().collect::<Vec<_>>()) {
         if !vars.is_empty() {
             println!("📢 Loading environment variables from a `.env` file in the directory tree.");
         }
@@ -151,7 +194,7 @@ pub fn run_with_args(cli: CLI) -> Result<()> {
     // Initialize the `.env` file.
     dotenvy::dotenv().ok();
 
-    if !cli.quiet {
+    if !quiet {
         // Init logger with optional debug flag.
         logger::init_logger("leo", match cli.debug {
             false => 1,
@@ -159,8 +202,9 @@ pub fn run_with_args(cli: CLI) -> Result<()> {
         })?;
     }
 
-    //  Check for updates. If not forced, it checks once per day.
-    if !cli.disable_update_check
+    // Check for updates. If not forced, it checks once per day.
+    if !quiet
+        && !cli.disable_update_check
         && let Ok(true) = updater::Updater::check_for_updates(false)
     {
         let _ = updater::Updater::print_cli();
@@ -168,26 +212,59 @@ pub fn run_with_args(cli: CLI) -> Result<()> {
 
     // Get custom root folder and create context for it.
     // If not specified, default context will be created in cwd.
-    let context = handle_error(Context::new(cli.path, cli.home, false));
+    let context = handle_error(Context::new(cli.path.clone(), cli.home, false));
+
+    let command_name = cli.command.name();
+    let mut command_output: Option<JsonOutput> = None;
 
     match cli.command {
-        Commands::Add { command } => command.try_execute(context),
-        Commands::Account { command } => command.try_execute(context),
-        Commands::New { command } => command.try_execute(context),
-        Commands::Build { command } => command.try_execute(context),
-        Commands::Debug { command } => command.try_execute(context),
-        Commands::Query { command } => command.try_execute(context),
-        Commands::Clean { command } => command.try_execute(context),
-        Commands::Deploy { command } => command.try_execute(context),
-        Commands::Devnet { command } => command.try_execute(context),
-        Commands::Run { command } => command.try_execute(context),
-        Commands::Test { command } => command.try_execute(context),
-        Commands::Execute { command } => command.try_execute(context),
-        Commands::Remove { command } => command.try_execute(context),
-        Commands::Synthesize { command } => command.try_execute(context),
-        Commands::Update { command } => command.try_execute(context),
-        Commands::Upgrade { command } => command.try_execute(context),
+        Commands::Add { command } => command.try_execute(context)?,
+        Commands::Account { command } => command.try_execute(context)?,
+        Commands::New { command } => command.try_execute(context)?,
+        Commands::Build { command } => command.try_execute(context)?,
+        Commands::Debug { command } => command.try_execute(context)?,
+        Commands::Query { command } => {
+            let result = command.execute(context)?;
+            let data = serde_json::from_str(&result).unwrap_or_else(|_| serde_json::Value::String(result));
+            command_output = Some(JsonOutput::Query(data));
+        }
+        Commands::Clean { command } => command.try_execute(context)?,
+        Commands::Deploy { command } => command_output = Some(JsonOutput::Deploy(command.execute(context)?)),
+        Commands::Devnet { command } => command.try_execute(context)?,
+        Commands::Run { command } => command_output = Some(JsonOutput::Run(command.execute(context)?)),
+        Commands::Test { command } => command_output = Some(JsonOutput::Test(command.execute(context)?)),
+        Commands::Execute { command } => command_output = Some(JsonOutput::Execute(command.execute(context)?)),
+        Commands::Remove { command } => command.try_execute(context)?,
+        Commands::Synthesize { command } => command_output = Some(JsonOutput::Synthesize(command.execute(context)?)),
+        Commands::Update { command } => command.try_execute(context)?,
+        Commands::Upgrade { command } => command_output = Some(JsonOutput::Deploy(command.execute(context)?)),
     }
+
+    if let Some(json_output_arg) = cli.json_output
+        && let Some(output) = command_output
+    {
+        let json = serde_json::to_string_pretty(&output).expect("JSON serialization failed");
+
+        // Use provided path or default to build/json-outputs/<command>.json
+        let path = if json_output_arg.is_empty() {
+            cli.path
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join("build")
+                .join("json-outputs")
+                .join(format!("{command_name}.json"))
+        } else {
+            PathBuf::from(json_output_arg)
+        };
+
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| CliError::custom(format!("Failed to create directory: {e}")))?;
+        }
+        std::fs::write(&path, json)
+            .map_err(|e| CliError::custom(format!("Failed to write JSON output to {}: {e}", path.display())))?;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -223,6 +300,7 @@ mod tests {
         let run = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::Run {
                 command: crate::cli::commands::LeoRun {
@@ -266,6 +344,7 @@ mod tests {
         let run = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::Run {
                 command: crate::cli::commands::LeoRun {
@@ -310,6 +389,7 @@ mod tests {
         let run = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::Run {
                 command: crate::cli::commands::LeoRun {
@@ -348,6 +428,7 @@ mod tests {
         let run = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::Run {
                 command: crate::cli::commands::LeoRun {
@@ -389,6 +470,7 @@ mod test_helpers {
         let new = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::New {
                 command: LeoNew {
@@ -463,6 +545,7 @@ function external_nested_function:
         let add = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::Add {
                 command: LeoAdd {
@@ -510,6 +593,7 @@ function external_nested_function:
         let create_grandparent_project = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::New {
                 command: LeoNew {
@@ -525,6 +609,7 @@ function external_nested_function:
         let create_parent_project = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::New {
                 command: LeoNew {
@@ -540,6 +625,7 @@ function external_nested_function:
         let create_child_project = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::New {
                 command: LeoNew {
@@ -597,6 +683,7 @@ program child.aleo {
         let add_grandparent_dependency_1 = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::Add {
                 command: LeoAdd {
@@ -613,6 +700,7 @@ program child.aleo {
         let add_grandparent_dependency_2 = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::Add {
                 command: LeoAdd {
@@ -629,6 +717,7 @@ program child.aleo {
         let add_parent_dependency = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::Add {
                 command: LeoAdd {
@@ -674,6 +763,7 @@ program child.aleo {
         let create_outer_project = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::New {
                 command: LeoNew {
@@ -689,6 +779,7 @@ program child.aleo {
         let create_inner_1_project = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::New {
                 command: LeoNew {
@@ -704,6 +795,7 @@ program child.aleo {
         let create_inner_2_project = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::New {
                 command: LeoNew {
@@ -717,14 +809,10 @@ program child.aleo {
         };
 
         // Add source files `outer/src/main.leo` and `outer/inner/src/main.leo`
-        let outer_program = "import inner_1.aleo;
+        let outer_program = "
+import inner_1.aleo;
 import inner_2.aleo;
 program outer.aleo {
-
-    struct ex_struct {
-        arg1: u32,
-        arg2: u32,
-    }
 
     record inner_1_record {
         owner: address,
@@ -733,17 +821,19 @@ program outer.aleo {
         arg3: u32,
     }
 
-    transition inner_1_main(public a: u32, b: u32) -> (inner_1.aleo/inner_1_record, inner_2.aleo/inner_1_record, inner_1_record) {
-        let c: ex_struct = ex_struct {arg1: 1u32, arg2: 1u32};
+    transition inner_1_main(public a: u32, b: u32) -> (inner_1.aleo/inner_1_record, inner_2.aleo/inner_2_record, inner_1_record) {
+        let c: inner_1.aleo/ex_struct = inner_1.aleo/ex_struct {arg1: 1u32, arg2: 1u32};
         let rec_1:inner_1.aleo/inner_1_record = inner_1.aleo/inner_1_main(1u32,1u32, c);
-        let rec_2:inner_2.aleo/inner_1_record = inner_2.aleo/inner_1_main(1u32,1u32);
+        let rec_2:inner_2.aleo/inner_2_record = inner_2.aleo/inner_2_main(1u32,1u32);
         return (rec_1, rec_2, inner_1_record {owner: aleo14tnetva3xfvemqyg5ujzvr0qfcaxdanmgjx2wsuh2xrpvc03uc9s623ps7, arg1: 1u32, arg2: 1u32, arg3: 1u32});
     }
 
     @noupgrade
     async constructor() {}
-}";
-        let inner_1_program = "program inner_1.aleo {
+}
+            ";
+        let inner_1_program = "
+program inner_1.aleo {
     mapping inner_1_mapping: u32 => u32;
     record inner_1_record {
         owner: address,
@@ -762,16 +852,18 @@ program outer.aleo {
 
     @noupgrade
     async constructor() {}
-}";
-        let inner_2_program = "program inner_2.aleo {
+}
+";
+        let inner_2_program = "
+program inner_2.aleo {
     mapping inner_2_mapping: u32 => u32;
-    record inner_1_record {
+    record inner_2_record {
         owner: address,
         val: u32,
     }
-    transition inner_1_main(public a: u32, b: u32) -> inner_1_record {
+    transition inner_2_main(public a: u32, b: u32) -> inner_2_record {
         let c: u32 = a + b;
-        return inner_1_record {
+        return inner_2_record {
             owner: self.caller,
             val: a,
         };
@@ -779,11 +871,13 @@ program outer.aleo {
 
     @noupgrade
     async constructor() {}
-}";
+}
+        ";
         // Add dependencies `outer/program.json`
         let add_outer_dependency_1 = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::Add {
                 command: LeoAdd {
@@ -800,6 +894,7 @@ program outer.aleo {
         let add_outer_dependency_2 = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::Add {
                 command: LeoAdd {
@@ -844,6 +939,7 @@ program outer.aleo {
         let create_outer_project = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::New {
                 command: LeoNew {
@@ -859,6 +955,7 @@ program outer.aleo {
         let create_inner_1_project = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::New {
                 command: LeoNew {
@@ -874,6 +971,7 @@ program outer.aleo {
         let create_inner_2_project = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::New {
                 command: LeoNew {
@@ -909,14 +1007,15 @@ program outer_2.aleo {
         owner: address,
         a: u32,
     }
+    
     transition main(public a: u32, b: u32) -> (inner_2.aleo/Yoo, Hello) {
-        let d: Foo = inner_1.aleo/main(1u32,1u32);
-        let e: u32 = inner_1.aleo/main_2(Foo {a: a, b: b, c: Boo {a:1u32, b:1u32}});
+        let d: inner_1.aleo/Foo = inner_1.aleo/main(1u32,1u32);
+        let e: u32 = inner_1.aleo/main_2(inner_1.aleo/Foo {a: a, b: b, c: inner_1.aleo/Boo {a:1u32, b:1u32}});
         let f: Boo = Boo {a:1u32, b:1u32};
-        let g: Foo = inner_2.aleo/main(1u32, 1u32);
+        let g: inner_2.aleo/Foo = inner_2.aleo/main(1u32, 1u32);
         inner_2.aleo/Yo_Consumer(inner_2.aleo/Yo());
         let h: inner_2.aleo/Yoo = inner_2.aleo/Yo();
-        let i: Goo = inner_2.aleo/Goo_creator();
+        let i: inner_2.aleo/Goo = inner_2.aleo/Goo_creator();
         let j: Hello = Hello {owner: self.signer, a:1u32};
 
         return (h, j);
@@ -985,6 +1084,7 @@ program outer_2.aleo {
         let add_outer_dependency_1 = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::Add {
                 command: LeoAdd {
@@ -1001,6 +1101,7 @@ program outer_2.aleo {
         let add_outer_dependency_2 = CLI {
             debug: false,
             quiet: false,
+            json_output: None,
             disable_update_check: false,
             command: Commands::Add {
                 command: LeoAdd {

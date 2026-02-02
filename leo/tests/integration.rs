@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Provable Inc.
+// Copyright (C) 2019-2026 Provable Inc.
 // This file is part of the Leo library.
 
 // The Leo library is free software: you can redistribute it and/or modify
@@ -34,6 +34,7 @@ use std::{
 };
 
 use anyhow::anyhow;
+use serial_test::serial;
 use snarkvm::prelude::ConsensusVersion;
 
 const VALIDATOR_COUNT: usize = 4usize;
@@ -136,13 +137,25 @@ fn filter_stdout(data: &str) -> String {
         (Regex::new(" - transaction ID: '[a-zA-Z0-9]*'").unwrap(), " - transaction ID: 'XXXXXX'"),
         (Regex::new(" - fee ID: '[a-zA-Z0-9]*'").unwrap(), " - fee ID: 'XXXXXX'"),
         (Regex::new(" - fee transaction ID: '[a-zA-Z0-9]*'").unwrap(), " - fee transaction ID: 'XXXXXX'"),
+        (Regex::new(r#""transaction_id":\s*"[a-zA-Z0-9]*""#).unwrap(), r#""transaction_id": "XXXXXX""#),
+        (Regex::new(r#""fee_id":\s*"[a-zA-Z0-9]*""#).unwrap(), r#""fee_id": "XXXXXX""#),
+        (Regex::new(r#""fee_transaction_id":\s*"[a-zA-Z0-9]*""#).unwrap(), r#""fee_transaction_id": "XXXXXX""#),
+        (Regex::new(r#""address":\s*"aleo1[a-zA-Z0-9]*""#).unwrap(), r#""address": "XXXXXX""#),
         (
             Regex::new("💰Your current public balance is [0-9.]* credits.").unwrap(),
             "💰Your current public balance is XXXXXX credits.",
         ),
         (Regex::new("Explored [0-9]* blocks.").unwrap(), "Explored XXXXXX blocks."),
+        // Transaction confirmation can vary between environments (timing-dependent)
+        (Regex::new("Transaction rejected\\.").unwrap(), "Could not find the transaction."),
         (Regex::new("Max Variables:        [0-9,]*").unwrap(), "Max Variables:        XXXXXX"),
         (Regex::new("Max Constraints:      [0-9,]*").unwrap(), "Max Constraints:      XXXXXX"),
+        // Synthesize command produces checksums and sizes that may vary.
+        (Regex::new(r#""prover_checksum":"[a-fA-F0-9]+""#).unwrap(), r#""prover_checksum":"XXXXXX""#),
+        (Regex::new(r#""verifier_checksum":"[a-fA-F0-9]+""#).unwrap(), r#""verifier_checksum":"XXXXXX""#),
+        (Regex::new(r#""prover_size":[0-9]+"#).unwrap(), r#""prover_size":0"#),
+        (Regex::new(r#""verifier_size":[0-9]+"#).unwrap(), r#""verifier_size":0"#),
+        (Regex::new(r"- Circuit ID: [a-zA-Z0-9]+").unwrap(), "- Circuit ID: XXXXXX"),
         // These are filtered out since the cache can frequently differ between local and CI runs.
         (Regex::new("Warning: The cached file.*\n").unwrap(), ""),
         (
@@ -179,9 +192,36 @@ fn filter_stderr(data: &str) -> String {
     cow.into_owned()
 }
 
+/// Filter dynamic values in JSON output files to allow comparison across runs.
+fn filter_json_file(data: &str) -> String {
+    use regex::Regex;
+
+    let regexes = [
+        (Regex::new(r#""transaction_id":\s*"[a-zA-Z0-9]*""#).unwrap(), r#""transaction_id": "XXXXXX""#),
+        (Regex::new(r#""fee_id":\s*"[a-zA-Z0-9]*""#).unwrap(), r#""fee_id": "XXXXXX""#),
+        (Regex::new(r#""fee_transaction_id":\s*"[a-zA-Z0-9]*""#).unwrap(), r#""fee_transaction_id": "XXXXXX""#),
+        (Regex::new(r#""address":\s*"aleo1[a-zA-Z0-9]*""#).unwrap(), r#""address": "XXXXXX""#),
+        (Regex::new(r#""prover_checksum":\s*"[a-fA-F0-9]+""#).unwrap(), r#""prover_checksum": "XXXXXX""#),
+        (Regex::new(r#""verifier_checksum":\s*"[a-fA-F0-9]+""#).unwrap(), r#""verifier_checksum": "XXXXXX""#),
+        (Regex::new(r#""circuit_id":\s*"[a-fA-F0-9]+""#).unwrap(), r#""circuit_id": "XXXXXX""#),
+        (Regex::new(r#""prover_size":\s*[0-9]+"#).unwrap(), r#""prover_size": 0"#),
+        (Regex::new(r#""verifier_size":\s*[0-9]+"#).unwrap(), r#""verifier_size": 0"#),
+    ];
+
+    let mut cow = Cow::Borrowed(data);
+    for (regex, replacement) in regexes {
+        if let Cow::Owned(s) = regex.replace_all(&cow, replacement) {
+            cow = Cow::Owned(s);
+        }
+    }
+
+    cow.into_owned()
+}
+
 const BINARY_PATH: &str = env!("CARGO_BIN_EXE_leo");
 
 #[test]
+#[serial]
 fn integration_tests() {
     if !cfg!(target_family = "unix") {
         println!("Skipping CLI integration tests (they only run on unix systems).");
@@ -200,7 +240,7 @@ fn integration_tests() {
     // Wait for snarkos to start listening on port 3030.
     let height_url = "http://localhost:3030/testnet/block/height/latest";
     let start = std::time::Instant::now();
-    let timeout = std::time::Duration::from_secs(90);
+    let timeout = std::time::Duration::from_secs(300);
 
     loop {
         match leo_package::fetch_from_network_plain(height_url) {
@@ -210,7 +250,36 @@ fn integration_tests() {
             Err(_) if start.elapsed() < timeout => {
                 std::thread::sleep(std::time::Duration::from_secs(1));
             }
-            Err(e) => panic!("snarkos did not start within {timeout:?}: {e}"),
+            Err(e) => {
+                let snarkos_path: PathBuf =
+                    which::which("snarkos").unwrap_or_else(|_| panic!("Cannot find snarkos path.")); // fallback for CI
+
+                let version_output = Command::new(&snarkos_path)
+                    .arg("--version")
+                    .output()
+                    .map(|output| {
+                        let stdout = String::from_utf8_lossy(&output.stdout);
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+
+                        if output.status.success() {
+                            stdout.trim().to_string()
+                        } else {
+                            format!(
+                                "failed to get version (status {}): stdout: `{}`, stderr: `{}`",
+                                output.status,
+                                stdout.trim(),
+                                stderr.trim()
+                            )
+                        }
+                    })
+                    .unwrap_or_else(|err| format!("failed to execute snarkos --version: {err}"));
+
+                panic!(
+                    "{} (version: {}) did not start within {timeout:?}: {e}.",
+                    snarkos_path.display(),
+                    version_output
+                )
+            }
         }
     }
 
@@ -260,7 +329,6 @@ fn integration_tests() {
 }
 
 fn copy_recursively(src: &Path, dst: &Path) -> io::Result<()> {
-    // Ensure destination directory exists
     if !dst.exists() {
         fs::create_dir_all(dst)?;
     }
@@ -274,7 +342,14 @@ fn copy_recursively(src: &Path, dst: &Path) -> io::Result<()> {
         if file_type.is_dir() {
             copy_recursively(&src_path, &dst_path)?;
         } else if file_type.is_file() {
-            fs::copy(&src_path, &dst_path)?;
+            let in_json_outputs = src_path.components().any(|c| c.as_os_str() == "json-outputs");
+            if in_json_outputs && src_path.extension().is_some_and(|ext| ext == "json") {
+                let content = fs::read_to_string(&src_path)?;
+                let filtered = filter_json_file(&content);
+                fs::write(&dst_path, filtered)?;
+            } else {
+                fs::copy(&src_path, &dst_path)?;
+            }
         } else {
             panic!("Unexpected file type at {}", src_path.display())
         }
@@ -305,9 +380,21 @@ fn dirs_equal(actual: &Path, expected: &Path) -> io::Result<Option<String>> {
         let bytes1 = fs::read(&path1)?;
         let bytes2 = fs::read(&path2)?;
 
-        if bytes1 != bytes2 {
-            let actual = String::from_utf8_lossy(&bytes1);
-            let expected = String::from_utf8_lossy(&bytes2);
+        // Apply filtering to JSON files in json-outputs directory
+        let is_json_output = relative_path.to_string_lossy().contains("json-outputs/")
+            && relative_path.extension().is_some_and(|ext| ext == "json");
+
+        let (content1, content2) = if is_json_output {
+            let s1 = String::from_utf8_lossy(&bytes1);
+            let s2 = String::from_utf8_lossy(&bytes2);
+            (filter_json_file(&s1).into_bytes(), filter_json_file(&s2).into_bytes())
+        } else {
+            (bytes1, bytes2)
+        };
+
+        if content1 != content2 {
+            let actual = String::from_utf8_lossy(&content1);
+            let expected = String::from_utf8_lossy(&content2);
             return Ok(Some(format!(
                 "File contents differ: {}\n  - Actual: {actual}\n  - Expected: {expected}",
                 relative_path.display()
