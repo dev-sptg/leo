@@ -66,6 +66,7 @@ noconfig = [ ]
 only_testnet = [ ]
 
 [workspace.dependencies]
+openssl = { version = "0.10", features = ["vendored"] }
 # leo dependencies
 leo-abi             = { path = "./compiler/abi",              version = "=3.4.0" }
 leo-abi-types       = { path = "./compiler/abi-types",        version = "=3.4.0" }

@@ -70,23 +70,32 @@ jobs:
           submodules: true
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
           toolchain: stable
-          override: true
           components: rustfmt
           target: x86_64-unknown-linux-musl
-          default: stable-x86_64-unknown-linux-musl
 
       - uses: Swatinem/rust-cache@v2
 
       - name: Build
         # Use an older version of this Docker image as newer versions don't have OpenSSL.
         run: |
-          docker pull clux/muslrust:1.85.1-stable
-          docker run -v cargo-cache:/root/.cargo/registry -v $PWD:/volume --rm -t clux/muslrust:1.85.1-stable \
-            sh -c "rustup target add x86_64-unknown-linux-musl && cargo build --target x86_64-unknown-linux-musl --package leo-lang --release --features noconfig && ldd target/x86_64-unknown-linux-musl/release/leo"
+          docker pull clux/muslrust:latest
+          docker run \
+            -v ${{ github.workspace }}:/volume \
+            -v cargo-cache:/root/.cargo/registry \
+            --rm \
+            -t clux/muslrust:latest \
+            bash -c "
+              rustup target add x86_64-unknown-linux-musl &&
+              cargo build \
+                --target x86_64-unknown-linux-musl \
+                --package leo-lang \
+                --release \
+                --locked \
+                --features noconfig
+            "
 
       - id: get_version
         uses: battila7/get-version-action@v2
