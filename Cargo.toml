@@ -148,7 +148,7 @@ version = "4.4.0"
 features = [ "test_consensus_heights" ]
 
 [workspace.dependencies.tempfile]
-version = "3.13"
+version = "3.25"
 
 [workspace.dependencies.tracing]
 version = "0.1"
