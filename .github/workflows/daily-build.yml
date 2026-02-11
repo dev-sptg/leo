@@ -65,33 +65,36 @@ jobs:
     name: Linux musl
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v2
         with:
-          submodules: true
+          submodules: recursive
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
           toolchain: stable
-          override: true
           components: rustfmt
           target: x86_64-unknown-linux-musl
-          default: stable-x86_64-unknown-linux-musl
 
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Build
-        # Use an older version of this Docker image as newer versions don't have OpenSSL.
+      - name: Build musl binary
         run: |
-          docker pull clux/muslrust:1.85.1-stable
-          docker run -v cargo-cache:/root/.cargo/registry -v $PWD:/volume --rm -t clux/muslrust:1.85.1-stable \
-            sh -c "rustup target add x86_64-unknown-linux-musl && cargo build --target x86_64-unknown-linux-musl --package leo-lang --release --features noconfig && ldd target/x86_64-unknown-linux-musl/release/leo"
+          docker run \
+            -v ${{ github.workspace }}:/home/rust/src \
+            --rm \
+            -t docker.io/blackdex/rust-musl:x86_64-musl-stable \
+            bash -lc "
+              rustup target add x86_64-unknown-linux-musl &&
+              cd /home/rust/src &&
+              cargo build --target x86_64-unknown-linux-musl --release --locked --package leo-lang --features noconfig
+            "
+
+      - name: Check Binary
+        run: file target/x86_64-unknown-linux-musl/release/leo
 
       - id: get_version
         uses: battila7/get-version-action@v2
 
-      - name: Zip
+      - name: Zip Artifact
         run: |
           mkdir tempdir
           cp target/x86_64-unknown-linux-musl/release/leo tempdir
