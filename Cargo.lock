@@ -690,7 +690,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0dc92fb57ca44df6db8059111ab3af99a63d5d0f8375d9972e319a379c6bab76"
 dependencies = [
  "generic-array",
- "rand_core",
+ "rand_core 0.6.4",
  "subtle",
  "zeroize",
 ]
@@ -1009,7 +1009,7 @@ dependencies = [
  "ff",
  "generic-array",
  "group",
- "rand_core",
+ "rand_core 0.6.4",
  "sec1",
  "subtle",
  "zeroize",
@@ -1103,7 +1103,7 @@ version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0b50bfb653653f9ca9095b427bed08ab8d75a137839d9ad64eb11810d5b6393"
 dependencies = [
- "rand_core",
+ "rand_core 0.6.4",
  "subtle",
 ]
 
@@ -1310,7 +1310,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0f9ef7462f7c099f518d754361858f86d8a07af53ba9af0fe635bbccb151a63"
 dependencies = [
  "ff",
- "rand_core",
+ "rand_core 0.6.4",
  "subtle",
 ]
 
@@ -1825,7 +1825,7 @@ dependencies = [
  "leo-errors",
  "leo-span",
  "rand",
- "rand_chacha",
+ "rand_chacha 0.10.0",
  "serde",
  "serde_json",
  "snarkvm",
@@ -1847,7 +1847,7 @@ dependencies = [
  "leo-passes",
  "leo-span",
  "leo-test-framework",
- "rand_chacha",
+ "rand_chacha 0.10.0",
  "rayon",
  "regex",
  "serde",
@@ -1900,7 +1900,7 @@ dependencies = [
  "leo-span",
  "leo-test-framework",
  "rand",
- "rand_chacha",
+ "rand_chacha 0.10.0",
  "ratatui",
  "regex",
  "serial_test",
@@ -1941,7 +1941,7 @@ dependencies = [
  "once_cell",
  "parking_lot",
  "rand",
- "rand_chacha",
+ "rand_chacha 0.10.0",
  "rayon",
  "regex",
  "rpassword",
@@ -2563,8 +2563,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
 dependencies = [
  "libc",
- "rand_chacha",
- "rand_core",
+ "rand_chacha 0.3.1",
+ "rand_core 0.6.4",
 ]
 
 [[package]]
@@ -2574,7 +2574,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6c10a63a0fa32252be49d21e7709d4d4baf8d231c2dbce1eaa8141b9b127d88"
 dependencies = [
  "ppv-lite86",
- "rand_core",
+ "rand_core 0.6.4",
+]
+
+[[package]]
+name = "rand_chacha"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e6af7f3e25ded52c41df4e0b1af2d047e45896c2f3281792ed68a1c243daedb"
+dependencies = [
+ "ppv-lite86",
+ "rand_core 0.10.0",
 ]
 
 [[package]]
@@ -2587,12 +2597,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand_core"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c8d0fd677905edcbeedbf2edb6494d676f0e98d54d5cf9bda0b061cb8fb8aba"
+
+[[package]]
 name = "rand_xorshift"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d25bf25ec5ae4a3f1b92f929810509a2f53d7dca2f50b794ff57e3face536c8f"
 dependencies = [
- "rand_core",
+ "rand_core 0.6.4",
 ]
 
 [[package]]
@@ -3154,7 +3170,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77549399552de45a898a580c1b41d445bf730df867cc44e6c0233bbc4b8329de"
 dependencies = [
  "digest",
- "rand_core",
+ "rand_core 0.6.4",
 ]
 
 [[package]]
@@ -3698,7 +3714,7 @@ dependencies = [
  "lru 0.16.2",
  "parking_lot",
  "rand",
- "rand_chacha",
+ "rand_chacha 0.3.1",
  "rayon",
  "snarkvm-console",
  "snarkvm-ledger-authority",
@@ -3869,7 +3885,7 @@ dependencies = [
  "lru 0.16.2",
  "parking_lot",
  "rand",
- "rand_chacha",
+ "rand_chacha 0.3.1",
  "rayon",
  "serde_json",
  "snarkvm-algorithms",
@@ -3889,7 +3905,7 @@ dependencies = [
  "lru 0.16.2",
  "parking_lot",
  "rand",
- "rand_chacha",
+ "rand_chacha 0.3.1",
  "rayon",
  "snarkvm-circuit",
  "snarkvm-console",
@@ -4008,7 +4024,7 @@ dependencies = [
  "indexmap",
  "parking_lot",
  "rand",
- "rand_chacha",
+ "rand_chacha 0.3.1",
  "rayon",
  "serde_json",
  "snarkvm-algorithms",
@@ -4032,7 +4048,7 @@ dependencies = [
  "indexmap",
  "paste",
  "rand",
- "rand_chacha",
+ "rand_chacha 0.3.1",
  "rayon",
  "serde_json",
  "snarkvm-circuit",
