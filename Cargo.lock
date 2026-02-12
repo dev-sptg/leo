@@ -2176,9 +2176,7 @@ dependencies = [
 name = "leo-fmt"
 version = "3.4.0"
 dependencies = [
- "anyhow",
- "leo-errors",
- "leo-parser-lossless",
+ "leo-parser-rowan",
  "similar",
  "walkdir",
 ]
@@ -2300,8 +2298,6 @@ dependencies = [
  "leo-parser-rowan",
  "leo-span",
  "leo-test-framework",
- "serde",
- "serde_json",
  "serial_test",
  "snarkvm",
 ]
