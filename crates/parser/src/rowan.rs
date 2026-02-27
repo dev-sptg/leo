@@ -1688,7 +1688,7 @@ impl<'a> ConversionContext<'a> {
         interfaces: &mut Vec<(Symbol, leo_ast::Interface)>,
     ) -> Result<()> {
         match item.kind() {
-            FUNCTION_DEF | FINAL_FN_DEF | SCRIPT_DEF => {
+            FUNCTION_DEF | FINAL_FN_DEF => {
                 let func = self.to_function(item, is_in_program_block)?;
                 functions.push((func.identifier.name, func));
             }
@@ -1944,9 +1944,9 @@ impl<'a> ConversionContext<'a> {
             .unwrap_or_else(|| self.error_block(span)))
     }
 
-    /// Convert a FUNCTION_DEF / FINAL_FN_DEF / SCRIPT_DEF node to a Function.
+    /// Convert a FUNCTION_DEF / FINAL_FN_DEF node to a Function.
     fn to_function(&self, node: &SyntaxNode, is_in_program_block: bool) -> Result<leo_ast::Function> {
-        debug_assert!(matches!(node.kind(), FUNCTION_DEF | FINAL_FN_DEF | SCRIPT_DEF | CONSTRUCTOR_DEF));
+        debug_assert!(matches!(node.kind(), FUNCTION_DEF | FINAL_FN_DEF | CONSTRUCTOR_DEF));
         let span = self.span_including_annotations(node, self.non_trivia_span(node));
         let id = self.builder.next_id();
 
@@ -1957,7 +1957,6 @@ impl<'a> ConversionContext<'a> {
             leo_ast::Variant::EntryPoint
         } else {
             match node.kind() {
-                SCRIPT_DEF => leo_ast::Variant::Script,
                 FINAL_FN_DEF => leo_ast::Variant::FinalFn,
                 _ => leo_ast::Variant::Fn,
             }
@@ -2306,6 +2305,8 @@ impl<'a> ConversionContext<'a> {
 
         let mut functions = Vec::new();
         let mut records = Vec::new();
+        let mut mappings = Vec::new();
+        let mut storages = Vec::new();
 
         for child in children(node) {
             match child.kind() {
@@ -2317,11 +2318,28 @@ impl<'a> ConversionContext<'a> {
                     let proto = self.to_record_prototype(&child)?;
                     records.push((proto.identifier.name, proto));
                 }
+                MAPPING_DEF => {
+                    let mapping = self.to_mapping(&child)?;
+                    mappings.push(mapping);
+                }
+                STORAGE_DEF => {
+                    let storage = self.to_storage(&child)?;
+                    storages.push(storage);
+                }
                 _ => {}
             }
         }
 
-        Ok(leo_ast::Interface { identifier, parents, span, id: self.builder.next_id(), functions, records })
+        Ok(leo_ast::Interface {
+            identifier,
+            parents,
+            span,
+            id: self.builder.next_id(),
+            functions,
+            records,
+            mappings,
+            storages,
+        })
     }
 
     /// Convert an FN_PROTOTYPE_DEF node to a FunctionPrototype.
