@@ -36,7 +36,7 @@ pub struct LeoTest {
     )]
     pub(crate) test_name: String,
 
-    #[clap(long, help = "Run all tests with full proof generation.")]
+    #[clap(long, help = "Run all tests with full proof generation.", default_value = "false")]
     pub(crate) prove: bool,
 
     #[clap(flatten)]
