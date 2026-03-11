@@ -192,6 +192,11 @@ fn run_test(test: &Test, force_rewrite: bool, port: u16) -> Option<String> {
     let stderr_utf8 = std::str::from_utf8(&output.stderr).expect("stderr should be utf8");
     fs::write(&stderr_path, filter_stderr(stderr_utf8).as_bytes()).expect("Failed to write STDERR");
 
+    let exitcode_path = test_context_directory.path().join("EXITCODE");
+    if let Some(code) = output.status.code() {
+        fs::write(&exitcode_path, code.to_string().as_bytes()).expect("Failed to write EXITCODE");
+    }
+
     if force_rewrite {
         // Remove stale expectation directory so files deleted between runs don't linger.
         if test.expectation_directory.exists() {
