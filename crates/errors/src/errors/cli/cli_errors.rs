@@ -355,6 +355,13 @@ create_messages!(
         help: None,
     }
 
+    @backtraced
+    tests_failed {
+        args: (failed: impl Display, total: impl Display),
+        msg: format!("{failed} out of {total} tests failed"),
+        help: None,
+    }
+
     /// For when the Leo compiler generates invalid Aleo bytecode.
     @backtraced
     generated_invalid_bytecode {
