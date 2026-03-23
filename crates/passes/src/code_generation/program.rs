@@ -269,15 +269,22 @@ impl<'a> CodeGeneratingVisitor<'a> {
                         let location = futures
                             .next()
                             .expect("Type checking guarantees we have future locations for each future input");
-                        let [future_name] = location.path.as_slice() else {
-                            panic!(
-                                "All futures must have a single segment paths since they don't belong to submodules."
+                        if location.is_dynamic() {
+                            (AleoType::DynamicFuture, None)
+                        } else {
+                            let [future_name] = location.path.as_slice() else {
+                                panic!(
+                                    "All futures must have a single segment paths since they don't belong to submodules."
+                                )
+                            };
+                            (
+                                AleoType::Future {
+                                    name: future_name.to_string(),
+                                    program: location.program.to_string(),
+                                },
+                                None,
                             )
-                        };
-                        (
-                            AleoType::Future { name: future_name.to_string(), program: location.program.to_string() },
-                            None,
-                        )
+                        }
                     } else {
                         self.visit_type_with_visibility(&input.type_, visibility)
                     }
@@ -400,7 +407,7 @@ impl<'a> CodeGeneratingVisitor<'a> {
         let create_type = |type_: &Type| {
             match type_ {
                 Type::Mapping(_) | Type::Tuple(_) => panic!("Mappings cannot contain mappings or tuples."),
-                Type::Identifier(identifier) => {
+                Type::Ident(identifier) => {
                     // Lookup the type in the composite mapping.
                     // Invariant: `Type::Identifier` in a mapping position refers to a locally-defined
                     // composite (struct or record). Library composites arrive as `Type::Composite` with

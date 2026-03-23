@@ -154,6 +154,11 @@ pub fn literal_to_value(literal: &Literal, expected_ty: &Option<Type>) -> Result
         LiteralVariant::Group(s) => {
             SvmLiteralParam::Group(prepare_snarkvm_string(s, "group").parse().expect_tc(literal.span)?).into()
         }
+
+        LiteralVariant::Identifier(s) => {
+            let identifier = SvmIdentifierLiteral::new(s).expect_tc(literal.span)?;
+            SvmLiteralParam::Identifier(Box::new(identifier)).into()
+        }
         LiteralVariant::Integer(IntegerType::U8, s, ..) => {
             let s = s.replace("_", "");
             u8::from_str_by_radix(&s).expect("Parsing guarantees this works.").into()

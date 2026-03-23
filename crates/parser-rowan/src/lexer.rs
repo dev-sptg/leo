@@ -125,6 +125,10 @@ enum LogosToken {
     #[regex(r#""[^"]*""#)]
     StaticString,
 
+    // Identifier literals: 'foo', 'bar_baz'
+    #[regex(r"'[a-zA-Z][a-zA-Z0-9_]*'")]
+    IdentifierLiteral,
+
     // =========================================================================
     // Identifiers and Keywords
     // =========================================================================
@@ -288,6 +292,7 @@ fn ident_to_kind(s: &str) -> SyntaxKind {
         "signature" => KW_SIGNATURE,
         "string" => KW_STRING,
         "record" => KW_RECORD,
+        "identifier" => KW_IDENTIFIER,
         "i8" => KW_I8,
         "i16" => KW_I16,
         "i32" => KW_I32,
@@ -435,6 +440,7 @@ pub fn lex(source: &str) -> (Vec<Token>, Vec<LexError>) {
                 LogosToken::AddressLiteral => ADDRESS_LIT,
                 LogosToken::Integer => INTEGER,
                 LogosToken::StaticString => STRING,
+                LogosToken::IdentifierLiteral => IDENT_LIT,
 
                 // Identifiers (check for keywords)
                 LogosToken::Ident => ident_to_kind(slice),
@@ -692,6 +698,26 @@ mod tests {
             KW_STRING "string"
             WHITESPACE " "
             KW_RECORD "record"
+            EOF ""
+        "#]]);
+    }
+
+    #[test]
+    fn lex_identifier_literal() {
+        check_lex("'foo' 'bar_baz' 'x'", expect![[r#"
+            IDENT_LIT "'foo'"
+            WHITESPACE " "
+            IDENT_LIT "'bar_baz'"
+            WHITESPACE " "
+            IDENT_LIT "'x'"
+            EOF ""
+        "#]]);
+    }
+
+    #[test]
+    fn lex_identifier_keyword() {
+        check_lex("identifier", expect![[r#"
+            KW_IDENTIFIER "identifier"
             EOF ""
         "#]]);
     }

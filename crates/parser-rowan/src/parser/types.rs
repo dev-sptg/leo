@@ -53,6 +53,7 @@ impl Parser<'_, '_> {
         KW_SCALAR,
         KW_SIGNATURE,
         KW_STRING,
+        KW_IDENTIFIER,
         KW_I8,
         KW_I16,
         KW_I32,
@@ -547,6 +548,15 @@ mod tests {
             ROOT@0..6
               TYPE_PRIMITIVE@0..6
                 KW_STRING@0..6 "string"
+        "#]]);
+    }
+
+    #[test]
+    fn parse_type_identifier() {
+        check_type("identifier", expect![[r#"
+            ROOT@0..10
+              TYPE_PRIMITIVE@0..10
+                KW_IDENTIFIER@0..10 "identifier"
         "#]]);
     }
 

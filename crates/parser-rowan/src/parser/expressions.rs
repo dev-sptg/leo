@@ -355,6 +355,37 @@ impl Parser<'_, '_> {
         Some(m.complete(self, INDEX_EXPR))
     }
 
+    /// Parse dynamic call expression: `expr@(expr)/func(args)`.
+    fn parse_dynamic_call_expr(&mut self, lhs: CompletedMarker) -> Option<CompletedMarker> {
+        let m = lhs.precede(self);
+
+        self.bump_any(); // @
+        self.expect(L_PAREN);
+        self.parse_expr(); // target expression
+        // Optional network argument
+        if self.eat(COMMA) {
+            self.parse_expr(); // network expression
+        }
+        self.expect(R_PAREN);
+        self.expect(SLASH);
+        if self.at(IDENT) {
+            self.bump_any(); // function name
+        }
+        // parse call arguments
+        self.expect(L_PAREN);
+        if !self.at(R_PAREN) {
+            self.parse_expr();
+            while self.eat(COMMA) {
+                if self.at(R_PAREN) {
+                    break;
+                }
+                self.parse_expr();
+            }
+        }
+        self.expect(R_PAREN);
+        Some(m.complete(self, DYNAMIC_CALL_EXPR))
+    }
+
     /// Parse call expression: `expr(args)`.
     fn parse_call_expr(&mut self, lhs: CompletedMarker) -> Option<CompletedMarker> {
         let m = lhs.precede(self);
@@ -394,6 +425,7 @@ impl Parser<'_, '_> {
             INTEGER => self.parse_integer_literal(),
             STRING => self.parse_string_literal(),
             ADDRESS_LIT => self.parse_address_literal(),
+            IDENT_LIT => self.parse_identifier_literal(),
             KW_TRUE | KW_FALSE => self.parse_bool_literal(),
             KW_NONE => self.parse_none_literal(),
 
@@ -464,6 +496,13 @@ impl Parser<'_, '_> {
         let m = self.start();
         self.bump_any();
         Some(m.complete(self, LITERAL_STRING))
+    }
+
+    /// Parse an identifier literal: `'foo'`.
+    fn parse_identifier_literal(&mut self) -> Option<CompletedMarker> {
+        let m = self.start();
+        self.bump_any();
+        Some(m.complete(self, LITERAL_IDENT))
     }
 
     /// Parse an address literal.
@@ -615,6 +654,12 @@ impl Parser<'_, '_> {
                 return self.parse_call_expr(cm);
             }
 
+            // Check for dynamic call: Interface @ ( target [, network] ) / function ( args )
+            if self.at(AT) {
+                let cm = m.complete(self, TYPE_LOCATOR);
+                return self.parse_dynamic_call_expr(cm);
+            }
+
             let kind = if is_locator { PATH_LOCATOR_EXPR } else { PROGRAM_REF_EXPR };
             return Some(m.complete(self, kind));
         }
@@ -661,6 +706,12 @@ impl Parser<'_, '_> {
         if self.at(L_PAREN) {
             let cm = m.complete(self, PATH_EXPR);
             return self.parse_call_expr(cm);
+        }
+
+        // Check for dynamic call: Interface @ ( target [, network] ) / function ( args )
+        if self.at(AT) {
+            let cm = m.complete(self, TYPE_PATH);
+            return self.parse_dynamic_call_expr(cm);
         }
 
         Some(m.complete(self, PATH_EXPR))
@@ -784,6 +835,117 @@ mod tests {
             ROOT@0..4
               LITERAL_NONE@0..4
                 KW_NONE@0..4 "none"
+        "#]]);
+    }
+
+    #[test]
+    fn parse_expr_identifier_literal() {
+        check_expr("'foo'", expect![[r#"
+            ROOT@0..5
+              LITERAL_IDENT@0..5
+                IDENT_LIT@0..5 "'foo'"
+        "#]]);
+    }
+
+    // =========================================================================
+    // Dynamic Call Expressions
+    // =========================================================================
+
+    #[test]
+    fn parse_expr_dynamic_call_basic() {
+        check_expr("Adder@(target)/sum(x, y)", expect![[r#"
+            ROOT@0..24
+              DYNAMIC_CALL_EXPR@0..24
+                TYPE_PATH@0..5
+                  IDENT@0..5 "Adder"
+                AT@5..6 "@"
+                L_PAREN@6..7 "("
+                PATH_EXPR@7..13
+                  IDENT@7..13 "target"
+                R_PAREN@13..14 ")"
+                SLASH@14..15 "/"
+                IDENT@15..18 "sum"
+                L_PAREN@18..19 "("
+                PATH_EXPR@19..20
+                  IDENT@19..20 "x"
+                COMMA@20..21 ","
+                WHITESPACE@21..22 " "
+                PATH_EXPR@22..23
+                  IDENT@22..23 "y"
+                R_PAREN@23..24 ")"
+        "#]]);
+    }
+
+    #[test]
+    fn parse_expr_dynamic_call_identifier_target() {
+        check_expr("Adder@('foo')/sum(x, y)", expect![[r#"
+            ROOT@0..23
+              DYNAMIC_CALL_EXPR@0..23
+                TYPE_PATH@0..5
+                  IDENT@0..5 "Adder"
+                AT@5..6 "@"
+                L_PAREN@6..7 "("
+                LITERAL_IDENT@7..12
+                  IDENT_LIT@7..12 "'foo'"
+                R_PAREN@12..13 ")"
+                SLASH@13..14 "/"
+                IDENT@14..17 "sum"
+                L_PAREN@17..18 "("
+                PATH_EXPR@18..19
+                  IDENT@18..19 "x"
+                COMMA@19..20 ","
+                WHITESPACE@20..21 " "
+                PATH_EXPR@21..22
+                  IDENT@21..22 "y"
+                R_PAREN@22..23 ")"
+        "#]]);
+    }
+
+    #[test]
+    fn parse_expr_dynamic_call_with_network() {
+        check_expr("Adder@('foo', 'aleo')/sum(x, y)", expect![[r#"
+            ROOT@0..31
+              DYNAMIC_CALL_EXPR@0..31
+                TYPE_PATH@0..5
+                  IDENT@0..5 "Adder"
+                AT@5..6 "@"
+                L_PAREN@6..7 "("
+                LITERAL_IDENT@7..12
+                  IDENT_LIT@7..12 "'foo'"
+                COMMA@12..13 ","
+                WHITESPACE@13..14 " "
+                LITERAL_IDENT@14..20
+                  IDENT_LIT@14..20 "'aleo'"
+                R_PAREN@20..21 ")"
+                SLASH@21..22 "/"
+                IDENT@22..25 "sum"
+                L_PAREN@25..26 "("
+                PATH_EXPR@26..27
+                  IDENT@26..27 "x"
+                COMMA@27..28 ","
+                WHITESPACE@28..29 " "
+                PATH_EXPR@29..30
+                  IDENT@29..30 "y"
+                R_PAREN@30..31 ")"
+        "#]]);
+    }
+
+    #[test]
+    fn parse_expr_dynamic_call_no_args() {
+        check_expr("Adder@(target)/sum()", expect![[r#"
+            ROOT@0..20
+              DYNAMIC_CALL_EXPR@0..20
+                TYPE_PATH@0..5
+                  IDENT@0..5 "Adder"
+                AT@5..6 "@"
+                L_PAREN@6..7 "("
+                PATH_EXPR@7..13
+                  IDENT@7..13 "target"
+                R_PAREN@13..14 ")"
+                SLASH@14..15 "/"
+                IDENT@15..18 "sum"
+                L_PAREN@18..19 "("
+                R_PAREN@19..20 ")"
         "#]]);
     }
 
