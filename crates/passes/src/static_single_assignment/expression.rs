@@ -25,6 +25,7 @@ use leo_ast::{
     Composite,
     CompositeExpression,
     CompositeFieldInitializer,
+    DynamicCallExpression,
     Expression,
     ExpressionConsumer,
     IntrinsicExpression,
@@ -136,6 +137,31 @@ impl ExpressionConsumer for SsaFormingVisitor<'_> {
             .into(),
             statements,
         )
+    }
+
+    fn consume_dynamic_call(&mut self, input: DynamicCallExpression) -> Self::Output {
+        let mut statements = Vec::new();
+
+        let (target, mut target_stmts) = self.consume_expression_and_define(input.target_program);
+        statements.append(&mut target_stmts);
+
+        let network = input.network.map(|n| {
+            let (n, mut stmts) = self.consume_expression_and_define(n);
+            statements.append(&mut stmts);
+            n
+        });
+
+        let arguments = input
+            .arguments
+            .into_iter()
+            .map(|argument| {
+                let (argument, mut stmts) = self.consume_expression_and_define(argument);
+                statements.append(&mut stmts);
+                argument
+            })
+            .collect();
+
+        (DynamicCallExpression { target_program: target, network, arguments, ..input }.into(), statements)
     }
 
     /// Consumes a cast expression, accumulating any statements that are generated.

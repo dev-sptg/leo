@@ -24,6 +24,8 @@ use leo_ast::{
     CallExpression,
     CastExpression,
     CompositeExpression,
+    CompositeType,
+    DynamicCallExpression,
     Expression,
     FromStrRadix,
     IntegerType,
@@ -83,6 +85,7 @@ impl CodeGeneratingVisitor<'_> {
 
             Expression::Intrinsic(expr) => self.visit_intrinsic(expr),
 
+            Expression::DynamicCall(expr) => some_expr(self.visit_dynamic_call(expr)),
             Expression::Async(..) => {
                 panic!("`AsyncExpression`s should not be in the AST at this phase of compilation.")
             }
@@ -158,6 +161,7 @@ impl CodeGeneratingVisitor<'_> {
         }
 
         match literal.variant.clone() {
+            LiteralVariant::Identifier(val) => AleoExpr::Identifier(val),
             LiteralVariant::Address(val) => AleoExpr::Address(prepare_literal(&val)),
             LiteralVariant::Boolean(val) => AleoExpr::Bool(val),
             LiteralVariant::Field(val) => AleoExpr::Field(prepare_literal(&val)),
@@ -339,12 +343,12 @@ impl CodeGeneratingVisitor<'_> {
                 AleoType::Record { name: record_name.to_string(), program: None }
             } else {
                 // foo; // no visibility for structs
-                let struct_name = Self::legalize_path(&composite_location.path)
-                    .expect("path format cannot be legalized at this point");
-                if program == this_program_name {
-                    AleoType::Ident { name: struct_name.to_string() }
+                let struct_name = self.legalize_composite_name(composite_location);
+                if program == this_program_name || self.state.symbol_table.is_library(program) {
+                    // Library composites are inlined, so emit without program qualifier.
+                    AleoType::Ident { name: struct_name }
                 } else {
-                    AleoType::Location { program: program.to_string(), name: struct_name.to_string() }
+                    AleoType::Location { program: program.to_string(), name: struct_name }
                 }
             }
         } else {
@@ -527,6 +531,117 @@ impl CodeGeneratingVisitor<'_> {
         instructions.push(call_instruction);
 
         // Return the output operands and the instructions.
+        (AleoExpr::Tuple(destinations.into_iter().map(AleoExpr::Reg).collect()), instructions)
+    }
+
+    fn visit_dynamic_call(&mut self, input: &DynamicCallExpression) -> (AleoExpr, Vec<AleoStmt>) {
+        let caller_program = self.program_id.expect("Dynamic calls only appear within programs.").as_symbol();
+
+        // Look up the interface and function prototype from the symbol table.
+
+        let Type::Composite(CompositeType { path: interface_path, .. }) = &input.interface else {
+            panic!("Dynamic calls can only be done over interface types");
+        };
+        let interface_location = interface_path.try_global_location().expect("Should be resolved by now.");
+        let interface = self
+            .state
+            .symbol_table
+            .lookup_interface(caller_program, interface_location)
+            .expect("Type checking guarantees interfaces exist")
+            .clone();
+
+        let (_, func_proto) = interface
+            .functions
+            .iter()
+            .find(|(name, _)| *name == input.function.name)
+            .expect("Type checking guarantees function exists in interface");
+        let func_proto = func_proto.clone();
+
+        let mut instructions = vec![];
+
+        // Codegen the target expression → PROG operand (a field value in a register).
+        let (target_expr, target_instructions) = self.visit_expression(&input.target_program);
+        instructions.extend(target_instructions);
+        let prog = target_expr.expect("Target must produce a value.");
+
+        // NET operand: use provided network or default to 'aleo'.
+        let net = if let Some(network) = &input.network {
+            let (net_expr, net_instructions) = self.visit_expression(network);
+            instructions.extend(net_instructions);
+            net_expr.expect("Network must produce a value.")
+        } else {
+            AleoExpr::RawName("'aleo'".to_string())
+        };
+
+        // FUN operand: the function name as an identifier literal.
+        let fun = AleoExpr::RawName(format!("'{}'", input.function.name));
+
+        // Codegen arguments.
+        let arguments: Vec<AleoExpr> = input
+            .arguments
+            .iter()
+            .filter_map(|argument| {
+                let (argument, argument_instructions) = self.visit_expression(argument);
+                instructions.extend(argument_instructions);
+                argument
+            })
+            .collect();
+
+        // Determine input types from the function prototype.
+        // call.dynamic requires explicit visibility on every type; default Mode::None to Private.
+        let input_types: Vec<(AleoType, Option<AleoVisibility>)> = func_proto
+            .input
+            .iter()
+            .map(|inp| {
+                let viz = AleoVisibility::maybe_from(inp.mode()).or(Some(AleoVisibility::Private));
+                self.visit_type_with_visibility(&inp.type_, viz)
+            })
+            .collect();
+
+        // Allocate output registers.
+        let mut destinations = Vec::new();
+        match func_proto.output_type.clone() {
+            t if t.is_empty() => {}
+            Type::Tuple(tuple) => match tuple.length() {
+                0 | 1 => panic!("Parsing guarantees that a tuple type has at least two elements"),
+                len => {
+                    for _ in 0..len {
+                        destinations.push(self.next_register());
+                    }
+                }
+            },
+            _ => {
+                destinations.push(self.next_register());
+            }
+        }
+
+        // Determine output types from the function prototype.
+        // call.dynamic requires explicit visibility on every type; default Mode::None to Private.
+        // Future outputs are mapped to DynamicFuture.
+        let output_types: Vec<(AleoType, Option<AleoVisibility>)> = func_proto
+            .output
+            .iter()
+            .map(|out| {
+                if matches!(out.type_, Type::Future(..)) {
+                    (AleoType::DynamicFuture, None)
+                } else {
+                    let viz = AleoVisibility::maybe_from(out.mode).or(Some(AleoVisibility::Private));
+                    self.visit_type_with_visibility(&out.type_, viz)
+                }
+            })
+            .collect();
+
+        // Emit CallDynamic instruction.
+        instructions.push(AleoStmt::CallDynamic(
+            prog,
+            net,
+            fun,
+            arguments,
+            input_types,
+            destinations.clone(),
+            output_types,
+        ));
+
         (AleoExpr::Tuple(destinations.into_iter().map(AleoExpr::Reg).collect()), instructions)
     }
 
@@ -808,6 +923,14 @@ impl CodeGeneratingVisitor<'_> {
                 let ins = AleoStmt::Cast(register.clone(), new_reg.clone(), AleoType::Signature);
                 ((AleoExpr::Reg(new_reg)), vec![ins])
             }
+            Type::DynRecord => {
+                let ins = AleoStmt::Cast(register.clone(), new_reg.clone(), AleoType::DynamicRecord);
+                (AleoExpr::Reg(new_reg), vec![ins])
+            }
+            Type::Identifier => {
+                let ins = AleoStmt::Cast(register.clone(), new_reg.clone(), AleoType::Identifier);
+                (AleoExpr::Reg(new_reg), vec![ins])
+            }
             Type::Integer(int) => {
                 let ins = AleoStmt::Cast(register.clone(), new_reg.clone(), match int {
                     IntegerType::U8 => AleoType::U8,
@@ -866,7 +989,7 @@ impl CodeGeneratingVisitor<'_> {
             Type::Mapping(..)
             | Type::Future(..)
             | Type::Tuple(..)
-            | Type::Identifier(..)
+            | Type::Ident(..)
             | Type::String
             | Type::Unit
             | Type::Numeric

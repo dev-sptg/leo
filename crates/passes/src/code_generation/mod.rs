@@ -333,6 +333,7 @@ pub enum AleoExpr {
     RawName(String),
     // Literals
     Address(String),
+    Identifier(String),
     Bool(bool),
     Field(String),
     Group(String),
@@ -359,6 +360,7 @@ impl Display for AleoExpr {
             Self::MemberAccess(comp, member) => write!(f, "{comp}.{member}"),
             Self::RawName(n) => write!(f, "{n}"),
             // Literals
+            Self::Identifier(val) => write!(f, "'{val}'"),
             Self::Address(val) => write!(f, "{val}"),
             Self::Bool(val) => write!(f, "{val}"),
             Self::Field(val) => write!(f, "{val}field"),
@@ -410,6 +412,15 @@ pub enum AleoStmt {
     Serialize(SerializeVariant, AleoExpr, AleoType, AleoReg, AleoType),
     Deserialize(DeserializeVariant, AleoExpr, AleoType, AleoReg, AleoType),
     Call(String, Vec<AleoExpr>, Vec<AleoReg>),
+    CallDynamic(
+        AleoExpr,
+        AleoExpr,
+        AleoExpr,
+        Vec<AleoExpr>,
+        Vec<(AleoType, Option<AleoVisibility>)>,
+        Vec<AleoReg>,
+        Vec<(AleoType, Option<AleoVisibility>)>,
+    ),
     Async(String, Vec<AleoExpr>, Vec<AleoReg>),
     BranchEq(AleoExpr, AleoExpr, String),
     Position(String),
@@ -520,6 +531,36 @@ impl Display for AleoStmt {
                 }
                 writeln!(f, ";")
             }
+            Self::CallDynamic(prog, net, fun, inputs, input_types, outputs, output_types) => {
+                write!(f, "    call.dynamic {prog} {net} {fun}")?;
+                if !inputs.is_empty() {
+                    write!(f, " with {}", inputs.iter().map(|i| i.to_string()).join(" "))?;
+                }
+                if !input_types.is_empty() {
+                    write!(
+                        f,
+                        " (as {})",
+                        input_types
+                            .iter()
+                            .map(|(ty, viz)| { if let Some(v) = viz { format!("{ty}.{v}") } else { format!("{ty}") } })
+                            .join(" ")
+                    )?;
+                }
+                if !outputs.is_empty() {
+                    write!(f, " into {}", outputs.iter().map(|o| o.to_string()).join(" "))?;
+                }
+                if !output_types.is_empty() {
+                    write!(
+                        f,
+                        " (as {})",
+                        output_types
+                            .iter()
+                            .map(|(ty, viz)| { if let Some(v) = viz { format!("{ty}.{v}") } else { format!("{ty}") } })
+                            .join(" ")
+                    )?;
+                }
+                writeln!(f, ";")
+            }
             Self::Async(id, inputs, dests) => {
                 write!(f, "    async {id}")?;
                 if !inputs.is_empty() {
@@ -576,6 +617,9 @@ pub enum AleoType {
     GroupX,
     GroupY,
     Address,
+    Identifier,
+    DynamicRecord,
+    DynamicFuture,
     Boolean,
     Field,
     Group,
@@ -603,6 +647,9 @@ impl Display for AleoType {
             Self::GroupY => write!(f, "group.y"),
             Self::Ident { name } => write!(f, "{name}"),
             Self::Location { program, name } => write!(f, "{program}/{name}"),
+            Self::Identifier => write!(f, "identifier"),
+            Self::DynamicRecord => write!(f, "dynamic.record"),
+            Self::DynamicFuture => write!(f, "dynamic.future"),
             Self::Address => write!(f, "address"),
             Self::Boolean => write!(f, "boolean"),
             Self::Field => write!(f, "field"),
@@ -639,6 +686,7 @@ impl<N: Network> From<PlaintextType<N>> for AleoType {
 impl From<LiteralType> for AleoType {
     fn from(value: LiteralType) -> Self {
         match value {
+            LiteralType::Identifier => Self::Identifier,
             LiteralType::Address => Self::Address,
             LiteralType::Boolean => Self::Boolean,
             LiteralType::Field => Self::Field,

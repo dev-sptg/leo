@@ -34,6 +34,7 @@ use snarkvm::prelude::{
     Field as SvmField,
     Future as FutureParam,
     Group as SvmGroup,
+    IdentifierLiteral as SvmIdentifierLiteralParam,
     LiteralType,
     Owner,
     ProgramID as ProgramIDParam,
@@ -62,6 +63,7 @@ pub(crate) type ProgramID = ProgramIDParam<CurrentNetwork>;
 pub(crate) type SvmPlaintext = Plaintext<CurrentNetwork>;
 pub(crate) type SvmLiteral = SvmLiteralParam<CurrentNetwork>;
 pub(crate) type SvmIdentifier = SvmIdentifierParam<CurrentNetwork>;
+pub(crate) type SvmIdentifierLiteral = SvmIdentifierLiteralParam<CurrentNetwork>;
 pub(crate) type SvmLocator = SvmLocatorParam<CurrentNetwork>;
 pub(crate) type Group = SvmGroup<CurrentNetwork>;
 pub(crate) type Field = SvmField<CurrentNetwork>;
@@ -189,6 +191,16 @@ impl Hash for ValueVariants {
                 }
                 SvmValueParam::Plaintext(plaintext) => {
                     hash_plaintext(plaintext, state);
+                }
+                SvmValueParam::DynamicRecord(record) => {
+                    6u8.hash(state);
+                    (**record.version()).hash(state);
+                    record.nonce().hash(state);
+                }
+                SvmValueParam::DynamicFuture(future) => {
+                    7u8.hash(state);
+                    future.program_name().hash(state);
+                    future.function_name().hash(state);
                 }
             },
             String(s) => {
@@ -521,7 +533,8 @@ impl Value {
             | SvmLiteralParam::Group(..)
             | SvmLiteralParam::Scalar(..)
             | SvmLiteralParam::Signature(..)
-            | SvmLiteralParam::String(..) => return None,
+            | SvmLiteralParam::String(..)
+            | SvmLiteralParam::Identifier(..) => return None,
         };
         Some(value)
     }
@@ -871,6 +884,8 @@ impl Value {
                 }
                 SvmValueParam::Record(..) => return None,
                 SvmValueParam::Future(..) => return None,
+                SvmValueParam::DynamicRecord(..) => return None,
+                SvmValueParam::DynamicFuture(..) => return None,
             },
             ValueVariants::Future(..) => return None,
             ValueVariants::String(value) => Literal::string(value.clone(), span, id).into(),
@@ -930,6 +945,12 @@ fn plaintext_to_expression(
                 Literal::address(signature.to_string(), span, node_builder.next_id()).into()
             }
             SvmLiteralParam::String(..) => return None,
+            SvmLiteralParam::Identifier(id) => {
+                // id.to_string() returns `'name'`; strip the surrounding single quotes.
+                let s = id.to_string();
+                let name = s.trim_matches('\'').to_string();
+                Literal::identifier(name, span, node_builder.next_id()).into()
+            }
         },
         Plaintext::Struct(index_map, ..) => {
             let Type::Composite(composite_type) = ty else {

@@ -379,6 +379,7 @@ impl AstVisitor for TypeCheckingVisitor<'_> {
             Expression::Async(async_) => self.visit_async(async_, additional),
             Expression::Binary(binary) => self.visit_binary(binary, additional),
             Expression::Call(call) => self.visit_call(call, additional),
+            Expression::DynamicCall(dc) => self.visit_dynamic_call(dc, additional),
             Expression::Cast(cast) => self.visit_cast(cast, additional),
             Expression::Composite(composite) => self.visit_composite_init(composite, additional),
             Expression::Err(err) => self.visit_err(err, additional),
@@ -990,6 +991,93 @@ impl AstVisitor for TypeCheckingVisitor<'_> {
         }
     }
 
+    fn visit_dynamic_call(&mut self, input: &DynamicCallExpression, expected: &Self::AdditionalInput) -> Self::Output {
+        let current_program = self.scope_state.program_name.unwrap();
+
+        // Look up the interface in the symbol table.
+        let Type::Composite(CompositeType { path: interface_path, .. }) = &input.interface else {
+            panic!("Dynamic calls can only be done over interface types");
+        };
+        let interface_location = interface_path.try_global_location().expect("Should be resolved by now.");
+        let Some(interface) = self.state.symbol_table.lookup_interface(current_program, interface_location) else {
+            self.emit_err(TypeCheckerError::unknown_sym("interface", &input.interface, interface_path.span));
+            return Type::Err;
+        };
+        let interface = interface.clone();
+
+        // Find the function prototype in the interface.
+        let Some((_, func_proto)) = interface.functions.iter().find(|(name, _)| *name == input.function.name) else {
+            self.emit_err(TypeCheckerError::unknown_sym(
+                "function",
+                format!("{}::{}", input.interface, input.function),
+                input.function.span,
+            ));
+            return Type::Err;
+        };
+        let func_proto = func_proto.clone();
+
+        // Dynamic calls are only allowed from transitions.
+        match self.scope_state.variant.unwrap() {
+            Variant::Finalize => {
+                self.emit_err(TypeCheckerError::dynamic_call_not_allowed_here("a finalize function", input.span));
+            }
+            Variant::FinalFn => {
+                self.emit_err(TypeCheckerError::dynamic_call_not_allowed_here("a final function", input.span));
+            }
+            Variant::Fn => {
+                self.emit_err(TypeCheckerError::dynamic_call_not_allowed_here("a regular function", input.span));
+            }
+            Variant::EntryPoint => {}
+        }
+
+        if self.async_block_id.is_some() {
+            self.emit_err(TypeCheckerError::dynamic_call_not_allowed_here("a final block", input.span));
+        }
+
+        // Check target type: must be field or identifier.
+        let target_type = self.visit_expression(&input.target_program, &None);
+        if !matches!(target_type, Type::Field | Type::Identifier | Type::Err) {
+            self.emit_err(TypeCheckerError::type_should_be2(
+                &target_type,
+                "`field` or `identifier`",
+                input.target_program.span(),
+            ));
+        }
+
+        // If network is provided, check it's an identifier.
+        if let Some(ref network) = input.network {
+            self.visit_expression(network, &Some(Type::Identifier));
+        }
+
+        // Check argument count.
+        if func_proto.input.len() != input.arguments.len() {
+            self.emit_err(TypeCheckerError::incorrect_num_args_to_call(
+                func_proto.input.len(),
+                input.arguments.len(),
+                input.span(),
+            ));
+        }
+
+        // Check argument types.
+        for (expected_input, argument) in func_proto.input.iter().zip(input.arguments.iter()) {
+            self.visit_expression(argument, &Some(expected_input.type_().clone()));
+        }
+
+        // If the output type contains a Future, mark it as coming from a dynamic call.
+        let output_type = func_proto.output_type.clone();
+        let contains_future = match &output_type {
+            Type::Future(..) => true,
+            Type::Tuple(tuple) => tuple.elements().iter().any(|t| matches!(t, Type::Future(..))),
+            _ => false,
+        };
+        if contains_future {
+            self.scope_state.call_location = Some(Location::dynamic());
+        }
+
+        // Return the function prototype's output type.
+        self.assert_and_return_type(output_type, expected, input.span())
+    }
+
     fn visit_call(&mut self, input: &CallExpression, expected: &Self::AdditionalInput) -> Self::Output {
         let current_program = self.scope_state.program_name.unwrap();
         let callee_location = input.function.expect_global_location();
@@ -1432,6 +1520,7 @@ impl AstVisitor for TypeCheckingVisitor<'_> {
             LiteralVariant::Address(..) => Type::Address,
             LiteralVariant::Boolean(..) => Type::Boolean,
             LiteralVariant::Field(..) => Type::Field,
+            LiteralVariant::Identifier(..) => Type::Identifier,
             LiteralVariant::Group(s) => {
                 let trimmed = s.trim_start_matches('-').trim_start_matches('0');
                 if !trimmed.is_empty()
@@ -2017,7 +2106,10 @@ impl AstVisitor for TypeCheckingVisitor<'_> {
 
     fn visit_expression_statement(&mut self, input: &ExpressionStatement) {
         // Expression statements can only be function calls.
-        if !matches!(input.expression, Expression::Call(_) | Expression::Intrinsic(_) | Expression::Unit(_)) {
+        if !matches!(
+            input.expression,
+            Expression::Call(_) | Expression::DynamicCall(_) | Expression::Intrinsic(_) | Expression::Unit(_)
+        ) {
             self.emit_err(TypeCheckerError::expression_statement_must_be_function_call(input.span()));
         } else {
             // Check the expression.

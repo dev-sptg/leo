@@ -142,10 +142,12 @@ pub fn make_optional_struct_symbol(ty: &Type) -> Symbol {
             | Type::Optional(_)
             | Type::Mapping(_)
             | Type::Numeric
-            | Type::Identifier(_)
+            | Type::Ident(_)
             | Type::Future(_)
             | Type::Vector(_)
             | Type::String
+            | Type::Identifier
+            | Type::DynRecord
             | Type::Err
             | Type::Unit => {
                 panic!("unexpected inner type in optional struct name")

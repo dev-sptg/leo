@@ -497,9 +497,11 @@ impl<'a> ConversionContext<'a> {
             LITERAL_ADDRESS => self.address_literal_to_expression(node)?,
             LITERAL_BOOL => self.bool_literal_to_expression(node)?,
             LITERAL_NONE => leo_ast::Literal::none(span, self.builder.next_id()).into(),
+            LITERAL_IDENT => self.identifier_literal_to_expression(node)?,
             BINARY_EXPR => self.binary_expr_to_expression(node)?,
             UNARY_EXPR => self.unary_expr_to_expression(node)?,
             CALL_EXPR => self.call_expr_to_expression(node)?,
+            DYNAMIC_CALL_EXPR => self.dynamic_call_expr_to_expression(node)?,
             METHOD_CALL_EXPR => self.method_call_expr_to_expression(node)?,
             FIELD_EXPR => self.field_expr_to_expression(node)?,
             TUPLE_ACCESS_EXPR => self.tuple_access_expr_to_expression(node)?,
@@ -575,6 +577,17 @@ impl<'a> ConversionContext<'a> {
         let id = self.builder.next_id();
         let token = tokens(node).next().expect("LITERAL_STRING should have a token");
         Ok(leo_ast::Literal::string(token.text().to_string(), span, id).into())
+    }
+
+    /// Convert a LITERAL_IDENT node to an expression.
+    fn identifier_literal_to_expression(&self, node: &SyntaxNode) -> Result<leo_ast::Expression> {
+        let span = self.content_span(node);
+        let id = self.builder.next_id();
+        let token = tokens(node).next().expect("LITERAL_IDENT should have a token");
+        // Strip the surrounding single quotes.
+        let text = token.text();
+        let content = &text[1..text.len() - 1];
+        Ok(leo_ast::Literal::identifier(content.to_string(), span, id).into())
     }
 
     /// Convert a LITERAL_ADDRESS node to an expression.
@@ -751,6 +764,63 @@ impl<'a> ConversionContext<'a> {
         }
 
         Ok(leo_ast::CallExpression { function, const_arguments, arguments, span, id }.into())
+    }
+
+    /// Convert a DYNAMIC_CALL_EXPR node to an expression.
+    fn dynamic_call_expr_to_expression(&self, node: &SyntaxNode) -> Result<leo_ast::Expression> {
+        debug_assert_eq!(node.kind(), DYNAMIC_CALL_EXPR);
+        let span = self.content_span(node);
+        let id = self.builder.next_id();
+
+        let interface = children(node)
+            .filter(|n| n.kind().is_type())
+            .map(|n| self.to_type(&n))
+            .next()
+            .expect("Parser guarantees a type")?;
+
+        let function = if let Some(token) = tokens(node).find(|t| t.kind() == IDENT) {
+            self.to_identifier(&token)
+        } else {
+            self.error_identifier(span)
+        };
+
+        // Collect expression children: first is target, optional second is network
+        // (if inside the @(...) before the /), rest are arguments.
+        // We detect which expressions are "inside the parens" vs "arguments" by
+        // looking at the SLASH token position. Expressions before SLASH are
+        // target/network, expressions after are arguments.
+        let slash_offset = tokens(node).find(|t| t.kind() == SLASH).map(|t| t.text_range().start());
+
+        let expr_children: Vec<_> = children(node).filter(|n| n.kind().is_expression()).collect();
+
+        let mut pre_slash = Vec::new();
+        let mut post_slash = Vec::new();
+        for child in &expr_children {
+            if let Some(slash_off) = slash_offset {
+                if child.text_range().start() < slash_off {
+                    pre_slash.push(child);
+                } else {
+                    post_slash.push(child);
+                }
+            } else {
+                // No slash found (error recovery), treat all as pre-slash
+                pre_slash.push(child);
+            }
+        }
+
+        let target = if let Some(target_node) = pre_slash.first() {
+            self.to_expression(target_node)?
+        } else {
+            self.error_expression(span)
+        };
+
+        let network =
+            if let Some(network_node) = pre_slash.get(1) { Some(self.to_expression(network_node)?) } else { None };
+
+        let arguments = post_slash.iter().map(|n| self.to_expression(n)).collect::<Result<Vec<_>>>()?;
+
+        Ok(leo_ast::DynamicCallExpression { interface, target_program: target, network, function, arguments, span, id }
+            .into())
     }
 
     /// Convert a METHOD_CALL_EXPR node to the appropriate expression.
@@ -1731,21 +1801,28 @@ impl<'a> ConversionContext<'a> {
         &self,
         item: &SyntaxNode,
         consts: &mut Vec<(Symbol, leo_ast::ConstDeclaration)>,
+        structs: &mut Vec<(Symbol, leo_ast::Composite)>,
     ) -> Result<()> {
         if is_library_item(item.kind()) {
-            #[allow(clippy::single_match)]
             match item.kind() {
                 GLOBAL_CONST => {
                     let global_const = self.to_global_const(item)?;
                     consts.push((global_const.place.name, global_const));
                 }
-                // Future library items (structs, functions, etc.) will be handled here.
+                STRUCT_DEF => {
+                    let composite = self.to_composite(item)?;
+                    structs.push((composite.identifier.name, composite));
+                }
+                // Future library items (functions, etc.) will be handled here.
                 _ => {}
             }
         } else if is_program_item(item.kind()) {
             // A recognized program-only item appeared in a library file.
             let span = self.to_span(item);
-            self.handler.emit_err(ParserError::custom("Only `const` declarations are allowed in a library.", span));
+            self.handler.emit_err(ParserError::custom(
+                "Only `const` declarations and `struct` definitions are allowed in a library.",
+                span,
+            ));
         }
         // Other node kinds (e.g. ERROR nodes from CST-level parse failures) are
         // already reported by the rowan parser; nothing to do here.
@@ -1899,14 +1976,14 @@ impl<'a> ConversionContext<'a> {
 
     /// Convert a syntax node to a library (`lib.leo` file).
     fn to_library(&self, name: Symbol, node: &SyntaxNode) -> Result<leo_ast::Library> {
-        // A library file contains only top-level `const` declarations.
         let mut consts = Vec::new();
+        let mut structs = Vec::new();
 
         for child in children(node) {
-            self.collect_library_item(&child, &mut consts)?;
+            self.collect_library_item(&child, &mut consts, &mut structs)?;
         }
 
-        Ok(leo_ast::Library { name, consts })
+        Ok(leo_ast::Library { name, consts, structs })
     }
 
     /// Extract a ProgramId from an IMPORT node. Guarantees `network` is always present.
@@ -2852,6 +2929,7 @@ fn keyword_to_primitive_type(kind: SyntaxKind) -> Option<leo_ast::Type> {
         KW_SCALAR => leo_ast::Type::Scalar,
         KW_SIGNATURE => leo_ast::Type::Signature,
         KW_STRING => leo_ast::Type::String,
+        KW_IDENTIFIER => leo_ast::Type::Identifier,
         KW_U8 => leo_ast::Type::Integer(leo_ast::IntegerType::U8),
         KW_U16 => leo_ast::Type::Integer(leo_ast::IntegerType::U16),
         KW_U32 => leo_ast::Type::Integer(leo_ast::IntegerType::U32),
@@ -2974,10 +3052,10 @@ fn compute_module_key(name: &FileName, root_dir: Option<&std::path::Path>) -> Op
 
 /// Returns `true` for syntax node kinds that are valid inside a library (`lib.leo`).
 ///
-/// Currently only `const` declarations are allowed; this list will grow as library support
-/// expands to include structs and functions.
+/// Currently `const` declarations and `struct` definitions are allowed; this list will grow
+/// as library support expands to include functions and other items.
 fn is_library_item(kind: SyntaxKind) -> bool {
-    matches!(kind, GLOBAL_CONST)
+    matches!(kind, GLOBAL_CONST | STRUCT_DEF)
 }
 
 /// Returns `true` for syntax node kinds that are valid inside a program (`main.leo`).
