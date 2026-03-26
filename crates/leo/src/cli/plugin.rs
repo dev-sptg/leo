@@ -93,10 +93,12 @@ pub fn all() -> Vec<(String, PathBuf)> {
             let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
                 continue;
             };
-            if let Some(subcmd) = name.strip_prefix(PLUGIN_PREFIX) {
-                if !subcmd.is_empty() && is_executable(&path) && seen.insert(subcmd.to_string()) {
-                    plugins.push((subcmd.to_string(), path));
-                }
+            if let Some(subcmd) = name.strip_prefix(PLUGIN_PREFIX)
+                && !subcmd.is_empty()
+                && is_executable(&path)
+                && seen.insert(subcmd.to_string())
+            {
+                plugins.push((subcmd.to_string(), path));
             }
         }
     }
