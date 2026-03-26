@@ -129,6 +129,8 @@ enum Commands {
         #[clap(flatten)]
         command: LeoSynthesize,
     },
+    #[clap(about = "List installed leo plugins")]
+    Plugin,
     #[clap(about = "Update the Leo CLI")]
     Update {
         #[clap(flatten)]
@@ -160,6 +162,7 @@ impl Commands {
             Commands::Remove { .. } => "remove",
             Commands::Clean { .. } => "clean",
             Commands::Synthesize { .. } => "synthesize",
+            Commands::Plugin => "plugin",
             Commands::Update { .. } => "update",
             Commands::Upgrade { .. } => "upgrade",
         }
@@ -251,6 +254,7 @@ pub fn run_with_args(cli: CLI) -> Result<()> {
         Commands::Run { command } => command_output = Some(JsonOutput::Run(command.execute(context)?)),
         Commands::Test { command } => command_output = Some(JsonOutput::Test(command.execute(context)?)),
         Commands::Execute { command } => command_output = Some(JsonOutput::Execute(command.execute(context)?)),
+        Commands::Plugin => crate::cli::plugin::print_all(),
         Commands::Remove { command } => command.try_execute(context)?,
         Commands::Synthesize { command } => command_output = Some(JsonOutput::Synthesize(command.execute(context)?)),
         Commands::Update { command } => command.try_execute(context)?,

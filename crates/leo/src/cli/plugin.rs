@@ -16,12 +16,15 @@
 
 use leo_errors::{CliError, Result};
 
+use colored::Colorize;
 use std::{
     convert::Infallible,
     ffi::OsString,
     path::{Path, PathBuf},
     process,
 };
+
+const PLUGIN_PREFIX: &str = "leo-";
 
 /// Scan `PATH` for an executable named `name`.
 pub fn find_exe(name: &str) -> Option<PathBuf> {
@@ -68,6 +71,50 @@ pub fn exec(name: &str, args: &[OsString], cwd: Option<&Path>) -> Result<Infalli
                 CliError::custom(format!("failed to spawn '{name}': {err}")).into()
             })?;
         process::exit(status.code().unwrap_or(1));
+    }
+}
+
+/// Iterate over all `leo-*` plugin executables found on `PATH`.
+///
+/// Yields `(subcommand_name, path)` pairs, e.g. `("fmt", "/usr/local/bin/leo-fmt")`.
+/// Each plugin appears at most once (first match on PATH wins).
+pub fn all() -> Vec<(String, PathBuf)> {
+    let Some(var) = std::env::var_os("PATH") else {
+        return Vec::new();
+    };
+    let mut seen = std::collections::HashSet::new();
+    let mut plugins = Vec::new();
+    for dir in std::env::split_paths(&var) {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            if let Some(subcmd) = name.strip_prefix(PLUGIN_PREFIX) {
+                if !subcmd.is_empty() && is_executable(&path) && seen.insert(subcmd.to_string()) {
+                    plugins.push((subcmd.to_string(), path));
+                }
+            }
+        }
+    }
+    plugins.sort_by(|(a, _), (b, _)| a.cmp(b));
+    plugins
+}
+
+/// Print all installed `leo-*` plugins to stdout.
+pub fn print_all() {
+    let plugins = all();
+    if plugins.is_empty() {
+        println!("No leo plugins detected on PATH.");
+        return;
+    }
+    println!("Installed plugins:\n");
+    let name_col_w = plugins.iter().map(|(cmd, _)| cmd.len()).max().unwrap_or(0);
+    for (cmd, path) in &plugins {
+        println!("  {:<name_col_w$}  {}", cmd.bold(), path.display());
     }
 }
 
