@@ -433,6 +433,8 @@ define_syntax_kinds! {
     CONST_PARAM_LIST,
     /// Const generic argument list.
     CONST_ARG_LIST,
+    /// Visibility-annotated return type for `_dynamic_call` (e.g. `public u64`).
+    DYNAMIC_CALL_RETURN_TYPE,
     /// Array length expression wrapper in `[T; N]`.
     ARRAY_LENGTH,
 
@@ -569,6 +571,8 @@ define_syntax_kinds! {
     TYPE_FINAL,
     /// Mapping type in storage.
     TYPE_MAPPING,
+    /// Dynamic record type: `dyn record`
+    TYPE_DYN_RECORD,
     /// Parent list: `Foo + Bar`
     PARENT_LIST,
 
@@ -704,6 +708,7 @@ impl SyntaxKind {
                 | TYPE_OPTIONAL
                 | TYPE_FINAL
                 | TYPE_MAPPING
+                | TYPE_DYN_RECORD
         )
     }
 
