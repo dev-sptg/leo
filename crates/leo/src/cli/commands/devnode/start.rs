@@ -65,6 +65,8 @@ impl Command for Start {
 
 // This command initializes a local development node that is pre-populated with test accounts.
 async fn start_devnode(command: Start, private_key: Option<String>) -> Result<()> {
+    // Load the private key from the command line or environment variable, and start the server.
+    let private_key = get_private_key(&private_key)?;
     // Initialize the logger.
     println!("Starting the Devnode server...");
     initialize_terminal_logger(command.verbosity).expect("Failed to initialize logger");
@@ -85,19 +87,6 @@ async fn start_devnode(command: Start, private_key: Option<String>) -> Result<()
     };
     // Initialize the storage mode.
     let storage_mode = StorageMode::new_test(None);
-    // Fetch the private key from the command line or an environment variable.
-    let private_key = match private_key {
-        Some(key) => key,
-        None => std::env::var("PRIVATE_KEY").map_err(|e| {
-            CliError::custom(format!(
-                "
-Failed to load `PRIVATE_KEY` from the environment: {e}
-Please either:
-1. Use the --private-key flag: `leo devnode start --private-key <PRIVATE_KEY>`
-2. Set the PRIVATE_KEY environment variable"
-            ))
-        })?,
-    };
     // Initialize the ledger - use spawn_blocking for the blocking load operation.
     let ledger: Ledger<TestnetV0, ConsensusMemory<TestnetV0>> =
         tokio::task::spawn_blocking(move || Ledger::load(genesis_block, storage_mode))
