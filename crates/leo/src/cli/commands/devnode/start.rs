@@ -66,8 +66,8 @@ impl Command for Start {
 // This command initializes a local development node that is pre-populated with test accounts.
 async fn start_devnode(command: Start, private_key: Option<String>) -> Result<()> {
     // Load the private key from the command line or environment variable, and start the server.
-    let private_key = get_private_key(&private_key)
-    .map_err(|e| CliError::custom(format!("Invalid private key: {e}")))?;
+    let private_key =
+        get_private_key(&private_key).map_err(|e| CliError::custom(format!("Invalid private key: {e}")))?;
     // Initialize the logger.
     println!("Starting the Devnode server...");
     initialize_terminal_logger(command.verbosity).expect("Failed to initialize logger");
