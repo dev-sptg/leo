@@ -69,7 +69,9 @@ async fn start_devnode(command: Start, private_key: Option<String>) -> Result<()
     println!("Starting the Devnode server...");
     // Load the private key from the command line or environment variable, and start the server.
     let private_key = match private_key {
-        Some(pk) => PrivateKey::<TestnetV0>::from_str(&pk)?,
+        Some(pk) => {
+            PrivateKey::<TestnetV0>::from_str(&pk).map_err(|e| CliError::custom(format!("Invalid private key: {e}")))?
+        }
         None => {
             let pk = std::env::var("PRIVATE_KEY").map_err(|e| {
                 CliError::custom(format!(
@@ -80,7 +82,7 @@ Please either:
 2. Set the PRIVATE_KEY environment variable"
                 ))
             })?;
-            PrivateKey::<TestnetV0>::from_str(&pk)?
+            PrivateKey::<TestnetV0>::from_str(&pk).map_err(|e| CliError::custom(format!("Invalid private key: {e}")))?
         }
     };
     initialize_terminal_logger(command.verbosity).expect("Failed to initialize logger");
