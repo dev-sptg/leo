@@ -28,9 +28,10 @@ const PLUGIN_PREFIX: &str = "leo-";
 
 /// Scan `PATH` for an executable named `name`.
 pub fn find_exe(name: &str) -> Option<PathBuf> {
+    let filename = format!("{name}{}", std::env::consts::EXE_SUFFIX);
     let var = std::env::var_os("PATH")?;
     std::env::split_paths(&var).find_map(|dir| {
-        let candidate = dir.join(name);
+        let candidate = dir.join(&filename);
         if is_executable(&candidate) { Some(candidate) } else { None }
     })
 }
@@ -93,7 +94,8 @@ pub fn all() -> Vec<(String, PathBuf)> {
             let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
                 continue;
             };
-            if let Some(subcmd) = name.strip_prefix(PLUGIN_PREFIX)
+            let stem = name.strip_suffix(std::env::consts::EXE_SUFFIX).unwrap_or(name);
+            if let Some(subcmd) = stem.strip_prefix(PLUGIN_PREFIX)
                 && !subcmd.is_empty()
                 && is_executable(&path)
                 && seen.insert(subcmd.to_string())
