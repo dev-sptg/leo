@@ -5,9 +5,9 @@ program credits.aleo {
     }
 
     fn transfer_public_to_private(receiver: address, amount: u64) -> (credits, Final) {
-        let record: credits = credits { owner: receiver, amount };
+        let cred: credits = credits { owner: receiver, amount };
         let f: Final = final { finalize(); };
-        return (record, f);
+        return (cred, f);
     }
 }
 
@@ -24,7 +24,7 @@ program test_static.aleo {
     constructor() {}
 
     fn test_withdraw_private(amount: u64) -> (credits.aleo::credits, Final) {
-        let (record, f): (credits.aleo::credits, Final) = credits.aleo::transfer_public_to_private(self.signer, amount);
-        return (record, final { f.run(); });
+        let (cred, f): (credits.aleo::credits, Final) = credits.aleo::transfer_public_to_private(self.signer, amount);
+        return (cred, final { f.run(); });
     }
 }
