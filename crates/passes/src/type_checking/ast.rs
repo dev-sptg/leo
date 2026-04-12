@@ -2189,7 +2189,13 @@ impl AstVisitor for TypeCheckingVisitor<'_> {
                     (Some(Type::Tuple(tuple_type)), _) => tuple_type.clone(),
                     (None, Type::Tuple(tuple_type)) => tuple_type.clone(),
                     _ => {
-                        // This is an error but should have been emitted earlier. Just exit here.
+                        // This is a type error: no tuple type could be determined for this binding.
+                        // An error should have been emitted by the expression visitor. Set all
+                        // identifiers to `Type::Err` to uphold the invariant that every variable has
+                        // a known type after type checking, preventing downstream panics.
+                        for identifier in identifiers {
+                            self.set_local_type(Some(Type::Err), identifier, Type::Err);
+                        }
                         return;
                     }
                 };
