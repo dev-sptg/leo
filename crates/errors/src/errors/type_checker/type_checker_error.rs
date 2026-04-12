@@ -1523,4 +1523,11 @@ create_messages!(
         msg: format!("Vector types can only be used in storage declarations."),
         help: None,
     }
+
+    @formatted
+    multi_identifier_definition_requires_tuple {
+        args: (type_: impl Display),
+        msg: format!("A definition with multiple identifiers requires a tuple on the right-hand side, but found type `{type_}`."),
+        help: Some("Use a tuple expression, e.g. `let (a, b) = (x, y);`.".to_string()),
+    }
 );
