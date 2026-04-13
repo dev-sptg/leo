@@ -1548,11 +1548,12 @@ impl TypeCheckingVisitor<'_> {
             self.visit_expression_reject_numeric(arg, &expected);
         }
 
-        // Reject `constant` visibility on input and return types.
-        for (mode, _, sp) in input.input_types.iter().chain(input.return_types.iter()) {
+        // Validate input and return types: reject constant visibility and undefined composite types.
+        for (mode, ty, sp) in input.input_types.iter().chain(input.return_types.iter()) {
             if matches!(mode, Mode::Constant) {
                 self.emit_err(TypeCheckerError::dynamic_call_constant_not_allowed(*sp));
             }
+            self.assert_type_is_valid(ty, *sp);
         }
 
         // Determine return type. Unit `()` is normalized to empty return_types at parse time.
@@ -2040,11 +2041,25 @@ impl TypeCheckingVisitor<'_> {
             }
         }
 
-        // Ensure that `@no_inline` is not used on functions with generic const parameters.
-        if !function.const_parameters.is_empty()
-            && function.annotations.iter().any(|a| a.identifier.name == sym::no_inline)
-        {
-            self.emit_err(TypeCheckerError::only_inline_can_have_const_generics(function.identifier.span()));
+        // Const generic parameters can only be monomorphized at inline call sites.  Reject them on
+        // any function that will never be inlined or that does not support inlining.
+        if !function.const_parameters.is_empty() {
+            if function.annotations.iter().any(|a| a.identifier.name == sym::no_inline) {
+                self.emit_err(TypeCheckerError::cannot_have_const_generics(
+                    "Functions annotated with `@no_inline`",
+                    function.identifier.span(),
+                ));
+            } else if matches!(self.scope_state.variant, Some(Variant::EntryPoint)) {
+                self.emit_err(TypeCheckerError::cannot_have_const_generics(
+                    "Entry point functions",
+                    function.identifier.span(),
+                ));
+            } else if matches!(self.scope_state.variant, Some(Variant::FinalFn)) {
+                self.emit_err(TypeCheckerError::cannot_have_const_generics(
+                    "`final fn` functions",
+                    function.identifier.span(),
+                ));
+            }
         }
 
         // Ensure that `@no_inline` is not used on `final fn` functions.
