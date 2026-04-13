@@ -1548,11 +1548,12 @@ impl TypeCheckingVisitor<'_> {
             self.visit_expression(arg, &expected);
         }
 
-        // Reject `constant` visibility on input and return types.
-        for (mode, _, sp) in input.input_types.iter().chain(input.return_types.iter()) {
+        // Validate input and return types: reject constant visibility and undefined composite types.
+        for (mode, ty, sp) in input.input_types.iter().chain(input.return_types.iter()) {
             if matches!(mode, Mode::Constant) {
                 self.emit_err(TypeCheckerError::dynamic_call_constant_not_allowed(*sp));
             }
+            self.assert_type_is_valid(ty, *sp);
         }
 
         // Determine return type. Unit `()` is normalized to empty return_types at parse time.
