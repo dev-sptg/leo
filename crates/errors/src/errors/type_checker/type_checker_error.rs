@@ -1150,9 +1150,9 @@ create_messages!(
     }
 
     @formatted
-    only_inline_can_have_const_generics {
-        args: (),
-        msg: format!("Only inlined functions can have generic const parameters."),
+    cannot_have_const_generics {
+        args: (kind: impl Display),
+        msg: format!("{kind} cannot have generic const parameters."),
         help: None,
     }
 
