@@ -1545,7 +1545,7 @@ impl TypeCheckingVisitor<'_> {
         }
         for (i, arg) in input.arguments.iter().skip(3).enumerate() {
             let expected = input.input_types.get(i).map(|(_, t, _)| t.clone());
-            self.visit_expression(arg, &expected);
+            self.visit_expression_reject_numeric(arg, &expected);
         }
 
         // Validate input and return types: reject constant visibility and undefined composite types.
@@ -1628,9 +1628,9 @@ impl TypeCheckingVisitor<'_> {
             }
         }
 
-        // Arg 4 (key): any type.
+        // Arg 4 (key): any type, but must be fully typed (unsuffixed literals are rejected).
         if input.arguments.len() > 3 {
-            self.visit_expression(&input.arguments[3], &None);
+            self.visit_expression_reject_numeric(&input.arguments[3], &None);
         }
 
         // Determine return type.
