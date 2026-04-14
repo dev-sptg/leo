@@ -97,6 +97,7 @@ impl ProgramReconstructor for MonomorphizationVisitor<'_> {
                         .map(|(last, _)| (*last, f.clone()))
                 }))
                 .collect(),
+            interfaces: input.interfaces,
         }
     }
 
@@ -243,7 +244,7 @@ impl ProgramReconstructor for MonomorphizationVisitor<'_> {
                         .map(|(last, _)| (*last, f.clone()))
                 })
                 .collect(),
-            interfaces: input.interfaces,
+            interfaces: input.interfaces.into_iter().map(|(i, int)| (i, self.reconstruct_interface(int))).collect(),
             constructor,
             consts,
             span: input.span,
@@ -447,6 +448,7 @@ impl ProgramReconstructor for MonomorphizationVisitor<'_> {
                         .map(|(last, _)| (*last, f.clone()))
                 })
                 .collect(),
+            interfaces: input.interfaces.into_iter().map(|(i, int)| (i, self.reconstruct_interface(int))).collect(),
 
             ..input
         }

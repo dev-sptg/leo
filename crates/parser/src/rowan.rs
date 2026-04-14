@@ -30,7 +30,7 @@
 use itertools::Itertools as _;
 use snarkvm::prelude::{Address, Signature, TestnetV0};
 
-use leo_ast::{NetworkName, NodeBuilder};
+use leo_ast::{NetworkName, NodeBuilder, NodeID};
 use leo_errors::{Handler, ParserError, ParserWarning, Result};
 use leo_parser_rowan::{SyntaxElement, SyntaxKind, SyntaxKind::*, SyntaxNode, SyntaxToken, TextRange};
 use leo_span::{
@@ -1931,6 +1931,7 @@ impl<'a> ConversionContext<'a> {
         consts: &mut Vec<(Symbol, leo_ast::ConstDeclaration)>,
         structs: &mut Vec<(Symbol, leo_ast::Composite)>,
         functions: &mut Vec<(Symbol, leo_ast::Function)>,
+        interfaces: &mut Vec<(Symbol, leo_ast::Interface)>,
     ) -> Result<()> {
         if is_library_item(item.kind()) {
             match item.kind() {
@@ -1947,13 +1948,17 @@ impl<'a> ConversionContext<'a> {
                     let func = self.to_function(item, false)?;
                     functions.push((func.identifier.name, func));
                 }
+                INTERFACE_DEF => {
+                    let interface = self.to_interface(item)?;
+                    interfaces.push((interface.identifier.name, interface));
+                }
                 _ => {}
             }
         } else if is_program_item(item.kind()) {
             // A recognized program-only item appeared in a library file.
             let span = self.to_span(item);
             self.handler.emit_err(ParserError::custom(
-                "Only `const` declarations, `struct` definitions, and `fn` functions are allowed in a library.",
+                "Only `const` declarations, `struct` definitions, `fn` functions, and `interface` definitions are allowed in a library.",
                 span,
             ));
         }
@@ -2112,12 +2117,13 @@ impl<'a> ConversionContext<'a> {
         let mut consts = Vec::new();
         let mut structs = Vec::new();
         let mut functions = Vec::new();
+        let mut interfaces = Vec::new();
 
         for child in children(node) {
-            self.collect_library_item(&child, &mut consts, &mut structs, &mut functions)?;
+            self.collect_library_item(&child, &mut consts, &mut structs, &mut functions, &mut interfaces)?;
         }
 
-        Ok(leo_ast::Library { name, modules: indexmap::IndexMap::new(), consts, structs, functions })
+        Ok(leo_ast::Library { name, modules: indexmap::IndexMap::new(), consts, structs, functions, interfaces })
     }
 
     /// Extract a ProgramId from an IMPORT node. Guarantees `network` is always present.
@@ -2507,17 +2513,16 @@ impl<'a> ConversionContext<'a> {
         Ok(leo_ast::ConstDeclaration { place, type_, value, span, id })
     }
 
-    /// Convert a MAPPING_DEF node to a Mapping.
-    fn to_mapping(&self, node: &SyntaxNode) -> Result<leo_ast::Mapping> {
+    /// Parse a MAPPING_DEF node, returning its constituent parts.
+    fn parse_mapping_def(
+        &self,
+        node: &SyntaxNode,
+    ) -> Result<(leo_ast::Identifier, leo_ast::Type, leo_ast::Type, Span, NodeID)> {
         debug_assert_eq!(node.kind(), MAPPING_DEF);
         let span = self.non_trivia_span(node);
         let id = self.builder.next_id();
-
         let identifier = self.require_ident(node, "name in mapping");
-
-        // Get key and value types
         let mut type_nodes = children(node).filter(|n| n.kind().is_type());
-
         let key_type = match type_nodes.next() {
             Some(key_node) => self.to_type(&key_node)?,
             None => {
@@ -2525,7 +2530,6 @@ impl<'a> ConversionContext<'a> {
                 leo_ast::Type::Err
             }
         };
-
         let value_type = match type_nodes.next() {
             Some(value_node) => self.to_type(&value_node)?,
             None => {
@@ -2533,21 +2537,41 @@ impl<'a> ConversionContext<'a> {
                 leo_ast::Type::Err
             }
         };
+        Ok((identifier, key_type, value_type, span, id))
+    }
 
+    /// Convert a MAPPING_DEF node to a Mapping.
+    fn to_mapping(&self, node: &SyntaxNode) -> Result<leo_ast::Mapping> {
+        let (identifier, key_type, value_type, span, id) = self.parse_mapping_def(node)?;
         Ok(leo_ast::Mapping { identifier, key_type, value_type, span, id })
+    }
+
+    /// Convert a MAPPING_DEF node inside an interface to a MappingPrototype.
+    fn to_mapping_prototype(&self, node: &SyntaxNode) -> Result<leo_ast::MappingPrototype> {
+        let (identifier, key_type, value_type, span, id) = self.parse_mapping_def(node)?;
+        Ok(leo_ast::MappingPrototype { identifier, key_type, value_type, span, id })
+    }
+
+    /// Parse a STORAGE_DEF node, returning its constituent parts.
+    fn parse_storage_def(&self, node: &SyntaxNode) -> Result<(leo_ast::Identifier, leo_ast::Type, Span, NodeID)> {
+        debug_assert_eq!(node.kind(), STORAGE_DEF);
+        let span = self.non_trivia_span(node);
+        let id = self.builder.next_id();
+        let identifier = self.require_ident(node, "name in storage");
+        let type_ = self.require_type(node, "type in storage")?;
+        Ok((identifier, type_, span, id))
     }
 
     /// Convert a STORAGE_DEF node to a StorageVariable.
     fn to_storage(&self, node: &SyntaxNode) -> Result<leo_ast::StorageVariable> {
-        debug_assert_eq!(node.kind(), STORAGE_DEF);
-        let span = self.non_trivia_span(node);
-        let id = self.builder.next_id();
+        let (identifier, type_, span, id) = self.parse_storage_def(node)?;
+        Ok(leo_ast::StorageVariable { identifier, type_, span, id })
+    }
 
-        let name = self.require_ident(node, "name in storage");
-
-        let type_ = self.require_type(node, "type in storage")?;
-
-        Ok(leo_ast::StorageVariable { identifier: name, type_, span, id })
+    /// Convert a STORAGE_DEF node inside an interface to a StorageVariablePrototype.
+    fn to_storage_prototype(&self, node: &SyntaxNode) -> Result<leo_ast::StorageVariablePrototype> {
+        let (identifier, type_, span, id) = self.parse_storage_def(node)?;
+        Ok(leo_ast::StorageVariablePrototype { identifier, type_, span, id })
     }
 
     /// Convert a CONSTRUCTOR_DEF node to a Constructor.
@@ -2598,11 +2622,11 @@ impl<'a> ConversionContext<'a> {
                     records.push((proto.identifier.name, proto));
                 }
                 MAPPING_DEF => {
-                    let mapping = self.to_mapping(&child)?;
+                    let mapping = self.to_mapping_prototype(&child)?;
                     mappings.push(mapping);
                 }
                 STORAGE_DEF => {
-                    let storage = self.to_storage(&child)?;
+                    let storage = self.to_storage_prototype(&child)?;
                     storages.push(storage);
                 }
                 _ => {}
@@ -3220,11 +3244,8 @@ fn compute_module_key(name: &FileName, root_dir: Option<&std::path::Path>) -> Op
 }
 
 /// Returns `true` for syntax node kinds that are valid inside a library (`lib.leo`).
-///
-/// Currently `const` declarations and `struct` definitions are allowed; this list will grow
-/// as library support expands to include functions and other items.
 fn is_library_item(kind: SyntaxKind) -> bool {
-    matches!(kind, GLOBAL_CONST | STRUCT_DEF | FUNCTION_DEF)
+    matches!(kind, GLOBAL_CONST | STRUCT_DEF | FUNCTION_DEF | INTERFACE_DEF)
 }
 
 /// Returns `true` for syntax node kinds that are valid inside a program (`main.leo`).
