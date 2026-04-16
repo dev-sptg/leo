@@ -297,14 +297,16 @@ impl<'a> ConversionContext<'a> {
 
     /// Convert a TYPE_LOCATOR node to a Type.
     ///
-    /// TYPE_LOCATOR represents `program.aleo::Type`.
+    /// TYPE_LOCATOR represents `program.aleo::Type` or `program.aleo::module::Type`.
     fn type_locator_to_type(&self, node: &SyntaxNode) -> Result<leo_ast::Type> {
         debug_assert_eq!(node.kind(), TYPE_LOCATOR);
 
-        // Extract IDENT tokens for program and (optional) type name.
-        let mut idents = tokens(node).filter(|t| t.kind() == IDENT);
-        let program_token = idents.next();
-        let name_token = idents.next();
+        // Collect all IDENT tokens; the first is the program name and the rest
+        // form qualifier segments plus the final type name.
+        let all_idents: Vec<_> = tokens(node).filter(|t| t.kind() == IDENT).collect();
+        let Some(program_token) = all_idents.first() else {
+            panic!("TYPE_LOCATOR should contain at least a program IDENT: {:?}", node.text())
+        };
 
         // Find KW_ALEO in the tokens — always present in a TYPE_LOCATOR node.
         let kw_aleo_token =
@@ -316,30 +318,24 @@ impl<'a> ConversionContext<'a> {
             id: self.builder.next_id(),
         };
 
-        match (program_token, name_token) {
-            (Some(program_token), Some(name_token)) => {
-                // Normal case: program.aleo::Type
-                let program_ident = self.to_identifier(&program_token);
-                let type_ident = self.to_identifier(&name_token);
-                let program_id = leo_ast::ProgramId { name: program_ident, network: network_ident };
-                let path_span = Span::new(program_id.name.span.lo, type_ident.span.hi);
-                let path =
-                    leo_ast::Path::new(Some(program_id), Vec::new(), type_ident, path_span, self.builder.next_id());
-                let (_type_parameters, const_arguments) = self.extract_const_arg_list(node)?;
-                Ok(leo_ast::CompositeType { path, const_arguments }.into())
-            }
-            (Some(program_token), None) => {
-                // program.aleo without ::Type — a program ID used as a type reference.
-                let program_ident = self.to_identifier(&program_token);
-                let program_id = leo_ast::ProgramId { name: program_ident, network: network_ident };
-                let span = self.content_span(node);
-                let path =
-                    leo_ast::Path::new(Some(program_id), Vec::new(), program_ident, span, self.builder.next_id());
-                Ok(leo_ast::CompositeType { path, const_arguments: Vec::new() }.into())
-            }
-            _ => {
-                panic!("TYPE_LOCATOR should contain at least a program IDENT: {:?}", node.text())
-            }
+        let program_ident = self.to_identifier(program_token);
+        let program_id = leo_ast::ProgramId { name: program_ident, network: network_ident };
+
+        if all_idents.len() < 2 {
+            // program.aleo without ::Type — a program ID used as a type reference.
+            let span = self.content_span(node);
+            let path = leo_ast::Path::new(Some(program_id), Vec::new(), program_ident, span, self.builder.next_id());
+            Ok(leo_ast::CompositeType { path, const_arguments: Vec::new() }.into())
+        } else {
+            // program.aleo::Type or program.aleo::module::Type:
+            //   last IDENT = type name, everything before (excluding program) = qualifier segments.
+            let name_token = all_idents.last().unwrap(); // safe: len >= 2
+            let qualifier: Vec<_> = all_idents[1..all_idents.len() - 1].iter().map(|t| self.to_identifier(t)).collect();
+            let type_ident = self.to_identifier(name_token);
+            let path_span = Span::new(program_id.name.span.lo, type_ident.span.hi);
+            let path = leo_ast::Path::new(Some(program_id), qualifier, type_ident, path_span, self.builder.next_id());
+            let (_type_parameters, const_arguments) = self.extract_const_arg_list(node)?;
+            Ok(leo_ast::CompositeType { path, const_arguments }.into())
         }
     }
 
@@ -381,19 +377,38 @@ impl<'a> ConversionContext<'a> {
     fn type_array_to_type(&self, node: &SyntaxNode) -> Result<leo_ast::Type> {
         debug_assert_eq!(node.kind(), TYPE_ARRAY);
 
-        let element_node = children(node).find(|n| n.kind().is_type()).expect("array type should have element type");
-        let element_type = self.to_type(&element_node)?;
-        let length_expr = self.array_length_to_expression(node)?;
-        Ok(leo_ast::ArrayType { element_type: Box::new(element_type), length: Box::new(length_expr) }.into())
+        match children(node).find(|n| n.kind().is_type()) {
+            Some(element_node) => {
+                let element_type = self.to_type(&element_node)?;
+                let length_expr = self.array_length_to_expression(node)?;
+                Ok(leo_ast::ArrayType { element_type: Box::new(element_type), length: Box::new(length_expr) }.into())
+            }
+            None => {
+                // Error recovery: the rowan parser produced a TYPE_ARRAY with no element type.
+                let span = self.to_span(node);
+                self.emit_unexpected_str("element type", node.text(), span);
+                Ok(leo_ast::Type::Err)
+            }
+        }
     }
 
     /// Convert a TYPE_VECTOR node to a VectorType.
     fn type_vector_to_type(&self, node: &SyntaxNode) -> Result<leo_ast::Type> {
         debug_assert_eq!(node.kind(), TYPE_VECTOR);
 
-        let element_node = children(node).find(|n| n.kind().is_type()).expect("vector type should have element type");
-        let element_type = self.to_type(&element_node)?;
-        Ok(leo_ast::VectorType { element_type: Box::new(element_type) }.into())
+        match children(node).find(|n| n.kind().is_type()) {
+            Some(element_node) => {
+                let element_type = self.to_type(&element_node)?;
+                Ok(leo_ast::VectorType { element_type: Box::new(element_type) }.into())
+            }
+            None => {
+                // Error recovery: the rowan parser produced a TYPE_VECTOR with no element type
+                // (e.g. `[]` or `[1]` where the content is not a valid type).
+                let span = self.to_span(node);
+                self.emit_unexpected_str("element type", node.text(), span);
+                Ok(leo_ast::Type::Err)
+            }
+        }
     }
 
     /// Extract the array length expression from a TYPE_ARRAY node.
@@ -970,8 +985,17 @@ impl<'a> ConversionContext<'a> {
         };
 
         // Get the method name (IDENT or keyword token after DOT).
+        // `find_name_after_dot` can return keyword tokens because the grammar
+        // accepts them in field/method name position for error recovery (e.g.
+        // `x.assert()`). `to_identifier` asserts IDENT, so handle keywords
+        // separately: emit a diagnostic and use an error placeholder.
         let method_name = match find_name_after_dot(node) {
-            Some(method_token) => self.to_identifier(&method_token),
+            Some(method_token) if method_token.kind() == IDENT => self.to_identifier(&method_token),
+            Some(method_token) => {
+                let token_span = self.token_span(&method_token);
+                self.emit_unexpected_str("identifier", method_token.text(), token_span);
+                self.error_identifier(token_span)
+            }
             None => {
                 self.emit_unexpected_str("method name in method call", node.text(), span);
                 return Ok(self.error_expression(span));
@@ -1363,33 +1387,47 @@ impl<'a> ConversionContext<'a> {
 
     /// Extract program and type name from a locator node's IDENT tokens.
     ///
-    /// Locator nodes have the structure: `IDENT DOT KW_ALEO COLON_COLON IDENT [COLON_COLON CONST_ARG_LIST]`.
-    /// The first IDENT is the program name, the second (after SLASH) is the type/function name.
+    /// Locator nodes have the structure:
+    ///   `IDENT DOT KW_ALEO COLON_COLON IDENT [COLON_COLON IDENT]* [COLON_COLON CONST_ARG_LIST]`.
+    /// The first IDENT is the program name, the remaining IDENTs form qualifier segments and the
+    /// final item name (e.g. `program.aleo::sub::item` → qualifier: `[sub]`, name: `item`).
     fn locator_tokens_to_path(&self, node: &SyntaxNode) -> Result<leo_ast::Path> {
-        let mut idents = tokens(node).filter(|t| t.kind() == IDENT);
-        let program_token = idents.next().expect("locator should have program IDENT");
-        let name_token = idents.next().expect("locator should have name IDENT");
+        let span = self.to_span(node);
+        let all_idents: Vec<_> = tokens(node).filter(|t| t.kind() == IDENT).collect();
 
-        // Convert program token into Identifier
-        let program_ident = self.to_identifier(&program_token);
+        // First IDENT is the program name — with error recovery if absent.
+        let program_ident = match all_idents.first() {
+            Some(t) => self.to_identifier(t),
+            None => {
+                self.emit_unexpected_str("program name", node.text(), span);
+                self.error_identifier(span)
+            }
+        };
 
-        // Detect `KW_ALEO` — required
-        let kw_aleo_token = tokens(node).find(|t| t.kind() == KW_ALEO).expect("locator should have `aleo` keyword");
-
+        // KW_ALEO is always present; fall back to `span` if somehow absent.
         let network_ident = leo_ast::Identifier {
             name: Symbol::intern("aleo"),
-            span: self.token_span(&kw_aleo_token),
+            span: tokens(node).find(|t| t.kind() == KW_ALEO).map(|t| self.token_span(&t)).unwrap_or(span),
             id: self.builder.next_id(),
         };
 
-        // Wrap into ProgramId — network is never None
+        // Wrap into ProgramId — network is never None.
         let program = leo_ast::ProgramId { name: program_ident, network: network_ident };
 
-        // Name identifier (type name)
-        let name = self.to_identifier(&name_token);
-        let path_span = Span::new(program.name.span.lo, name.span.hi);
+        // Last IDENT is the item name; [1..len-1] are qualifiers.
+        // Error recovery: the rowan parser only bumps the name IDENT `if self.at(IDENT)`,
+        // so a non-IDENT token after `::` (e.g. `a.aleo::;`) produces a locator with no name.
+        let (qualifier, name) = if all_idents.len() < 2 {
+            self.emit_unexpected_str("identifier", node.text(), span);
+            (Vec::new(), self.error_identifier(span))
+        } else {
+            let name = self.to_identifier(all_idents.last().unwrap()); // safe: len >= 2
+            let qualifier: Vec<_> = all_idents[1..all_idents.len() - 1].iter().map(|t| self.to_identifier(t)).collect();
+            (qualifier, name)
+        };
 
-        Ok(leo_ast::Path::new(Some(program), Vec::new(), name, path_span, self.builder.next_id()))
+        let path_span = Span::new(program.name.span.lo, name.span.hi);
+        Ok(leo_ast::Path::new(Some(program), qualifier, name, path_span, self.builder.next_id()))
     }
 
     /// Convert a STRUCT_FIELD_INIT or STRUCT_FIELD_SHORTHAND node to a CompositeFieldInitializer.
@@ -2376,11 +2414,17 @@ impl<'a> ConversionContext<'a> {
 
         // Annotation names can be identifiers or keywords (e.g. @program, @test).
         // The name is the first IDENT or keyword token after `@`.
-        let name_token =
-            tokens(node).find(|t| t.kind() == IDENT || t.kind().is_keyword()).expect("annotation should have name");
-        let name = Symbol::intern(name_token.text());
-        let name_span = self.token_span(&name_token);
-        let identifier = leo_ast::Identifier { name, span: name_span, id: self.builder.next_id() };
+        let identifier = match tokens(node).find(|t| t.kind() == IDENT || t.kind().is_keyword()) {
+            Some(name_token) => {
+                let name = Symbol::intern(name_token.text());
+                let name_span = self.token_span(&name_token);
+                leo_ast::Identifier { name, span: name_span, id: self.builder.next_id() }
+            }
+            None => {
+                self.emit_unexpected_str("annotation name", node.text(), span);
+                self.error_identifier(span)
+            }
+        };
 
         // Parse annotation key-value pairs from ANNOTATION_PAIR child nodes.
         let map = children(node)
