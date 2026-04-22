@@ -67,7 +67,7 @@ use crate::{
     TypeCheckingInput,
 };
 
-use leo_ast::{ArrayType, CompositeType, ProgramReconstructor as _, Type};
+use leo_ast::{ArrayType, CompositeType, Type, UnitReconstructor as _};
 use leo_errors::Result;
 use leo_span::Symbol;
 
@@ -156,5 +156,5 @@ pub fn make_optional_struct_symbol(ty: &Type) -> Symbol {
     }
 
     // Step 3: Build symbol that ends with `?`.
-    Symbol::intern(&format!("\"{}?\"", display_type(ty)))
+    Symbol::intern(&format!("{}?", display_type(ty)))
 }
