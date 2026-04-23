@@ -92,7 +92,7 @@ impl leo_ast::AstReconstructor for OptionLoweringVisitor<'_> {
             Expression::ArrayAccess(e) => self.reconstruct_array_access(*e, additional),
             Expression::Binary(e) => self.reconstruct_binary(*e, additional),
             Expression::Call(e) => self.reconstruct_call(*e, additional),
-            Expression::DynamicCall(e) => self.reconstruct_dynamic_call(*e, additional),
+            Expression::DynamicOp(e) => self.reconstruct_dynamic_op(*e, additional),
             Expression::Cast(e) => self.reconstruct_cast(*e, additional),
             Expression::Composite(e) => self.reconstruct_composite_init(e, additional),
             Expression::Err(e) => self.reconstruct_err(e, additional),
@@ -438,7 +438,7 @@ impl leo_ast::AstReconstructor for OptionLoweringVisitor<'_> {
                     .symbol_table
                     .lookup_record(self.program, composite_location)
                     .or_else(|| self.state.symbol_table.lookup_struct(self.program, composite_location))
-                    .or_else(|| self.new_structs.get(composite_location))
+                    .or_else(|| self.composites.get(composite_location))
                     .expect("guaranteed by type checking");
 
                 let const_parameters = composite_def.const_parameters.iter().map(|param| param.type_.clone()).collect();
