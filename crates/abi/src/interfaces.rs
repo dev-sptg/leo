@@ -71,8 +71,7 @@ pub enum InterfaceOwner {
 ///
 /// - All interfaces locally defined in the program's scope and modules.
 /// - All interfaces directly implemented (via `scope.parents`), looked up in stubs.
-///
-/// Does NOT walk parent chains transitively.
+/// - All external parent interfaces referenced transitively by any of the above.
 pub fn generate_program_interfaces(ast: &ast::Program) -> Vec<CompiledInterface> {
     let scope = ast.program_scopes.values().next().unwrap();
     let program_str = scope.program_id.to_string();
@@ -102,27 +101,61 @@ pub fn generate_program_interfaces(ast: &ast::Program) -> Vec<CompiledInterface>
         }
     }
 
-    // 3. Directly implemented interfaces from stubs.
-    for (_, ty) in &scope.parents {
-        let ast::Type::Composite(ct) = ty else { continue };
-        let Some(loc) = ct.path.try_global_location() else { continue };
-        let owner_str = loc.program.to_string();
+    // 3. External interfaces: directly implemented + transitive parents.
+    //
+    // Use a worklist so that every external interface referenced in a `parents`
+    // field (whether on the program itself or on a local/external interface) is
+    // emitted together with its own transitive parents.
+    let mut worklist: Vec<(Symbol, Vec<Symbol>)> = Vec::new();
 
-        // Skip if local (already covered above).
+    // Seed from program-level parent implementations (scope.parents).
+    for (_, ty) in &scope.parents {
+        if let ast::Type::Composite(ct) = ty
+            && let Some(loc) = ct.path.try_global_location()
+        {
+            worklist.push((loc.program, loc.path.clone()));
+        }
+    }
+
+    // Seed from parents of locally-defined interfaces.
+    let local_ifaces = scope
+        .interfaces
+        .iter()
+        .map(|(_, i)| i)
+        .chain(ast.modules.values().flat_map(|m| m.interfaces.iter().map(|(_, i)| i)));
+    for iface in local_ifaces {
+        for (_, parent_ty) in &iface.parents {
+            if let ast::Type::Composite(ct) = parent_ty
+                && let Some(loc) = ct.path.try_global_location()
+            {
+                worklist.push((loc.program, loc.path.clone()));
+            }
+        }
+    }
+
+    while let Some((ext_program, iface_path)) = worklist.pop() {
+        let owner_str = ext_program.to_string();
+
+        // Skip if local (already covered in steps 1 and 2).
         if owner_str == program_str {
             continue;
         }
 
-        let Some(stub) = ast.stubs.get(&loc.program) else { continue };
-        let Some(iface) = find_interface_in_stub(stub, &loc.path) else { continue };
+        let Some(stub) = ast.stubs.get(&ext_program) else { continue };
+        let Some(iface) = find_interface_in_stub(stub, &iface_path) else { continue };
 
-        // Build a CompositeSource for the external program/library.
         let ext_cs = composite_source_for_stub(stub);
-        let module_path: Vec<Symbol> = loc.path[..loc.path.len().saturating_sub(1)].to_vec();
-        let abi = build_interface(iface, loc.program, &module_path, &ext_cs);
+        let module_path: Vec<Symbol> = iface_path[..iface_path.len().saturating_sub(1)].to_vec();
+        let abi = build_interface(iface, ext_program, &module_path, &ext_cs);
         let key = (Some(owner_str.clone()), abi.path.clone());
         if seen.insert(key) {
             result.push(CompiledInterface { owner: InterfaceOwner::External { owner_program: owner_str }, abi });
+            // Enqueue this interface's parents for processing.
+            for (_, parent_ty) in &iface.parents {
+                let ast::Type::Composite(ct) = parent_ty else { continue };
+                let Some(parent_loc) = ct.path.try_global_location() else { continue };
+                worklist.push((parent_loc.program, parent_loc.path.clone()));
+            }
         }
     }
 

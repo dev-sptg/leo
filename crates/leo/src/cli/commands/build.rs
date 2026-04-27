@@ -565,6 +565,10 @@ fn build_leo_source_directory_library(
 
 /// Writes interface ABI JSON files to the interfaces directory.
 fn write_interface_abis(interfaces_dir: &Path, interfaces: &[leo_abi::interfaces::CompiledInterface]) -> Result<()> {
+    // Remove stale files from a previous build (renamed/deleted interfaces).
+    if interfaces_dir.exists() {
+        std::fs::remove_dir_all(interfaces_dir).map_err(CliError::failed_to_write_abi)?;
+    }
     if interfaces.is_empty() {
         return Ok(());
     }

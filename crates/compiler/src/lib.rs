@@ -39,3 +39,6 @@ mod test_compiler;
 
 #[cfg(test)]
 mod test_execution;
+
+#[cfg(test)]
+mod test_interface_abi;
