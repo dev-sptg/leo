@@ -14,10 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with the Leo library. If not, see <https://www.gnu.org/licenses/>.
 
-/// Contains the Constant Evaluation error definitions.
-mod const_eval;
-pub use self::const_eval::*;
-
 /// The LeoError type that contains all sub error types.
 /// This allows a unified error type throughout the Leo crates.
 #[derive(Debug, Error)]
@@ -26,8 +22,6 @@ pub enum LeoError {
     Formatted(#[from] crate::Formatted),
     #[error(transparent)]
     Backtraced(#[from] crate::Backtraced),
-    #[error(transparent)]
-    ConstEvalError(#[from] ConstEvalError),
     #[error("")]
     LastErrorCode(i32),
     #[error(transparent)]
@@ -40,7 +34,6 @@ impl LeoError {
         match self {
             Formatted(e) => e.error_code(),
             Backtraced(e) => e.error_code(),
-            ConstEvalError(_) => "Const Eval Error".to_string(),
             LastErrorCode(_) => unreachable!(),
             SnarkVM(_) => "SnarkVM Error".to_string(),
         }
@@ -51,10 +44,36 @@ impl LeoError {
         match self {
             Formatted(e) => e.exit_code(),
             Backtraced(e) => e.exit_code(),
-            ConstEvalError(_) => 1,
             LastErrorCode(code) => *code,
             SnarkVM(_) => 11000,
         }
+    }
+
+    /// Borrow a structured, LSP-agnostic view of this error.
+    ///
+    /// Only [`LeoError::Formatted`] variants carry a span and labeled
+    /// secondary information, so other variants return `None`. The caller is
+    /// expected to fall back to a synthetic package-level diagnostic in that
+    /// case; see the `leo-lsp` diagnostics module for an example.
+    ///
+    /// [`LeoError::LastErrorCode`] is a sentinel used to signal that an error
+    /// has already been emitted through a handler. It deliberately returns
+    /// `None` so it is never published as a separate diagnostic.
+    pub fn diagnostic_view(&self) -> Option<crate::DiagnosticView<'_>> {
+        match self {
+            LeoError::Formatted(formatted) => Some(formatted.diagnostic_view()),
+            LeoError::Backtraced(_) | LeoError::LastErrorCode(_) | LeoError::SnarkVM(_) => None,
+        }
+    }
+
+    /// Return whether this error is the sentinel raised after a handler emit.
+    ///
+    /// `Handler::last_err` produces [`LeoError::LastErrorCode`] when the
+    /// emitter has already buffered a real diagnostic. Consumers should skip
+    /// the sentinel when collecting structured diagnostics so the original
+    /// error is published exactly once.
+    pub fn is_last_error_code(&self) -> bool {
+        matches!(self, LeoError::LastErrorCode(_))
     }
 }
 
@@ -70,6 +89,18 @@ impl LeoWarning {
         use LeoWarning::*;
         match self {
             Formatted(w) => w.warning_code(),
+        }
+    }
+
+    /// Borrow a structured, LSP-agnostic view of this warning.
+    ///
+    /// Every variant currently wraps a [`Formatted`] payload, so the view is
+    /// always available. The signature is kept symmetric with
+    /// [`LeoError::diagnostic_view`] so future variants that lack span data
+    /// can opt out without breaking call sites.
+    pub fn diagnostic_view(&self) -> Option<crate::DiagnosticView<'_>> {
+        match self {
+            LeoWarning::Formatted(formatted) => Some(formatted.diagnostic_view()),
         }
     }
 }
