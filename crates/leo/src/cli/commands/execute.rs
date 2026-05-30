@@ -239,10 +239,6 @@ fn handle_execute<A: Aleo>(
     // Get all the dependencies in the package if it exists.
     // Get the programs and optional manifests for all programs.
     let programs = if let Some(package) = &package {
-        // Get the package directories.
-        let build_directory = package.build_directory();
-        let imports_directory = package.imports_directory();
-        let source_directory = package.source_directory();
         // Get the program names and their bytecode.
         package
             .compilation_units
@@ -254,13 +250,9 @@ fn handle_execute<A: Aleo>(
                     .map_err(|e| crate::errors::custom(format!("Failed to parse program ID: {e}")))?;
                 match &unit.data {
                     ProgramData::Bytecode(bytecode) => Ok((program_id, bytecode.to_string(), unit.edition)),
-                    ProgramData::SourcePath { source, .. } => {
+                    ProgramData::SourcePath { .. } => {
                         // Get the path to the built bytecode.
-                        let bytecode_path = if source.as_path() == source_directory.join("main.leo") {
-                            build_directory.join("main.aleo")
-                        } else {
-                            imports_directory.join(format!("{}", unit.name))
-                        };
+                        let bytecode_path = package.unit_bytecode_path(&unit.name.to_string());
                         // Fetch the bytecode.
                         let bytecode = std::fs::read_to_string(&bytecode_path).map_err(|e| {
                             crate::errors::custom(format!(
@@ -300,6 +292,17 @@ fn handle_execute<A: Aleo>(
             .find(|(program, _)| program.id() == &program_id)
             .expect("Program should exist since it is local")
             .0;
+        // `view fn`s are read-only finalize-store reads; they produce no transition and no
+        // transaction, so `leo execute` (which broadcasts a fee-paid transaction) cannot target
+        // one. Detect this up front instead of falling through to the "function does not exist"
+        // branch below, which would mislead the user.
+        if program.contains_view(&function_id) {
+            return Err(crate::errors::custom(format!(
+                "`{function_name}` is a `view fn`; views are read-only and do not produce a transaction, \
+                 so they cannot be executed."
+            ))
+            .into());
+        }
         if !program.contains_function(&function_id) {
             return Err(crate::errors::custom(format!(
                 "Function `{function_name}` does not exist in program `{program_name}`."
@@ -363,7 +366,7 @@ fn handle_execute<A: Aleo>(
     }
 
     // Initialize an RNG.
-    let rng = &mut rand::thread_rng();
+    let rng = &mut rand::rng();
 
     // Initialize a new VM.
     let vm = VM::from(ConsensusStore::<A::Network, ConsensusMemory<A::Network>>::open(StorageMode::Production)?)?;
@@ -398,7 +401,7 @@ fn handle_execute<A: Aleo>(
             (program, edition)
         })
         .collect::<Vec<_>>();
-    vm.process().write().add_programs_with_editions(&programs_and_editions)?;
+    vm.process().lock().add_programs_with_editions(&programs_and_editions)?;
 
     // Load any extra programs specified via `--with`.
     if !command.with.is_empty() {
@@ -416,7 +419,6 @@ fn handle_execute<A: Aleo>(
     let authorization = if command.skip_execute_proof {
         println!("\n⚙️ Generating transaction WITHOUT a proof for {program_name}/{function_name}...");
         vm.process()
-            .read()
             .authorize::<A, _>(&private_key, &program_name, &function_name, inputs.iter(), rng)
             .map_err(|e| anyhow::anyhow!("{e}"))?
     } else {
@@ -427,7 +429,7 @@ fn handle_execute<A: Aleo>(
 
     // Estimate and display execution cost.
     let (estimated_cost, (est_storage, est_exec)) =
-        execution_cost_for_authorization(&vm.process().read(), &authorization, consensus_version)?;
+        execution_cost_for_authorization(vm.process(), &authorization, consensus_version)?;
     let stats = print_execution_cost_summary(&program_name, est_storage, est_exec, priority_fee);
 
     // Generate the transaction (the method differs based on skip_execute_proof).
@@ -439,7 +441,7 @@ fn handle_execute<A: Aleo>(
         let execution = Execution::from(authorization.transitions().values().cloned(), state_root, None)?;
 
         // Calculate the actual cost for fee authorization.
-        let (cost, _) = execution_cost(&vm.process().read(), &execution, consensus_version)?;
+        let (cost, _) = execution_cost(vm.process(), &execution, consensus_version)?;
 
         // Generate the fee authorization.
         let id = authorization.to_execution_id()?;
@@ -460,7 +462,7 @@ fn handle_execute<A: Aleo>(
         let transaction = Transaction::from_execution(execution, Some(fee))?;
 
         // Evaluate the transaction to get the response.
-        let response = vm.process().read().evaluate::<A>(authorization).map_err(|e| anyhow::anyhow!("{e}"))?;
+        let response = vm.process().evaluate::<A>(authorization).map_err(|e| anyhow::anyhow!("{e}"))?;
 
         ("transaction", Box::new(transaction), response)
     } else {

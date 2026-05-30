@@ -253,16 +253,8 @@ fn prepare_package_tasks<N: Network>(
             let bytecode = match &program.data {
                 ProgramData::Bytecode(s) => s.clone(),
                 ProgramData::SourcePath { .. } => {
-                    // We need to read the bytecode from the filesystem.
-                    let aleo_name = format!("{}", program.name);
-                    let aleo_path = if package.manifest.program == aleo_name {
-                        // The main program in the package, so its .aleo file
-                        // will be in the build directory.
-                        package.build_directory().join("main.aleo")
-                    } else {
-                        // Some other dependency, so look in `imports`.
-                        package.imports_directory().join(aleo_name)
-                    };
+                    // We need to read the bytecode from its own build directory.
+                    let aleo_path = package.unit_bytecode_path(&program.name.to_string());
                     fs::read_to_string(aleo_path.clone()).map_err(|e| {
                         crate::errors::custom(format!("Failed to read file {}: {e}", aleo_path.display()))
                     })?
@@ -339,7 +331,7 @@ fn load_remote_deps<N: Network>(command: &LeoDeploy, setup: &DeploySetup<N>, rem
 
     // Check for programs that violate edition/constructor requirements.
     check_edition_constructor_requirements(&programs_and_editions, setup.consensus_version, "deploy")?;
-    setup.vm.process().write().add_programs_with_editions(&programs_and_editions)?;
+    setup.vm.process().lock().add_programs_with_editions(&programs_and_editions)?;
     Ok(())
 }
 
@@ -353,7 +345,7 @@ fn generate_deploy_transactions<N: Network, A: Aleo<Network = N>>(
     skipped: &HashSet<ProgramID<N>>,
     already_deployed: &mut HashSet<ProgramID<N>>,
 ) -> Result<Option<DeployTransactions<N>>> {
-    let rng = &mut rand::thread_rng();
+    let rng = &mut rand::rng();
     let mut transactions = Vec::new();
     let mut all_stats = Vec::new();
 
@@ -402,7 +394,7 @@ Once it is deployed, it CANNOT be changed.
                 // Get the deployment.
                 let deployment = transaction.deployment().expect("Expected a deployment in the transaction");
                 // Add the program to the VM before calculating function costs.
-                setup.vm.process().write().add_program(&program)?;
+                setup.vm.process().lock().add_program(&program)?;
                 // Compute the deployment stats.
                 let stats = compute_deployment_stats(
                     &setup.vm,
@@ -430,7 +422,7 @@ Once it is deployed, it CANNOT be changed.
         }
 
         // Add the program to the VM. This ensures skipped programs are available for later imports.
-        if let Err(e) = setup.vm.process().write().add_program(&program) {
+        if let Err(e) = setup.vm.process().lock().add_program(&program) {
             tracing::debug!("Program {id} already in VM: {e}");
         }
     }
@@ -884,6 +876,10 @@ fn check_tasks_for_warnings<N: Network>(
         if consensus_version < ConsensusVersion::V9 && program.contains_v9_syntax() {
             warnings.push(format!("The program '{id}' uses V9 features but the consensus version is less than V9. The deployment will likely fail"));
         }
+        // Check if the program uses V15 features (e.g., `view` blocks).
+        if consensus_version < ConsensusVersion::V15 && program.contains_v15_syntax() {
+            warnings.push(format!("The program '{id}' uses V15 features (e.g., `view fn`) but the consensus version is less than V15. The deployment will likely fail"));
+        }
         // Check if the program contains a constructor.
         if consensus_version >= ConsensusVersion::V9 && !program.contains_constructor() {
             warnings
@@ -1038,7 +1034,7 @@ pub(crate) fn compute_deployment_stats<N: Network, R: Rng + CryptoRng>(
     let variables = deployment.num_combined_variables()?;
     let constraints = deployment.num_combined_constraints()?;
     let (_, (storage_cost, synthesis_cost, constructor_cost, namespace_cost)) =
-        deployment_cost(&vm.process().read(), deployment, consensus_version)?;
+        deployment_cost(vm.process(), deployment, consensus_version)?;
     let priority = priority_fee.unwrap_or(0);
 
     let function_costs = calculate_function_costs(vm, deployment, consensus_version, rng)?;
@@ -1108,12 +1104,11 @@ pub(crate) fn deploy_with_placeholder_certificate<N: Network, A: Aleo<Network = 
 
     // Construct the fee authorization and capture cost breakdown.
     let (minimum_deployment_cost, (storage_cost, synthesis_cost, constructor_cost, namespace_cost)) =
-        deployment_cost(&vm.process().read(), &deployment, consensus_version)?;
+        deployment_cost(vm.process(), &deployment, consensus_version)?;
     // Authorize the fee.
     let fee_authorization = match record {
         Some(record) => vm
             .process()
-            .read()
             .authorize_fee_private::<A, _>(
                 private_key,
                 record,
@@ -1125,7 +1120,6 @@ pub(crate) fn deploy_with_placeholder_certificate<N: Network, A: Aleo<Network = 
             .map_err(|e| anyhow::anyhow!("{e}"))?,
         None => vm
             .process()
-            .read()
             .authorize_fee_public::<A, _>(
                 private_key,
                 minimum_deployment_cost,
@@ -1143,7 +1137,7 @@ pub(crate) fn deploy_with_placeholder_certificate<N: Network, A: Aleo<Network = 
     let fee = Fee::from(fee_authorization.transitions().into_iter().next().unwrap().1, state_root, None)?;
 
     // Add the program to the VM before calculating function costs.
-    vm.process().write().add_program(program)?;
+    vm.process().lock().add_program(program)?;
     // Compute the deployment stats (circuit fields are None since VKs are placeholders).
     let priority = priority_fee.unwrap_or(0);
     let function_costs = calculate_function_costs(vm, &deployment, consensus_version, rng)?;
@@ -1185,7 +1179,7 @@ pub(crate) fn calculate_function_costs<N: Network, R: Rng + CryptoRng>(
     rng: &mut R,
 ) -> Result<Vec<FunctionCostStats>> {
     // Get the stack for the program.
-    let stack = vm.process().read().get_stack(deployment.program().id())?;
+    let stack = vm.process().get_stack(deployment.program().id())?;
 
     let mut function_costs = Vec::new();
 
@@ -1224,7 +1218,7 @@ pub(crate) fn calculate_function_costs<N: Network, R: Rng + CryptoRng>(
                 }
                 Ok(authorization) => {
                     let (total, (storage, finalize)) =
-                        execution_cost_for_authorization(&vm.process().read(), &authorization, consensus_version)?;
+                        execution_cost_for_authorization(vm.process(), &authorization, consensus_version)?;
                     (finalize, Some(storage), Some(total))
                 }
             };

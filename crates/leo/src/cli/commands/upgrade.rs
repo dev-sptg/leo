@@ -163,16 +163,8 @@ fn handle_upgrade<N: Network, A: Aleo<Network = N>>(
             let bytecode = match &program.data {
                 ProgramData::Bytecode(s) => s.clone(),
                 ProgramData::SourcePath { .. } => {
-                    // We need to read the bytecode from the filesystem.
-                    let aleo_name = format!("{}", program.name);
-                    let aleo_path = if package.manifest.program == aleo_name {
-                        // The main program in the package, so its .aleo file
-                        // will be in the build directory.
-                        package.build_directory().join("main.aleo")
-                    } else {
-                        // Some other dependency, so look in `imports`.
-                        package.imports_directory().join(aleo_name)
-                    };
+                    // We need to read the bytecode from its own build directory.
+                    let aleo_path = package.unit_bytecode_path(&program.name.to_string());
                     fs::read_to_string(aleo_path.clone()).map_err(|e| {
                         crate::errors::custom(format!("Failed to read file {}: {e}", aleo_path.display()))
                     })?
@@ -263,7 +255,7 @@ fn handle_upgrade<N: Network, A: Aleo<Network = N>>(
     }
 
     // Initialize an RNG.
-    let rng = &mut rand::thread_rng();
+    let rng = &mut rand::rng();
 
     // Initialize a new VM.
     let vm = VM::from(ConsensusStore::<N, ConsensusMemory<N>>::open(StorageMode::Production)?)?;
@@ -298,12 +290,12 @@ fn handle_upgrade<N: Network, A: Aleo<Network = N>>(
     // Check for programs that violate edition/constructor requirements.
     check_edition_constructor_requirements(&programs_and_editions, consensus_version, "upgrade")?;
 
-    vm.process().write().add_programs_with_editions(&programs_and_editions)?;
+    vm.process().lock().add_programs_with_editions(&programs_and_editions)?;
 
     // Print the programs and their editions in the VM.
     println!("Loaded the following programs into the VM:");
-    for program_id in vm.process().read().program_ids() {
-        let edition = *vm.process().read().get_stack(program_id)?.program_edition();
+    for program_id in vm.process().program_ids() {
+        let edition = *vm.process().get_stack(program_id)?.program_edition();
         if program_id.to_string() == "credits.aleo" {
             println!(" - credits.aleo (default)");
         } else {
@@ -329,7 +321,7 @@ fn handle_upgrade<N: Network, A: Aleo<Network = N>>(
             let (transaction, stats) = if command.skip_deploy_certificate {
                 println!("⚠️  Skipping deployment certificate generation as per user request.\n");
                 // Increment the edition from the existing on-chain program.
-                let edition = *vm.process().read().get_stack(id)?.program_edition() + 1;
+                let edition = *vm.process().get_stack(id)?.program_edition() + 1;
                 println!("edition for deployed program: {}", edition);
                 deploy_with_placeholder_certificate::<N, A, _>(
                     &vm,
@@ -353,7 +345,7 @@ fn handle_upgrade<N: Network, A: Aleo<Network = N>>(
                 // Get the deployment.
                 let deployment = transaction.deployment().expect("Expected a deployment in the transaction");
                 // Add the program to the VM before calculating function costs.
-                vm.process().write().add_program(&program)?;
+                vm.process().lock().add_program(&program)?;
                 // Compute the deployment stats.
                 let stats =
                     compute_deployment_stats(&vm, deployment, priority_fee, consensus_version, bytecode_size, rng)?;
@@ -368,7 +360,7 @@ fn handle_upgrade<N: Network, A: Aleo<Network = N>>(
             all_stats.push(stats);
         }
         // Add the program to the VM (idempotent; ensures skipped programs are available for later imports).
-        if let Err(e) = vm.process().write().add_program(&program) {
+        if let Err(e) = vm.process().lock().add_program(&program) {
             warn_and_confirm(&format!("Failed to add program {id} to the VM. Error: {e}"), command.extra.yes)?;
         }
     }
@@ -538,6 +530,10 @@ fn check_tasks_for_warnings<N: Network>(
         // Check if the program uses V9 features.
         if consensus_version < ConsensusVersion::V9 && program.contains_v9_syntax() {
             warnings.push(format!("The program '{id}' uses V9 features but the consensus version is less than V9. The upgrade will likely fail"));
+        }
+        // Check if the program uses V15 features (e.g., `view` blocks).
+        if consensus_version < ConsensusVersion::V15 && program.contains_v15_syntax() {
+            warnings.push(format!("The program '{id}' uses V15 features (e.g., `view fn`) but the consensus version is less than V15. The upgrade will likely fail"));
         }
         // Check if the program contains a constructor.
         if consensus_version >= ConsensusVersion::V9 && !program.contains_constructor() {

@@ -23,17 +23,30 @@ When you run `leo build`, the compiler generates ABI files alongside the compile
 
 ```text
 build/
-├── main.aleo          # Compiled Aleo bytecode
-├── abi.json           # ABI for your program
-└── imports/
-    ├── foo.aleo       # Imported program bytecode
-    └── foo.abi.json   # ABI for imported program
+├── my_program/                        # your program's own build directory
+│   ├── my_program.aleo                # compiled Aleo bytecode
+│   ├── abi.json                       # ABI for your program
+│   └── interfaces/
+│       ├── MyInterface.json           # Per-interface ABI (locally defined)
+│       └── parent_program/
+│           └── ParentInterface.json   # Per-interface ABI (transitive parent)
+└── foo/                               # an imported dependency
+    ├── foo.aleo                       # imported program bytecode
+    └── abi.json                       # ABI for the imported program
 ```
 
-- **`build/abi.json`** - ABI for your main program
-- **`build/imports/{program}.abi.json`** - ABIs for each imported dependency
+Every program - your own and each dependency - gets its own `build/{program}/`
+directory with the same shape.
+
+- **`build/{program}/{program}.aleo`** - compiled bytecode for each program.
+- **`build/{program}/abi.json`** - ABI for each program.
+- **`build/{program}/interfaces/`** - per-interface ABI JSON files, one per interface declared locally (top-level or in a module) and one per transitive parent interface implemented through `scope.parents`. External parent interfaces are nested under their owning program's directory. The `interfaces/` directory is cleared and regenerated on every build, so renamed or deleted interfaces never leave stale files behind.
 
 ABI generation is automatic on every build - no flags required.
+
+## Generating ABIs from Compiled Bytecode
+
+The standalone [`leo abi`](../cli/02b_abi.md) command generates an ABI JSON document from any `.aleo` file — useful when you have a deployed program's bytecode but not its source. The same code path is exposed as a WebAssembly binding through the `leo-aleo-abi-wasm` crate, so browser tooling (wallets, explorers) can produce ABIs from bytecode without shelling out to the CLI.
 
 ## ABI Format
 
@@ -42,22 +55,26 @@ The ABI is a JSON object with the following top-level structure:
 ```json title="abi.json"
 {
   "program": "token.aleo",
+  "implements": [...],
   "structs": [...],
   "records": [...],
   "mappings": [...],
   "storage_variables": [...],
-  "functions": [...]
+  "functions": [...],
+  "views": [...]
 }
 ```
 
-| Field               | Description                                                         |
-| ------------------- | ------------------------------------------------------------------- |
-| `program`           | Program identifier (e.g., `"token.aleo"`)                           |
-| `structs`           | Struct type definitions used in the public interface                |
-| `records`           | Record type definitions                                             |
-| `mappings`          | On-chain key-value storage declarations                             |
-| `storage_variables` | Storage variable declarations                                       |
-| `functions`         | Public entry points (entry `fn` declarations, not helper functions) |
+| Field               | Description                                                              |
+| ------------------- | ------------------------------------------------------------------------ |
+| `program`           | Program identifier (e.g., `"token.aleo"`)                                |
+| `implements`        | Fully qualified interfaces the program implements                        |
+| `structs`           | Struct type definitions used in the public interface                     |
+| `records`           | Record type definitions                                                  |
+| `mappings`          | On-chain key-value storage declarations                                  |
+| `storage_variables` | Storage variable declarations                                            |
+| `functions`         | Public entry points (entry `fn` declarations, not helper functions)      |
+| `views`             | Read-only `view fn` entry points; same shape as `functions`              |
 
 :::info
 The ABI only includes types that are referenced by the public interface. Internal helper structs not used in entry functions, mappings, or storage are automatically pruned.
@@ -415,9 +432,9 @@ Here's a complete example showing a Leo program and its generated ABI.
 ```leo file=../code_snippets/abi/token/src/main.leo showLineNumbers
 ```
 
-**Generated ABI (`build/abi.json`):**
+**Generated ABI (`build/token/abi.json`):**
 
-```json file=../code_snippets/abi/token/build/abi.json title="abi.json"
+```json file=../code_snippets/abi/token/build/token/abi.json title="abi.json"
 ```
 
 **Key observations:**
