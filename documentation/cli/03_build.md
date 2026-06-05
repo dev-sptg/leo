@@ -16,7 +16,7 @@ To compile your program into Aleo instructions and verify that it builds properl
 leo build
 ```
 
-On invoking the build command, Leo automatically creates a `build/`⁠ folder in the project directory. Inside it, every program - your own program and each dependency - gets its own `build/{program}/` directory containing its compiled `.aleo` bytecode and ABI.
+On invoking the build command, Leo automatically creates a `build/`⁠ folder in the project directory - or, when the package is inside a [workspace](../guides/03_workspaces.md), at the workspace root, shared across every member. Inside it, every program - your own program and each dependency - gets its own `build/{program}/` directory containing its compiled `.aleo` bytecode and ABI.
 
 ```bash title="console output:"
   Leo     2 statements before dead code elimination.
@@ -31,16 +31,8 @@ The build also generates an **ABI file** at `build/{PROGRAM_NAME}/abi.json` desc
 ## Flags
 
 ```text
---offline
-    Enables offline mode.
 --enable-ast-spans
     Enable spans in AST snapshots.
---enable-dce
-    Enables dead code elimination in the compiler.
---conditional-block-max-depth <CONDITIONAL_BLOCK_MAX_DEPTH>
-    Max depth to type check nested conditionals. [default: 10]
---disable-conditional-branch-type-checking
-    Disable type checking of nested conditional branches in finalize scope.
 --enable-initial-ast-snapshot
     Write an AST snapshot immediately after parsing.
 --enable-all-ast-snapshots

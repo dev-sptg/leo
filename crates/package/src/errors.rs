@@ -90,6 +90,15 @@ pub(crate) fn invalid_network_name(name: impl Display) -> Backtraced {
         .with_help("Valid network names are `testnet`, `mainnet`, and `canary`.")
 }
 
+pub(crate) fn invalid_manifest_dependency(dep_name: impl Display, reason: impl Display) -> Backtraced {
+    Backtraced::error(
+        CODE_PREFIX,
+        CODE_MASK + 75,
+        format!("invalid dependency `{dep_name}` in `program.json`: {reason}"),
+    )
+    .with_help("Use `edition` only for `network` dependencies, `path` only for `local` and `test`, and neither for `workspace`.")
+}
+
 pub(crate) fn failed_path(path: impl Display, err: impl Display) -> Backtraced {
     Backtraced::error(CODE_PREFIX, CODE_MASK + 57, format!("cannot find path `{path}`: {err}"))
         .with_help("Verify the path exists and is accessible from the current working directory.")
@@ -222,4 +231,21 @@ pub(crate) fn workspace_dep_member_not_found(dep_name: impl Display, workspace_r
         format!("workspace dependency `{dep_name}` not found in workspace at `{workspace_root}`"),
     )
     .with_help("Check the `members` list in `workspace.json` and verify the member's `program.json` declares a matching program name.")
+}
+
+/// Two workspace members declare programs with the same bare unit name, which
+/// would race on the shared `<workspace_root>/build/<name>/` directory.
+pub(crate) fn workspace_duplicate_program_name(
+    program: impl Display,
+    first: impl Display,
+    second: impl Display,
+) -> Backtraced {
+    Backtraced::error(
+        CODE_PREFIX,
+        CODE_MASK + 75,
+        format!("workspace members `{first}` and `{second}` both declare program `{program}`"),
+    )
+    .with_help(
+        "Rename one of the programs in its `program.json`; every workspace member must have a unique program name.",
+    )
 }
