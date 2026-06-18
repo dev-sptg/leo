@@ -1,6 +1,7 @@
-program main.aleo;
+import optprod.aleo;
+program optconsumer.aleo;
 
-function pass_through:
+function build:
     input r0 as u32.private;
     output r0 as u32.private;
 
